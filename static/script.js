@@ -25,10 +25,12 @@ class WritingAssistant {
         const refreshDocumentsBtn = document.getElementById('refresh-documents-btn');
         const loadFileInput = document.getElementById('load-file');
         const copyDocumentBtn = document.getElementById('copy-document-btn');
+        const newDocumentBtn = document.getElementById('new-document-btn');
 
         titleInput.addEventListener('blur', () => this.updateTitle(titleInput.value));
         addSectionBtn.addEventListener('click', () => this.addSection());
         copyDocumentBtn.addEventListener('click', () => this.copyDocumentToClipboard());
+        newDocumentBtn.addEventListener('click', () => this.showNewDocumentModal());
         
         saveMetadataBtn.addEventListener('click', () => this.saveMetadata());
         resetMetadataBtn.addEventListener('click', () => this.resetMetadata());
@@ -75,6 +77,23 @@ class WritingAssistant {
                 this.updateTimeout = setTimeout(() => {
                     this.updateSection(section);
                 }, 500);
+            }
+        });
+
+        // New Document Modal Event Listeners
+        const modal = document.getElementById('new-document-modal');
+        const closeModalBtn = document.getElementById('close-new-document-modal');
+        const cancelBtn = document.getElementById('cancel-new-document-btn');
+        const createBtn = document.getElementById('create-new-document-btn');
+
+        closeModalBtn.addEventListener('click', () => this.hideNewDocumentModal());
+        cancelBtn.addEventListener('click', () => this.hideNewDocumentModal());
+        createBtn.addEventListener('click', () => this.createNewDocument());
+
+        // Close modal when clicking outside of it
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.hideNewDocumentModal();
             }
         });
     }
@@ -317,8 +336,13 @@ class WritingAssistant {
             // Use localStorage data if available, otherwise use server data
             const metadata = savedMetadata || serverMetadata;
             
-            document.getElementById('source').value = metadata.source || '';
-            document.getElementById('model').value = metadata.model || '';
+            // Load source and model into hamburger menu
+            const sourceElement = document.getElementById('hamburger-source');
+            const modelElement = document.getElementById('hamburger-model');
+            if (sourceElement) sourceElement.value = metadata.source || '';
+            if (modelElement) modelElement.value = metadata.model || '';
+            
+            // Load other metadata into metadata tab
             document.getElementById('writing-style').value = metadata.writing_style || 'formal';
             document.getElementById('target-audience').value = metadata.target_audience || '';
             document.getElementById('tone').value = metadata.tone || 'neutral';
@@ -367,13 +391,18 @@ class WritingAssistant {
             if (showMessage) {
                 this.showMessage('Error saving metadata', 'error');
             }
+            throw error; // Rethrow the error so saveDocument can handle it
         }
     }
 
     getMetadataFromForm() {
+        // Get source and model from hamburger menu
+        const sourceElement = document.getElementById('hamburger-source');
+        const modelElement = document.getElementById('hamburger-model');
+        
         return {
-            source: document.getElementById('source').value,
-            model: document.getElementById('model').value,
+            source: sourceElement ? sourceElement.value : '',
+            model: modelElement ? modelElement.value : '',
             writing_style: document.getElementById('writing-style').value,
             target_audience: document.getElementById('target-audience').value,
             tone: document.getElementById('tone').value,
@@ -384,8 +413,13 @@ class WritingAssistant {
     }
 
     async resetMetadata() {
-        document.getElementById('source').value = '';
-        document.getElementById('model').value = '';
+        // Reset hamburger menu fields
+        const sourceElement = document.getElementById('hamburger-source');
+        const modelElement = document.getElementById('hamburger-model');
+        if (sourceElement) sourceElement.value = '';
+        if (modelElement) modelElement.value = '';
+        
+        // Reset metadata tab fields
         document.getElementById('writing-style').value = 'formal';
         document.getElementById('target-audience').value = '';
         document.getElementById('tone').value = 'neutral';
@@ -449,10 +483,13 @@ class WritingAssistant {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('filename', filename);
-
         try {
+            // First, save the current metadata to ensure it's up to date
+            await this.saveMetadata();
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+
             const response = await fetch('/documents/save', {
                 method: 'POST',
                 body: formData
@@ -825,6 +862,78 @@ class WritingAssistant {
                 console.error('Fallback copy also failed:', fallbackError);
                 this.showMessage('Failed to copy to clipboard. Please try again.', 'error');
             }
+        }
+    }
+
+    showNewDocumentModal() {
+        const modal = document.getElementById('new-document-modal');
+        modal.classList.add('show');
+        
+        // Clear previous values
+        document.getElementById('new-document-title').value = '';
+        document.getElementById('new-document-outline').value = '';
+        
+        // Focus on title field
+        document.getElementById('new-document-title').focus();
+    }
+
+    hideNewDocumentModal() {
+        const modal = document.getElementById('new-document-modal');
+        modal.classList.remove('show');
+    }
+
+    async createNewDocument() {
+        const title = document.getElementById('new-document-title').value.trim();
+        const outline = document.getElementById('new-document-outline').value.trim();
+
+        if (!title && !outline) {
+            this.showMessage('Please provide either a title or section outline.', 'error');
+            return;
+        }
+
+        try {
+            // First, clear the current document by setting title to empty
+            const titleInput = document.getElementById('document-title');
+            titleInput.value = title;
+            await this.updateTitle(title);
+
+            // Clear all existing sections
+            const sectionsList = document.getElementById('sections-list');
+            sectionsList.innerHTML = '<div class="no-sections-message"><p>No sections yet. Click "Add Section" to get started.</p></div>';
+
+            // Create sections from outline
+            if (outline) {
+                const lines = outline.split('\n').filter(line => line.trim());
+                for (const line of lines) {
+                    const response = await fetch('/sections', {
+                        method: 'POST'
+                    });
+                    const section = await response.json();
+                    
+                    // Update the section with the main point
+                    const formData = new FormData();
+                    formData.append('main_point', line.trim());
+                    formData.append('user_text', '');
+                    
+                    await fetch(`/sections/${section.id}`, {
+                        method: 'PUT',
+                        body: formData
+                    });
+                    
+                    // Create the section element with updated data
+                    const updatedSection = {...section, main_point: line.trim()};
+                    this.createSectionElement(updatedSection);
+                }
+                
+                this.updateSectionNumbers();
+            }
+
+            this.hideNewDocumentModal();
+            this.showMessage('New document created successfully!', 'success');
+            
+        } catch (error) {
+            console.error('Error creating new document:', error);
+            this.showMessage('Error creating new document. Please try again.', 'error');
         }
     }
 }

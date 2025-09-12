@@ -59,6 +59,7 @@
                         <div class="sections-header">
                             <h2>Sections</h2>
                             <div class="sections-controls">
+                                <button id="new-document-btn" class="btn btn-success">📄 New Document</button>
                                 <button id="copy-document-btn" class="btn btn-secondary">📋 Copy Document</button>
                                 <button id="add-section-btn" class="btn btn-primary">Add Section</button>
                             </div>
@@ -88,12 +89,12 @@
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label>Your Text:</label>
+                                        <label>Current Text:</label>
                                         <textarea class="user-text" rows="4" placeholder="Enter your text here...">{{ section.user_text }}</textarea>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <label>Generated Text:</label>
+                                        <label>Alternative Suggestion:</label>
                                         <div class="generated-text-container">
                                             <div class="generated-text">{{ section.generated_text }}</div>
                                             <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
@@ -217,6 +218,30 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Document Modal -->
+    <div id="new-document-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Document</h2>
+                <button class="modal-close" id="close-new-document-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-document-title">Document Title:</label>
+                    <input type="text" id="new-document-title" placeholder="Enter document title...">
+                </div>
+                <div class="form-group">
+                    <label for="new-document-outline">Section Outline:</label>
+                    <textarea id="new-document-outline" rows="8" placeholder="Enter one main point per line. Each line will become a section.&#10;&#10;Example:&#10;Introduction to the topic&#10;Key benefits and advantages&#10;Implementation steps&#10;Conclusion and next steps"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-new-document-btn" class="btn btn-secondary">Cancel</button>
+                <button id="create-new-document-btn" class="btn btn-success">Create Document</button>
             </div>
         </div>
     </div>
