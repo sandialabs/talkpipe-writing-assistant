@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Writing Assistant</h1>
+                <div class="hamburger-menu">
+                    <button class="hamburger-btn" id="hamburger-btn">
+                        <span class="hamburger-line"></span>
+                        <span class="hamburger-line"></span>
+                        <span class="hamburger-line"></span>
+                    </button>
+                    <div class="hamburger-dropdown" id="hamburger-dropdown">
+                        <div class="dropdown-header">
+                            <h3>Generation Settings</h3>
+                        </div>
+                        <div class="dropdown-content">
+                            <div class="form-group">
+                                <label for="hamburger-source">Source:</label>
+                                <input type="text" id="hamburger-source" name="source" placeholder="e.g., OpenAI, Anthropic, local model...">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="hamburger-model">Model:</label>
+                                <input type="text" id="hamburger-model" name="model" placeholder="e.g., gpt-4, claude-3, llama-2...">
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" id="save-generation-settings-btn" class="btn btn-primary btn-small">Save Settings</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <div class="title-section">
+            <label for="document-title">Document Title:</label>
+            <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
+        </div>
+        
+        <div class="main-content">
+            <div class="tab-container">
+                <div class="tab-navigation">
+                    <button class="tab-btn active" data-tab="sections">Sections</button>
+                    <button class="tab-btn" data-tab="metadata">Metadata & Directives</button>
+                    <button class="tab-btn" data-tab="documents">Documents</button>
+                </div>
+                
+                <div class="tab-content active" id="sections-tab">
+                    <div class="sections-container">
+                        <div class="sections-header">
+                            <h2>Sections</h2>
+                            <div class="sections-controls">
+                                <button id="copy-document-btn" class="btn btn-secondary">📋 Copy Document</button>
+                                <button id="add-section-btn" class="btn btn-primary">Add Section</button>
+                            </div>
+                        </div>
+                        
+                        <div id="sections-list">
+                            {% for section in document.sections %}
+                            <div class="section-wrapper">
+                                <div class="insert-controls insert-above">
+                                    <button class="btn btn-small btn-insert insert-above-btn" title="Insert Section Above">+ Insert Above</button>
+                                </div>
+                                
+                                <div class="section" data-section-id="{{ section.id }}" data-order="{{ section.order }}">
+                                    <div class="section-header">
+                                        <span class="section-number">Section {{ section.order + 1 }}</span>
+                                        <div class="section-controls">
+                                            <button class="btn btn-small move-up" title="Move Up">↑</button>
+                                            <button class="btn btn-small move-down" title="Move Down">↓</button>
+                                            <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
+                                        </div>
+                                    </div>
+                                
+                                <div class="section-content">
+                                    <div class="form-group">
+                                        <label>Main Point (single sentence):</label>
+                                        <input type="text" class="main-point" value="{{ section.main_point }}" placeholder="Enter the main point...">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label>Your Text:</label>
+                                        <textarea class="user-text" rows="4" placeholder="Enter your text here...">{{ section.user_text }}</textarea>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label>Generated Text:</label>
+                                        <div class="generated-text-container">
+                                            <div class="generated-text">{{ section.generated_text }}</div>
+                                            <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                                
+                                <div class="insert-controls insert-below">
+                                    <button class="btn btn-small btn-insert insert-below-btn" title="Insert Section Below">+ Insert Below</button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            {% if not document.sections %}
+                            <div class="no-sections-message">
+                                <p>No sections yet. Click "Add Section" to get started.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="metadata-tab">
+                    <div class="metadata-container">
+                        <div class="metadata-header">
+                            <h2>Metadata & Directives</h2>
+                            <p class="metadata-description">Configure how text is generated and provide background context for your writing.</p>
+                        </div>
+                        
+                        <div class="metadata-form">
+                            <div class="settings-section">
+                                <h3>Content Settings</h3>
+                                <div class="form-group">
+                                    <label for="writing-style">Writing Style:</label>
+                                    <select id="writing-style" name="writing_style">
+                                        <option value="formal">Formal</option>
+                                        <option value="casual">Casual</option>
+                                        <option value="academic">Academic</option>
+                                        <option value="creative">Creative</option>
+                                        <option value="technical">Technical</option>
+                                        <option value="persuasive">Persuasive</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="target-audience">Target Audience:</label>
+                                    <input type="text" id="target-audience" name="target_audience" placeholder="e.g., general public, experts, students...">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="tone">Tone:</label>
+                                    <select id="tone" name="tone">
+                                        <option value="neutral">Neutral</option>
+                                        <option value="professional">Professional</option>
+                                        <option value="friendly">Friendly</option>
+                                        <option value="authoritative">Authoritative</option>
+                                        <option value="conversational">Conversational</option>
+                                        <option value="enthusiastic">Enthusiastic</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="background-context">Background Context:</label>
+                                    <textarea id="background-context" name="background_context" rows="4" placeholder="Provide any background information, context, or specific instructions that should guide the text generation..."></textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="generation-directive">Generation Directive:</label>
+                                    <textarea id="generation-directive" name="generation_directive" rows="3" placeholder="Specific instructions for how to transform or enhance the user's text (e.g., 'expand with examples', 'summarize key points', 'add citations')..."></textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="word-limit">Approximate Word Limit:</label>
+                                    <input type="number" id="word-limit" name="word_limit" placeholder="e.g., 100, 500, 1000" min="10" max="10000">
+                                </div>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" id="save-metadata-btn" class="btn btn-primary">Save Metadata</button>
+                                <button type="button" id="reset-metadata-btn" class="btn btn-secondary">Reset to Defaults</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="documents-tab">
+                    <div class="documents-container">
+                        <div class="documents-header">
+                            <h2>Document Management</h2>
+                            <p class="documents-description">Save and load your writing projects with all content and settings.</p>
+                        </div>
+                        
+                        <div class="document-actions">
+                            <div class="save-section">
+                                <h3>Save Current Document</h3>
+                                <div class="form-group">
+                                    <label for="save-filename">Filename:</label>
+                                    <input type="text" id="save-filename" placeholder="my-document" />
+                                </div>
+                                <button id="save-document-btn" class="btn btn-primary">Save Document</button>
+                                <button id="download-current-btn" class="btn btn-secondary">Download as JSON</button>
+                            </div>
+                            
+                            <div class="load-section">
+                                <h3>Load Document</h3>
+                                <div class="form-group">
+                                    <label for="load-file">Choose file:</label>
+                                    <input type="file" id="load-file" accept=".json" />
+                                </div>
+                                <button id="load-document-btn" class="btn btn-primary">Load Document</button>
+                            </div>
+                            
+                            <div class="saved-documents">
+                                <h3>Saved Documents</h3>
+                                <div class="documents-list" id="documents-list">
+                                    <!-- Documents will be loaded here -->
+                                </div>
+                                <button id="refresh-documents-btn" class="btn btn-secondary">Refresh List</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>
