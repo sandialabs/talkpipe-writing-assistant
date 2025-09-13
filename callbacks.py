@@ -2,7 +2,7 @@ from talkpipe import compile
 
 f_new_paragraph = compile(
     """
-    CONST PROMPT = "Write a short paragraph based on the provided main point and current draft.  If the current draft is provided, focus on improving that draft.
+    CONST PROMPT = "Write a short paragraph based on the provided main point and current draft.  If the current draft is provided, focus on improving that draft.";
 
     | fillTemplate[template="Main Point: {main_point}, Current Draft: {text}"]
     | llmPrompt[system_prompt=PROMPT, multi_turn=False]

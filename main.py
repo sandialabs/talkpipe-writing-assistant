@@ -8,6 +8,7 @@ import uuid
 import json
 from datetime import datetime
 from pathlib import Path
+import asyncio
 import callbacks as cb
 
 app = FastAPI(title="Writing Assistant")
@@ -20,55 +21,58 @@ class Section:
         self.id = id or str(uuid.uuid4())
         self.main_point = main_point
         self.user_text = user_text
-        self.generated_text = self.generate_text(main_point=main_point, text=user_text)
+        self.generated_text = ""
         self.order = order
+        self._current_task: Optional[asyncio.Task] = None
+        self._generation_lock = asyncio.Lock()
+        
+        # Start initial generation if content provided
+        if main_point or user_text:
+            try:
+                asyncio.create_task(self._async_generate_text(main_point, user_text))
+            except RuntimeError:
+                # If no event loop is running, generate synchronously
+                self.generated_text = self.generate_text(main_point, user_text)
     
     def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None) -> str:
-
-        # if not text.strip():
-        #     return ""
-        
-        # if metadata is None:
-        #     return text.upper()
-        
-        # enhanced_text = ""
-        
-        # # Add source and model info if provided
-        # if metadata.source or metadata.model:
-        #     source_info = []
-        #     if metadata.source:
-        #         source_info.append(f"SOURCE: {metadata.source.upper()}")
-        #     if metadata.model:
-        #         source_info.append(f"MODEL: {metadata.model.upper()}")
-        #     enhanced_text += f"[{', '.join(source_info)}] "
-        
-        # # Add style and tone info
-        # style_info = f"[{metadata.writing_style.upper()} STYLE"
-        # if metadata.tone != "neutral":
-        #     style_info += f", {metadata.tone.upper()} TONE"
-        # if metadata.target_audience:
-        #     style_info += f", FOR: {metadata.target_audience.upper()}"
-        # style_info += f"] "
-        # enhanced_text += style_info
-        
-        # # Add the main text
-        # enhanced_text += text.upper()
-        
-        # # Add directive if provided
-        # if metadata.generation_directive:
-        #     enhanced_text += f" [DIRECTIVE: {metadata.generation_directive.upper()}]"
-        
-        # # Add word limit if specified
-        # if metadata.word_limit:
-        #     enhanced_text += f" [LIMIT: {metadata.word_limit} WORDS]"
-        
-        # return enhanced_text
-
         return cb.new_paragraph(main_point=main_point, text=text)
+    
+    async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None):
+        """Internal async method to generate text and update the section"""
+        async with self._generation_lock:
+            # Cancel any existing task
+            if self._current_task and not self._current_task.done():
+                self._current_task.cancel()
+                try:
+                    await self._current_task
+                except asyncio.CancelledError:
+                    pass
+            
+            # Update state atomically before starting generation
+            self.main_point = main_point
+            self.user_text = text
+            
+            # Create new task with current values
+            self._current_task = asyncio.create_task(self._generate_text_task(main_point, text, metadata))
+            
+            try:
+                result = await self._current_task
+                # Only update generated_text if this task wasn't cancelled
+                if not self._current_task.cancelled():
+                    self.generated_text = result
+                return result
+            except asyncio.CancelledError:
+                return self.generated_text  # Return existing text if cancelled
+    
+    async def _generate_text_task(self, main_point: str, text: str, metadata: 'Metadata' = None):
+        """The actual text generation task that can be cancelled"""
+        # Run the potentially slow text generation in a thread pool
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.generate_text, main_point, text, metadata)
 
-    def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None):
-        self.user_text = user_text
-        self.generated_text = self.generate_text(main_point=main_point, text=user_text, metadata=metadata)
+    async def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None):
+        """Update text with atomic state changes"""
+        return await self._async_generate_text(main_point, user_text, metadata)
 
 class Metadata:
     def __init__(self):
@@ -137,10 +141,13 @@ class Document:
         for section_data in data.get("sections", []):
             section = Section(
                 id=section_data.get("id"),
-                main_point=section_data.get("main_point", ""),
-                user_text=section_data.get("user_text", ""),
+                main_point="",  # Don't trigger generation during loading
+                user_text="",
                 order=section_data.get("order", 0)
             )
+            # Set the data directly to avoid triggering generation
+            section.main_point = section_data.get("main_point", "")
+            section.user_text = section_data.get("user_text", "")
             section.generated_text = section_data.get("generated_text", "")
             self.sections.append(section)
         
@@ -240,20 +247,36 @@ async def add_section(position: Optional[int] = Form(None)):
 async def update_section(section_id: str, main_point: str = Form(""), user_text: str = Form("")):
     section = next((s for s in document.sections if s.id == section_id), None)
     if section:
-        section.main_point = main_point
-        section.update_text(main_point, user_text, document.metadata)
+        # Start async generation but don't wait for it
+        asyncio.create_task(section.update_text(main_point, user_text, document.metadata))
         return {
             "id": section.id,
-            "main_point": section.main_point,
-            "user_text": section.user_text,
-            "generated_text": section.generated_text,
+            "main_point": main_point,
+            "user_text": user_text,
+            "generated_text": section.generated_text,  # Return current text immediately
             "order": section.order
+        }
+    return {"error": "Section not found"}, 404
+
+@app.get("/sections/{section_id}/generated")
+async def get_generated_text(section_id: str):
+    section = next((s for s in document.sections if s.id == section_id), None)
+    if section:
+        return {
+            "id": section.id,
+            "generated_text": section.generated_text,
+            "is_generating": section._current_task is not None and not section._current_task.done()
         }
     return {"error": "Section not found"}, 404
 
 @app.delete("/sections/{section_id}")
 async def delete_section(section_id: str):
-    if document.delete_section(section_id):
+    section = next((s for s in document.sections if s.id == section_id), None)
+    if section:
+        # Cancel any ongoing generation
+        if section._current_task and not section._current_task.done():
+            section._current_task.cancel()
+        document.delete_section(section_id)
         return {"status": "success"}
     return {"error": "Section not found"}, 404
 
