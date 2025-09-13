@@ -1,5 +1,6 @@
 class WritingAssistant {
     constructor() {
+        this.pollingIntervals = new Map(); // Track polling for each section
         this.init();
     }
 
@@ -182,6 +183,10 @@ class WritingAssistant {
                         <label>Generated Text:</label>
                         <div class="generated-text-container">
                             <div class="generated-text">${section.generated_text}</div>
+                            <div class="loading-indicator" style="display: none;">
+                                <span class="loading-spinner">⟳</span>
+                                <span class="loading-text">Generating...</span>
+                            </div>
                             <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
                         </div>
                     </div>
@@ -210,6 +215,12 @@ class WritingAssistant {
         const mainPoint = sectionElement.querySelector('.main-point').value;
         const userText = sectionElement.querySelector('.user-text').value;
 
+        // Show loading indicator immediately
+        const loadingIndicator = sectionElement.querySelector('.loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'flex';
+        }
+
         const formData = new FormData();
         formData.append('main_point', mainPoint);
         formData.append('user_text', userText);
@@ -220,12 +231,91 @@ class WritingAssistant {
                 body: formData
             });
             const updatedSection = await response.json();
-            
+
             const generatedTextDiv = sectionElement.querySelector('.generated-text');
             generatedTextDiv.textContent = updatedSection.generated_text;
+
+            // Poll for the final result
+            this.pollForGeneratedText(sectionId, sectionElement);
         } catch (error) {
             console.error('Error updating section:', error);
+            // Hide loading indicator on error
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
         }
+    }
+
+    async pollForGeneratedText(sectionId, sectionElement) {
+        // Clear any existing polling for this section
+        if (this.pollingIntervals.has(sectionId)) {
+            clearTimeout(this.pollingIntervals.get(sectionId));
+            this.pollingIntervals.delete(sectionId);
+        }
+
+        const generatedTextDiv = sectionElement.querySelector('.generated-text');
+        const loadingIndicator = sectionElement.querySelector('.loading-indicator');
+
+        const maxPolls = 60; // Poll for up to 60 seconds
+        let pollCount = 0;
+        let lastText = generatedTextDiv.textContent;
+
+        const hideLoadingIndicator = () => {
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+        };
+
+        const poll = async () => {
+            try {
+                const response = await fetch(`/sections/${sectionId}/generated`);
+                const data = await response.json();
+
+                if (data.generated_text) {
+                    generatedTextDiv.textContent = data.generated_text;
+                    lastText = data.generated_text;
+                }
+
+                // Continue polling if:
+                // 1. Still generating, OR
+                // 2. Haven't exceeded max polls AND text might still be updating
+                if ((data.is_generating || pollCount < 5) && pollCount < maxPolls) {
+                    pollCount++;
+                    const timeoutId = setTimeout(poll, 1000); // Poll every 1 second
+                    this.pollingIntervals.set(sectionId, timeoutId);
+                } else {
+                    // Do one final poll after generation completes to ensure we get the result
+                    if (!data.is_generating && pollCount < maxPolls) {
+                        const finalTimeoutId = setTimeout(async () => {
+                            try {
+                                const finalResponse = await fetch(`/sections/${sectionId}/generated`);
+                                const finalData = await finalResponse.json();
+                                if (finalData.generated_text) {
+                                    generatedTextDiv.textContent = finalData.generated_text;
+                                }
+                            } catch (error) {
+                                console.error('Error in final poll:', error);
+                            }
+                            hideLoadingIndicator();
+                            this.pollingIntervals.delete(sectionId);
+                        }, 1000);
+                        this.pollingIntervals.set(sectionId, finalTimeoutId);
+                    } else {
+                        // Polling complete, clean up
+                        hideLoadingIndicator();
+                        this.pollingIntervals.delete(sectionId);
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling for generated text:', error);
+                hideLoadingIndicator();
+                this.pollingIntervals.delete(sectionId);
+            }
+        };
+
+        // Start polling after a short delay
+        const initialTimeoutId = setTimeout(poll, 1000);
+        this.pollingIntervals.set(sectionId, initialTimeoutId);
     }
 
     async deleteSection(sectionId) {
