@@ -326,21 +326,18 @@ class WritingAssistant {
 
     async loadMetadata() {
         try {
-            // First try to load from localStorage
-            const savedMetadata = this.loadFromLocalStorage();
-            
-            // Then load from server
+            // Load from server only
             const response = await fetch('/metadata');
-            const serverMetadata = await response.json();
+            const metadata = await response.json();
             
-            // Use localStorage data if available, otherwise use server data
-            const metadata = savedMetadata || serverMetadata;
+            // Load source and model into hamburger menu from localStorage (overriding server values)
+            const savedSource = localStorage.getItem('generationSource') || metadata.source || '';
+            const savedModel = localStorage.getItem('generationModel') || metadata.model || '';
             
-            // Load source and model into hamburger menu
             const sourceElement = document.getElementById('hamburger-source');
             const modelElement = document.getElementById('hamburger-model');
-            if (sourceElement) sourceElement.value = metadata.source || '';
-            if (modelElement) modelElement.value = metadata.model || '';
+            if (sourceElement) sourceElement.value = savedSource;
+            if (modelElement) modelElement.value = savedModel;
             
             // Load other metadata into metadata tab
             document.getElementById('writing-style').value = metadata.writing_style || 'formal';
@@ -349,11 +346,6 @@ class WritingAssistant {
             document.getElementById('background-context').value = metadata.background_context || '';
             document.getElementById('generation-directive').value = metadata.generation_directive || '';
             document.getElementById('word-limit').value = metadata.word_limit || '';
-            
-            // If we loaded from localStorage, also save to server
-            if (savedMetadata) {
-                await this.saveMetadataToServer(false); // Don't show message or regenerate sections
-            }
         } catch (error) {
             console.error('Error loading metadata:', error);
         }
@@ -365,9 +357,6 @@ class WritingAssistant {
 
     async saveMetadataToServer(showMessage = true) {
         const metadata = this.getMetadataFromForm();
-        
-        // Save to localStorage first
-        this.saveToLocalStorage(metadata);
         
         const formData = new FormData();
         Object.keys(metadata).forEach(key => {
@@ -427,9 +416,6 @@ class WritingAssistant {
         document.getElementById('generation-directive').value = '';
         document.getElementById('word-limit').value = '';
         
-        // Clear localStorage
-        localStorage.removeItem('writingAssistantMetadata');
-        
         await this.saveMetadataToServer(true);
     }
 
@@ -458,23 +444,6 @@ class WritingAssistant {
         }, 3000);
     }
 
-    saveToLocalStorage(metadata) {
-        try {
-            localStorage.setItem('writingAssistantMetadata', JSON.stringify(metadata));
-        } catch (error) {
-            console.error('Error saving to localStorage:', error);
-        }
-    }
-
-    loadFromLocalStorage() {
-        try {
-            const saved = localStorage.getItem('writingAssistantMetadata');
-            return saved ? JSON.parse(saved) : null;
-        } catch (error) {
-            console.error('Error loading from localStorage:', error);
-            return null;
-        }
-    }
 
     async saveDocument() {
         const filename = document.getElementById('save-filename').value.trim();

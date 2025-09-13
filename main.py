@@ -8,6 +8,7 @@ import uuid
 import json
 from datetime import datetime
 from pathlib import Path
+import callbacks as cb
 
 app = FastAPI(title="Writing Assistant")
 
@@ -19,52 +20,55 @@ class Section:
         self.id = id or str(uuid.uuid4())
         self.main_point = main_point
         self.user_text = user_text
-        self.generated_text = self.generate_text(user_text)
+        self.generated_text = self.generate_text(main_point=main_point, text=user_text)
         self.order = order
     
-    def generate_text(self, text: str, metadata: 'Metadata' = None) -> str:
-        if not text.strip():
-            return ""
+    def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None) -> str:
+
+        # if not text.strip():
+        #     return ""
         
-        if metadata is None:
-            return text.upper()
+        # if metadata is None:
+        #     return text.upper()
         
-        enhanced_text = ""
+        # enhanced_text = ""
         
-        # Add source and model info if provided
-        if metadata.source or metadata.model:
-            source_info = []
-            if metadata.source:
-                source_info.append(f"SOURCE: {metadata.source.upper()}")
-            if metadata.model:
-                source_info.append(f"MODEL: {metadata.model.upper()}")
-            enhanced_text += f"[{', '.join(source_info)}] "
+        # # Add source and model info if provided
+        # if metadata.source or metadata.model:
+        #     source_info = []
+        #     if metadata.source:
+        #         source_info.append(f"SOURCE: {metadata.source.upper()}")
+        #     if metadata.model:
+        #         source_info.append(f"MODEL: {metadata.model.upper()}")
+        #     enhanced_text += f"[{', '.join(source_info)}] "
         
-        # Add style and tone info
-        style_info = f"[{metadata.writing_style.upper()} STYLE"
-        if metadata.tone != "neutral":
-            style_info += f", {metadata.tone.upper()} TONE"
-        if metadata.target_audience:
-            style_info += f", FOR: {metadata.target_audience.upper()}"
-        style_info += f"] "
-        enhanced_text += style_info
+        # # Add style and tone info
+        # style_info = f"[{metadata.writing_style.upper()} STYLE"
+        # if metadata.tone != "neutral":
+        #     style_info += f", {metadata.tone.upper()} TONE"
+        # if metadata.target_audience:
+        #     style_info += f", FOR: {metadata.target_audience.upper()}"
+        # style_info += f"] "
+        # enhanced_text += style_info
         
-        # Add the main text
-        enhanced_text += text.upper()
+        # # Add the main text
+        # enhanced_text += text.upper()
         
-        # Add directive if provided
-        if metadata.generation_directive:
-            enhanced_text += f" [DIRECTIVE: {metadata.generation_directive.upper()}]"
+        # # Add directive if provided
+        # if metadata.generation_directive:
+        #     enhanced_text += f" [DIRECTIVE: {metadata.generation_directive.upper()}]"
         
-        # Add word limit if specified
-        if metadata.word_limit:
-            enhanced_text += f" [LIMIT: {metadata.word_limit} WORDS]"
+        # # Add word limit if specified
+        # if metadata.word_limit:
+        #     enhanced_text += f" [LIMIT: {metadata.word_limit} WORDS]"
         
-        return enhanced_text
-    
-    def update_text(self, user_text: str, metadata: 'Metadata' = None):
+        # return enhanced_text
+
+        return cb.new_paragraph(main_point=main_point, text=text)
+
+    def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None):
         self.user_text = user_text
-        self.generated_text = self.generate_text(user_text, metadata)
+        self.generated_text = self.generate_text(main_point=main_point, text=user_text, metadata=metadata)
 
 class Metadata:
     def __init__(self):
@@ -237,7 +241,7 @@ async def update_section(section_id: str, main_point: str = Form(""), user_text:
     section = next((s for s in document.sections if s.id == section_id), None)
     if section:
         section.main_point = main_point
-        section.update_text(user_text, document.metadata)
+        section.update_text(main_point, user_text, document.metadata)
         return {
             "id": section.id,
             "main_point": section.main_point,
@@ -358,4 +362,4 @@ async def delete_document(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="localhost", port=8001)
