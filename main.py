@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 import callbacks as cb
+from definitions import Metadata
 
 app = FastAPI(title="Writing Assistant")
 
@@ -35,7 +36,7 @@ class Section:
                 self.generated_text = self.generate_text(main_point, user_text)
     
     def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None) -> str:
-        return cb.new_paragraph(main_point=main_point, text=text)
+        return cb.new_paragraph(main_point=main_point, text=text, metadata=metadata)
     
     async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None):
         """Internal async method to generate text and update the section"""
@@ -73,17 +74,6 @@ class Section:
     async def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None):
         """Update text with atomic state changes"""
         return await self._async_generate_text(main_point, user_text, metadata)
-
-class Metadata:
-    def __init__(self):
-        self.writing_style = "formal"
-        self.target_audience = ""
-        self.tone = "neutral"
-        self.background_context = ""
-        self.generation_directive = ""
-        self.word_limit = None
-        self.source = ""
-        self.model = ""
 
 class Document:
     def __init__(self):

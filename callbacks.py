@@ -1,19 +1,46 @@
 from talkpipe import compile
 import threading
+from talkpipe.pipe.basic import fillTemplate
+from talkpipe.pipe.io import Print
+from talkpipe.llm.chat import LLMPrompt
+from definitions import Metadata
 
 _paragraph_lock = threading.Lock()
 
-f_new_paragraph = compile(
+SYSTEM_PROMPT = """
+    Write a short paragraph based on the provided main point and current draft.  
+    If the current draft is provided, focus on improving that draft.
     """
-    CONST PROMPT = "Write a short paragraph based on the provided main point and current draft.  If the current draft is provided, focus on improving that draft.";
 
-    | fillTemplate[template="Main Point: {main_point}, Current Draft: {text}"]
-    | print
-    | llmPrompt[system_prompt=PROMPT, multi_turn=False]
-    | print
-    """)
-f_new_paragraph = f_new_paragraph.as_function(single_in=True, single_out=True)
 
-def new_paragraph(main_point: str, text: str) -> str:
+PROMPT_TEMPLATE = """
+    Writing Style: {metadata.writing_style}
+ 
+    Tone: {metadata.tone}
+
+    Target Audience: {metadata.target_audience}
+
+    Background Context: {metadata.background_context}
+
+    Special Directions: {metadata.generation_directive}
+
+    Approximate Word Limit: {metadata.word_limit}
+
+    Main Point: {main_point}
+
+    Current Draft: {text}
+"""
+
+
+def new_paragraph(main_point: str, text: str, metadata: Metadata) -> str:
     with _paragraph_lock:
-        return f_new_paragraph({"main_point": main_point, "text": text})
+        f = (fillTemplate(template=PROMPT_TEMPLATE)  
+            | Print()
+            | LLMPrompt(system_prompt=SYSTEM_PROMPT, multi_turn=False, source=metadata.source, model=metadata.model) 
+            | Print())
+        f = f.as_function(single_in=True, single_out=True)
+
+
+        return f({"main_point": main_point, "text": text, "metadata": metadata})
+
+
