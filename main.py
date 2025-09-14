@@ -25,8 +25,9 @@ class Section:
         self.generated_text = ""
         self.order = order
         self._current_task: Optional[asyncio.Task] = None
+        self._pending_request: Optional[dict] = None
         self._generation_lock = asyncio.Lock()
-        
+
         # Start initial generation if content provided
         if main_point or user_text:
             try:
@@ -39,41 +40,83 @@ class Section:
         return cb.new_paragraph(main_point=main_point, text=text, metadata=metadata, title=title, prev_paragraph=prev_paragraph, next_paragraph=next_paragraph)
     
     async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
-        """Internal async method to generate text and update the section"""
+        """Internal async method to generate text with proper queuing"""
+        request_params = {
+            'main_point': main_point,
+            'text': text,
+            'metadata': metadata,
+            'title': title,
+            'prev_paragraph': prev_paragraph,
+            'next_paragraph': next_paragraph
+        }
+
         async with self._generation_lock:
-            # Cancel any existing task
+            # If there's a current task running
             if self._current_task and not self._current_task.done():
-                self._current_task.cancel()
-                try:
-                    await self._current_task
-                except asyncio.CancelledError:
-                    pass
-            
-            # Update state atomically before starting generation
-            self.main_point = main_point
-            self.user_text = text
-            
-            # Create new task with current values
-            self._current_task = asyncio.create_task(self._generate_text_task(main_point, text, metadata, title, prev_paragraph, next_paragraph))
-            
-            try:
-                result = await self._current_task
-                # Only update generated_text if this task wasn't cancelled
-                if not self._current_task.cancelled():
-                    self.generated_text = result
-                return result
-            except asyncio.CancelledError:
-                return self.generated_text  # Return existing text if cancelled
+                # Store this as the pending request (replacing any existing one)
+                self._pending_request = request_params
+                return self.generated_text  # Return current text immediately
+
+            # No current task, start this request immediately
+            self._current_task = asyncio.create_task(self._process_generation_queue(request_params))
+
+        # Don't await here - let it run in background
+        return self.generated_text
     
+    async def _process_generation_queue(self, initial_params: dict):
+        """Process generation requests, ensuring max 2 requests (current + pending)"""
+        while True:
+            # Update section state with current request
+            self.main_point = initial_params['main_point']
+            self.user_text = initial_params['text']
+
+            # Run the actual generation
+            loop = asyncio.get_event_loop()
+            try:
+                result = await loop.run_in_executor(
+                    None,
+                    self.generate_text,
+                    initial_params['main_point'],
+                    initial_params['text'],
+                    initial_params['metadata'],
+                    initial_params['title'],
+                    initial_params['prev_paragraph'],
+                    initial_params['next_paragraph']
+                )
+                self.generated_text = result
+            except Exception as e:
+                print(f"Generation error: {e}")
+                # Keep existing text on error
+
+            # Check if there's a pending request
+            async with self._generation_lock:
+                if self._pending_request:
+                    # Process the pending request next
+                    initial_params = self._pending_request
+                    self._pending_request = None
+                    continue
+                else:
+                    # No more requests, clear current task
+                    self._current_task = None
+                    break
+
     async def _generate_text_task(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
-        """The actual text generation task that can be cancelled"""
-        # Run the potentially slow text generation in a thread pool
+        """Legacy method - kept for compatibility"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.generate_text, main_point, text, metadata, title, prev_paragraph, next_paragraph)
 
     async def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """Update text with atomic state changes"""
         return await self._async_generate_text(main_point, user_text, metadata, title, prev_paragraph, next_paragraph)
+
+    def get_queue_status(self):
+        """Get current queue status for debugging"""
+        return {
+            'has_current_task': self._current_task is not None and not self._current_task.done(),
+            'has_pending_request': self._pending_request is not None,
+            'main_point': self.main_point,
+            'user_text': self.user_text[:50] + '...' if len(self.user_text) > 50 else self.user_text
+        }
 
 class Document:
     def __init__(self):
@@ -259,8 +302,9 @@ async def update_section(section_id: str, main_point: str = Form(""), user_text:
         # Get context information
         title, prev_paragraph, next_paragraph = document.get_section_context(section_id)
 
-        # Start async generation but don't wait for it
-        asyncio.create_task(section.update_text(main_point, user_text, document.metadata, title, prev_paragraph, next_paragraph))
+        # Use the section's built-in queuing system (max 2 requests)
+        await section.update_text(main_point, user_text, document.metadata, title, prev_paragraph, next_paragraph)
+
         return {
             "id": section.id,
             "main_point": main_point,
@@ -278,6 +322,16 @@ async def get_generated_text(section_id: str):
             "id": section.id,
             "generated_text": section.generated_text,
             "is_generating": section._current_task is not None and not section._current_task.done()
+        }
+    return {"error": "Section not found"}, 404
+
+@app.get("/sections/{section_id}/debug")
+async def get_section_debug_info(section_id: str):
+    section = next((s for s in document.sections if s.id == section_id), None)
+    if section:
+        return {
+            "id": section.id,
+            "queue_status": section.get_queue_status()
         }
     return {"error": "Section not found"}, 404
 
