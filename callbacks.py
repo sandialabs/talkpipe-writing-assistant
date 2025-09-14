@@ -9,10 +9,11 @@ _paragraph_lock = threading.Lock()
 
 SYSTEM_PROMPT = """
     Write or improve the current paragraph draft based on the provided main point and current draft.  
-    Take into account all of the provided additional information.  Do not repeat
-    information in the previous paragraph, but build upon it and refer to it
+    Take into account all of the provided additional information.  
+    Do not repeat information in the previous paragraph, but build upon it and refer to it
     if relevant.  Anticipate the next paragraph if useful.
-    If the current draft is provided, focus on improving that draft.  If not, write
+    If the current draft is provided, focus on improving that draft but rewrite it
+    if there are conflicts.  If not, write
     an entirely new paragraph.
     """
 

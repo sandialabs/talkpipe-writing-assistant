@@ -493,6 +493,31 @@ header h1 {
     opacity: 1;
 }
 
+.generated-text-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+}
+
+.btn-generate-text {
+    background-color: #3498db;
+    color: white;
+    font-size: 12px;
+    padding: 6px 12px;
+    transition: background-color 0.3s, opacity 0.3s;
+}
+
+.btn-generate-text:hover:not(:disabled) {
+    background-color: #2980b9;
+}
+
+.btn-generate-text:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .move-up, .move-down {
     background-color: #95a5a6;
     color: white;

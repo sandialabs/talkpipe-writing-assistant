@@ -28,13 +28,7 @@ class Section:
         self._pending_request: Optional[dict] = None
         self._generation_lock = asyncio.Lock()
 
-        # Start initial generation if content provided
-        if main_point or user_text:
-            try:
-                asyncio.create_task(self._async_generate_text(main_point, user_text))
-            except RuntimeError:
-                # If no event loop is running, generate synchronously
-                self.generated_text = self.generate_text(main_point, user_text)
+        # No automatic generation in constructor - only manual generation via button
     
     def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = "") -> str:
         return cb.new_paragraph(main_point=main_point, text=text, metadata=metadata, title=title, prev_paragraph=prev_paragraph, next_paragraph=next_paragraph)

@@ -70,6 +70,8 @@ class WritingAssistant {
                 this.insertSection(position);
             } else if (e.target.classList.contains('btn-replace-text') && section) {
                 this.replaceUserText(section);
+            } else if (e.target.classList.contains('btn-generate-text') && section) {
+                this.generateText(section);
             } else if (e.target.classList.contains('collapse-toggle') || e.target.classList.contains('collapse-icon')) {
                 e.stopPropagation();
                 this.toggleSectionCollapse(section);
@@ -93,16 +95,9 @@ class WritingAssistant {
                 const mainPointValue = e.target.value.trim();
                 sectionTitle.textContent = mainPointValue || 'New Section';
 
-                clearTimeout(this.updateTimeout);
-                this.updateTimeout = setTimeout(() => {
-                    this.updateSection(section);
-                }, 500);
-            } else if (e.target.classList.contains('user-text')) {
-                clearTimeout(this.updateTimeout);
-                this.updateTimeout = setTimeout(() => {
-                    this.updateSection(section);
-                }, 500);
+                // No automatic generation - just update the title
             }
+            // Removed automatic generation for user-text changes
         });
 
         // New Document Modal Event Listeners
@@ -214,7 +209,10 @@ class WritingAssistant {
                                 <span class="loading-spinner">⟳</span>
                                 <span class="loading-text">Generating...</span>
                             </div>
-                            <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
+                            <div class="generated-text-controls">
+                                <button class="btn btn-small btn-primary btn-generate-text" title="Generate new version">⚡ Generate</button>
+                                <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -233,7 +231,7 @@ class WritingAssistant {
         }
     }
 
-    async updateSection(sectionElement) {
+    async generateText(sectionElement) {
         const sectionId = sectionElement.dataset.sectionId;
         const mainPoint = sectionElement.querySelector('.main-point').value;
         const userText = sectionElement.querySelector('.user-text').value;
@@ -242,6 +240,13 @@ class WritingAssistant {
         const loadingIndicator = sectionElement.querySelector('.loading-indicator');
         if (loadingIndicator) {
             loadingIndicator.style.display = 'flex';
+        }
+
+        // Disable generate button during generation
+        const generateButton = sectionElement.querySelector('.btn-generate-text');
+        if (generateButton) {
+            generateButton.disabled = true;
+            generateButton.textContent = '⏳ Generating...';
         }
 
         const formData = new FormData();
@@ -261,12 +266,22 @@ class WritingAssistant {
             // Poll for the final result
             this.pollForGeneratedText(sectionId, sectionElement);
         } catch (error) {
-            console.error('Error updating section:', error);
+            console.error('Error generating text:', error);
             // Hide loading indicator on error
             if (loadingIndicator) {
                 loadingIndicator.style.display = 'none';
             }
+            // Re-enable generate button on error
+            if (generateButton) {
+                generateButton.disabled = false;
+                generateButton.textContent = '⚡ Generate';
+            }
         }
+    }
+
+    async updateSection(sectionElement) {
+        // Legacy method kept for compatibility - now just calls generateText
+        return this.generateText(sectionElement);
     }
 
     async pollForGeneratedText(sectionId, sectionElement) {
@@ -286,6 +301,12 @@ class WritingAssistant {
         const hideLoadingIndicator = () => {
             if (loadingIndicator) {
                 loadingIndicator.style.display = 'none';
+            }
+            // Re-enable generate button
+            const generateButton = sectionElement.querySelector('.btn-generate-text');
+            if (generateButton) {
+                generateButton.disabled = false;
+                generateButton.textContent = '⚡ Generate';
             }
         };
 
@@ -551,15 +572,16 @@ class WritingAssistant {
         document.getElementById('background-context').value = '';
         document.getElementById('generation-directive').value = '';
         document.getElementById('word-limit').value = '';
-        
-        await this.saveMetadataToServer(true);
+
+        await this.saveMetadataToServer(false);
     }
 
     async regenerateAllSections() {
-        const sections = document.querySelectorAll('.section');
-        for (const section of sections) {
-            await this.updateSection(section);
-        }
+        // Disabled: No automatic regeneration - users must click generate buttons manually
+        // const sections = document.querySelectorAll('.section');
+        // for (const section of sections) {
+        //     await this.updateSection(section);
+        // }
     }
 
     showMessage(text, type) {
@@ -589,8 +611,8 @@ class WritingAssistant {
         }
 
         try {
-            // First, save the current metadata to ensure it's up to date
-            await this.saveMetadata();
+            // First, save the current metadata to ensure it's up to date (without regenerating)
+            await this.saveMetadataToServer(false);
             
             const formData = new FormData();
             formData.append('filename', filename);
@@ -878,18 +900,14 @@ class WritingAssistant {
     replaceUserText(section) {
         const generatedTextDiv = section.querySelector('.generated-text');
         const userTextArea = section.querySelector('.user-text');
-        
+
         if (generatedTextDiv && userTextArea) {
             const generatedText = generatedTextDiv.textContent.trim();
-            
+
             if (generatedText) {
                 userTextArea.value = generatedText;
-                
-                clearTimeout(this.updateTimeout);
-                this.updateTimeout = setTimeout(() => {
-                    this.updateSection(section);
-                }, 100);
-                
+
+                // No automatic generation - just replace the text
                 this.showMessage('Text replaced successfully!', 'success');
             } else {
                 this.showMessage('No generated text to replace with.', 'error');
