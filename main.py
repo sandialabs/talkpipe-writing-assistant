@@ -35,10 +35,10 @@ class Section:
                 # If no event loop is running, generate synchronously
                 self.generated_text = self.generate_text(main_point, user_text)
     
-    def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None) -> str:
-        return cb.new_paragraph(main_point=main_point, text=text, metadata=metadata)
+    def generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = "") -> str:
+        return cb.new_paragraph(main_point=main_point, text=text, metadata=metadata, title=title, prev_paragraph=prev_paragraph, next_paragraph=next_paragraph)
     
-    async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None):
+    async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """Internal async method to generate text and update the section"""
         async with self._generation_lock:
             # Cancel any existing task
@@ -54,7 +54,7 @@ class Section:
             self.user_text = text
             
             # Create new task with current values
-            self._current_task = asyncio.create_task(self._generate_text_task(main_point, text, metadata))
+            self._current_task = asyncio.create_task(self._generate_text_task(main_point, text, metadata, title, prev_paragraph, next_paragraph))
             
             try:
                 result = await self._current_task
@@ -65,15 +65,15 @@ class Section:
             except asyncio.CancelledError:
                 return self.generated_text  # Return existing text if cancelled
     
-    async def _generate_text_task(self, main_point: str, text: str, metadata: 'Metadata' = None):
+    async def _generate_text_task(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """The actual text generation task that can be cancelled"""
         # Run the potentially slow text generation in a thread pool
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.generate_text, main_point, text, metadata)
+        return await loop.run_in_executor(None, self.generate_text, main_point, text, metadata, title, prev_paragraph, next_paragraph)
 
-    async def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None):
+    async def update_text(self, main_point: str, user_text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """Update text with atomic state changes"""
-        return await self._async_generate_text(main_point, user_text, metadata)
+        return await self._async_generate_text(main_point, user_text, metadata, title, prev_paragraph, next_paragraph)
 
 class Document:
     def __init__(self):
@@ -170,6 +170,25 @@ class Document:
             self.sections.insert(new_position, section)
             self.reorder_sections()
 
+    def get_section_context(self, section_id: str):
+        """Get title, previous paragraph, and next paragraph for a given section"""
+        section_index = next((i for i, s in enumerate(self.sections) if s.id == section_id), None)
+        if section_index is None:
+            return self.title, "", ""
+
+        prev_paragraph = ""
+        next_paragraph = ""
+
+        if section_index > 0:
+            prev_section = self.sections[section_index - 1]
+            prev_paragraph = prev_section.generated_text or prev_section.user_text
+
+        if section_index < len(self.sections) - 1:
+            next_section = self.sections[section_index + 1]
+            next_paragraph = next_section.generated_text or next_section.user_text
+
+        return self.title, prev_paragraph, next_paragraph
+
 # Helper function to get documents directory
 def get_documents_dir():
     home_dir = Path.home()
@@ -237,8 +256,11 @@ async def add_section(position: Optional[int] = Form(None)):
 async def update_section(section_id: str, main_point: str = Form(""), user_text: str = Form("")):
     section = next((s for s in document.sections if s.id == section_id), None)
     if section:
+        # Get context information
+        title, prev_paragraph, next_paragraph = document.get_section_context(section_id)
+
         # Start async generation but don't wait for it
-        asyncio.create_task(section.update_text(main_point, user_text, document.metadata))
+        asyncio.create_task(section.update_text(main_point, user_text, document.metadata, title, prev_paragraph, next_paragraph))
         return {
             "id": section.id,
             "main_point": main_point,

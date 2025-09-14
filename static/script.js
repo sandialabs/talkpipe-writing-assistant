@@ -9,6 +9,7 @@ class WritingAssistant {
         this.updateSectionNumbers();
         this.loadMetadata();
         this.setupHamburgerMenu();
+        this.initializeExistingSections();
     }
 
     setupEventListeners() {
@@ -47,6 +48,7 @@ class WritingAssistant {
         });
 
         sectionsList.addEventListener('click', (e) => {
+            console.log('Clicked element:', e.target.className, e.target.tagName);
             const section = e.target.closest('.section');
             const sectionWrapper = e.target.closest('.section-wrapper');
 
@@ -66,6 +68,16 @@ class WritingAssistant {
                 this.insertSection(position);
             } else if (e.target.classList.contains('btn-replace-text') && section) {
                 this.replaceUserText(section);
+            } else if (e.target.classList.contains('collapse-toggle') || e.target.classList.contains('collapse-icon')) {
+                e.stopPropagation();
+                this.toggleSectionCollapse(section);
+            } else if (e.target.classList.contains('section-header') ||
+                       e.target.classList.contains('section-title') ||
+                       e.target.classList.contains('section-title-container')) {
+                const headerSection = e.target.closest('.section');
+                if (headerSection && !e.target.closest('.section-controls')) {
+                    this.toggleSectionCollapse(headerSection);
+                }
             }
         });
 
@@ -73,7 +85,17 @@ class WritingAssistant {
             const section = e.target.closest('.section');
             if (!section) return;
 
-            if (e.target.classList.contains('main-point') || e.target.classList.contains('user-text')) {
+            if (e.target.classList.contains('main-point')) {
+                // Update section title immediately as user types
+                const sectionTitle = section.querySelector('.section-title');
+                const mainPointValue = e.target.value.trim();
+                sectionTitle.textContent = mainPointValue || 'New Section';
+
+                clearTimeout(this.updateTimeout);
+                this.updateTimeout = setTimeout(() => {
+                    this.updateSection(section);
+                }, 500);
+            } else if (e.target.classList.contains('user-text')) {
                 clearTimeout(this.updateTimeout);
                 this.updateTimeout = setTimeout(() => {
                     this.updateSection(section);
@@ -157,18 +179,23 @@ class WritingAssistant {
             <div class="insert-controls insert-above">
                 <button class="btn btn-small btn-insert insert-above-btn" title="Insert Section Above">+ Insert Above</button>
             </div>
-            
+
             <div class="section" data-section-id="${section.id}" data-order="${section.order}">
-                <div class="section-header">
-                    <span class="section-number">Section ${section.order + 1}</span>
+                <div class="section-header" data-collapse-target="${section.id}">
+                    <div class="section-title-container">
+                        <button class="collapse-toggle" title="Expand/Collapse Section">
+                            <span class="collapse-icon">▼</span>
+                        </button>
+                        <span class="section-title">${section.main_point || 'New Section'}</span>
+                    </div>
                     <div class="section-controls">
                         <button class="btn btn-small move-up" title="Move Up">↑</button>
                         <button class="btn btn-small move-down" title="Move Down">↓</button>
                         <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
                     </div>
                 </div>
-                
-                <div class="section-content">
+
+                <div class="section-content expanded" data-section-content="${section.id}">
                     <div class="form-group">
                         <label>Main Point (single sentence):</label>
                         <input type="text" class="main-point" value="${section.main_point}" placeholder="Enter the main point...">
@@ -393,9 +420,32 @@ class WritingAssistant {
         const sections = document.querySelectorAll('.section');
         sections.forEach((section, index) => {
             section.dataset.order = index;
-            const numberSpan = section.querySelector('.section-number');
-            numberSpan.textContent = `Section ${index + 1}`;
         });
+    }
+
+    toggleSectionCollapse(section) {
+        if (!section) return;
+
+        const content = section.querySelector('.section-content');
+
+        if (!content) {
+            console.log('Could not find content element');
+            return;
+        }
+
+        const isCollapsed = content.classList.contains('collapsed');
+
+        if (isCollapsed) {
+            // Expand
+            content.classList.remove('collapsed');
+            content.classList.add('expanded');
+            section.classList.remove('collapsed');
+        } else {
+            // Collapse
+            content.classList.add('collapsed');
+            content.classList.remove('expanded');
+            section.classList.add('collapsed');
+        }
     }
 
     switchTab(tabName) {
@@ -994,6 +1044,28 @@ class WritingAssistant {
             console.error('Error creating new document:', error);
             this.showMessage('Error creating new document. Please try again.', 'error');
         }
+    }
+
+    initializeExistingSections() {
+        // Initialize any sections that were already on the page when loaded
+        const existingSections = document.querySelectorAll('.section');
+        existingSections.forEach(section => {
+            const mainPointInput = section.querySelector('.main-point');
+            const sectionTitle = section.querySelector('.section-title');
+
+            if (mainPointInput && sectionTitle) {
+                // Set initial title from main point value
+                const mainPointValue = mainPointInput.value.trim();
+                sectionTitle.textContent = mainPointValue || 'New Section';
+
+                // Make sure content starts expanded
+                const content = section.querySelector('.section-content');
+                if (content) {
+                    content.classList.add('expanded');
+                    content.classList.remove('collapsed');
+                }
+            }
+        });
     }
 }
 

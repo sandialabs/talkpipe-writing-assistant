@@ -73,16 +73,21 @@
                                 </div>
                                 
                                 <div class="section" data-section-id="{{ section.id }}" data-order="{{ section.order }}">
-                                    <div class="section-header">
-                                        <span class="section-number">Section {{ section.order + 1 }}</span>
+                                    <div class="section-header" data-collapse-target="{{ section.id }}">
+                                        <div class="section-title-container">
+                                            <button class="collapse-toggle" title="Expand/Collapse Section">
+                                                <span class="collapse-icon">▼</span>
+                                            </button>
+                                            <span class="section-title">{{ section.main_point or 'New Section' }}</span>
+                                        </div>
                                         <div class="section-controls">
                                             <button class="btn btn-small move-up" title="Move Up">↑</button>
                                             <button class="btn btn-small move-down" title="Move Down">↓</button>
                                             <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
                                         </div>
                                     </div>
-                                
-                                <div class="section-content">
+
+                                <div class="section-content expanded" data-section-content="{{ section.id }}">
                                     <div class="form-group">
                                         <label>Main Point (single sentence):</label>
                                         <input type="text" class="main-point" value="{{ section.main_point }}" placeholder="Enter the main point...">
