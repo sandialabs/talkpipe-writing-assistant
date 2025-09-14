@@ -59,6 +59,8 @@
                         <div class="sections-header">
                             <h2>Sections</h2>
                             <div class="sections-controls">
+                                <button id="expand-all-btn" class="btn btn-outline btn-small">⬇ Expand All</button>
+                                <button id="collapse-all-btn" class="btn btn-outline btn-small">⬆ Collapse All</button>
                                 <button id="new-document-btn" class="btn btn-success">📄 New Document</button>
                                 <button id="copy-document-btn" class="btn btn-secondary">📋 Copy Document</button>
                                 <button id="add-section-btn" class="btn btn-primary">Add Section</button>
@@ -68,10 +70,6 @@
                         <div id="sections-list">
                             {% for section in document.sections %}
                             <div class="section-wrapper">
-                                <div class="insert-controls insert-above">
-                                    <button class="btn btn-small btn-insert insert-above-btn" title="Insert Section Above">+ Insert Above</button>
-                                </div>
-                                
                                 <div class="section" data-section-id="{{ section.id }}" data-order="{{ section.order }}">
                                     <div class="section-header" data-collapse-target="{{ section.id }}">
                                         <div class="section-title-container">
@@ -81,6 +79,8 @@
                                             <span class="section-title">{{ section.main_point or 'New Section' }}</span>
                                         </div>
                                         <div class="section-controls">
+                                            <button class="btn btn-small btn-muted insert-above-btn" title="Insert Section Above">+↑</button>
+                                            <button class="btn btn-small btn-muted insert-below-btn" title="Insert Section Below">+↓</button>
                                             <button class="btn btn-small move-up" title="Move Up">↑</button>
                                             <button class="btn btn-small move-down" title="Move Down">↓</button>
                                             <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
@@ -106,10 +106,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                </div>
-                                
-                                <div class="insert-controls insert-below">
-                                    <button class="btn btn-small btn-insert insert-below-btn" title="Insert Section Below">+ Insert Below</button>
                                 </div>
                             </div>
                             {% endfor %}

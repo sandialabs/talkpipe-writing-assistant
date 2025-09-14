@@ -32,9 +32,9 @@ PROMPT_TEMPLATE = """
 
     Approximate Word Limit: {metadata.word_limit}
 
-    Previous Paragraph: {prev_paragraph}
+    Paragraph before the current paragraph: {prev_paragraph}
 
-    Next Paragraph: {next_paragraph}
+    Paragraph after the current paragraph: {next_paragraph}
 
     Main Point for current paragraph: {main_point}
 

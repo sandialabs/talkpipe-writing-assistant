@@ -268,6 +268,56 @@ header h1 {
     background-color: #c0392b;
 }
 
+.btn-outline {
+    background-color: transparent;
+    color: #3498db;
+    border: 1px solid #3498db;
+}
+
+.btn-outline:hover {
+    background-color: #3498db;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background-color: #95a5a6;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #7f8c8d;
+}
+
+.btn-success {
+    background-color: #27ae60;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #229954;
+}
+
+.btn-muted {
+    background-color: #bdc3c7;
+    color: white;
+    border: 1px solid transparent;
+    opacity: 0.7;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 10px;
+}
+
+.btn-muted:hover {
+    background-color: #95a5a6;
+    opacity: 1;
+    transform: translateY(-1px);
+}
+
 .section-wrapper {
     margin-bottom: 20px;
     position: relative;
@@ -458,37 +508,6 @@ header h1 {
     background-color: #7f8c8d;
 }
 
-.insert-controls {
-    display: flex;
-    justify-content: center;
-    margin: 8px 0;
-}
-
-.insert-above {
-    margin-bottom: 12px;
-}
-
-.insert-below {
-    margin-top: 12px;
-}
-
-.btn-insert {
-    background-color: #27ae60;
-    color: white;
-    font-size: 11px;
-    padding: 6px 12px;
-    opacity: 0.7;
-    transition: opacity 0.3s, background-color 0.3s;
-}
-
-.btn-insert:hover {
-    opacity: 1;
-    background-color: #229954;
-}
-
-.section-wrapper:hover .btn-insert {
-    opacity: 0.9;
-}
 
 .no-sections-message {
     text-align: center;

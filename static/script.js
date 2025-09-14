@@ -28,11 +28,15 @@ class WritingAssistant {
         const loadFileInput = document.getElementById('load-file');
         const copyDocumentBtn = document.getElementById('copy-document-btn');
         const newDocumentBtn = document.getElementById('new-document-btn');
+        const expandAllBtn = document.getElementById('expand-all-btn');
+        const collapseAllBtn = document.getElementById('collapse-all-btn');
 
         titleInput.addEventListener('blur', () => this.updateTitle(titleInput.value));
         addSectionBtn.addEventListener('click', () => this.addSection());
         copyDocumentBtn.addEventListener('click', () => this.copyDocumentToClipboard());
         newDocumentBtn.addEventListener('click', () => this.showNewDocumentModal());
+        expandAllBtn.addEventListener('click', () => this.expandAllSections());
+        collapseAllBtn.addEventListener('click', () => this.collapseAllSections());
         
         saveMetadataBtn.addEventListener('click', () => this.saveMetadata());
         resetMetadataBtn.addEventListener('click', () => this.resetMetadata());
@@ -58,13 +62,11 @@ class WritingAssistant {
                 this.moveSection(section, 'up');
             } else if (e.target.classList.contains('move-down') && section) {
                 this.moveSection(section, 'down');
-            } else if (e.target.classList.contains('insert-above-btn') && sectionWrapper) {
-                const currentSection = sectionWrapper.querySelector('.section');
-                const position = parseInt(currentSection.dataset.order);
+            } else if (e.target.classList.contains('insert-above-btn') && section) {
+                const position = parseInt(section.dataset.order);
                 this.insertSection(position);
-            } else if (e.target.classList.contains('insert-below-btn') && sectionWrapper) {
-                const currentSection = sectionWrapper.querySelector('.section');
-                const position = parseInt(currentSection.dataset.order) + 1;
+            } else if (e.target.classList.contains('insert-below-btn') && section) {
+                const position = parseInt(section.dataset.order) + 1;
                 this.insertSection(position);
             } else if (e.target.classList.contains('btn-replace-text') && section) {
                 this.replaceUserText(section);
@@ -176,10 +178,6 @@ class WritingAssistant {
         sectionWrapper.className = 'section-wrapper';
 
         sectionWrapper.innerHTML = `
-            <div class="insert-controls insert-above">
-                <button class="btn btn-small btn-insert insert-above-btn" title="Insert Section Above">+ Insert Above</button>
-            </div>
-
             <div class="section" data-section-id="${section.id}" data-order="${section.order}">
                 <div class="section-header" data-collapse-target="${section.id}">
                     <div class="section-title-container">
@@ -189,6 +187,8 @@ class WritingAssistant {
                         <span class="section-title">${section.main_point || 'New Section'}</span>
                     </div>
                     <div class="section-controls">
+                        <button class="btn btn-small btn-muted insert-above-btn" title="Insert Section Above">+↑</button>
+                        <button class="btn btn-small btn-muted insert-below-btn" title="Insert Section Below">+↓</button>
                         <button class="btn btn-small move-up" title="Move Up">↑</button>
                         <button class="btn btn-small move-down" title="Move Down">↓</button>
                         <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
@@ -218,10 +218,6 @@ class WritingAssistant {
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="insert-controls insert-below">
-                <button class="btn btn-small btn-insert insert-below-btn" title="Insert Section Below">+ Insert Below</button>
             </div>
         `;
 
@@ -1064,6 +1060,26 @@ class WritingAssistant {
                     content.classList.add('expanded');
                     content.classList.remove('collapsed');
                 }
+            }
+        });
+    }
+
+    expandAllSections() {
+        const sections = document.querySelectorAll('.section');
+        sections.forEach(section => {
+            const content = section.querySelector('.section-content');
+            if (content && content.classList.contains('collapsed')) {
+                this.toggleSectionCollapse(section);
+            }
+        });
+    }
+
+    collapseAllSections() {
+        const sections = document.querySelectorAll('.section');
+        sections.forEach(section => {
+            const content = section.querySelector('.section-content');
+            if (content && !content.classList.contains('collapsed')) {
+                this.toggleSectionCollapse(section);
             }
         });
     }
