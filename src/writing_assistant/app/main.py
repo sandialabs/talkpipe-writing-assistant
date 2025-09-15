@@ -9,13 +9,16 @@ import json
 from datetime import datetime
 from pathlib import Path
 import asyncio
-import callbacks as cb
-from definitions import Metadata
+from ..core import callbacks as cb
+from ..core.definitions import Metadata
 
 app = FastAPI(title="Writing Assistant")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+# Get the directory where this module is located
+app_dir = Path(__file__).parent
+
+app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
+templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
 class Section:
     def __init__(self, id: str = None, main_point: str = "", user_text: str = "", order: int = 0):

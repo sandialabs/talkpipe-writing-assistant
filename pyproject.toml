@@ -1,0 +1,163 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "talkpipe-writing-assistant"
+authors = [
+    {name = "Travis Bauer", email = "tlbauer@sandia.gov"},
+]
+maintainers = [
+    {name = "Travis Bauer", email = "tlbauer@sandia.gov"}
+]
+description = "AI-powered writing assistant for structured document generation"
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["ai", "writing", "assistant", "document", "generation"]
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Text Processing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "talkpipe>=0.9.0a5",
+    "fastapi[standard]>=0.104.1",
+    "uvicorn>=0.24.0",
+    "jinja2>=3.1.2",
+    "python-multipart>=0.0.6",
+    "pydantic>=2.0.0",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.24.0",  # For testing FastAPI endpoints
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.24.0",
+]
+security = [
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+
+[project.scripts]
+writing-assistant = "writing_assistant.app.server:main"
+
+[project.urls]
+Homepage = "https://github.com/sandialabs/talkpipe-writing-assistant"
+Repository = "https://github.com/sandialabs/talkpipe-writing-assistant"
+Documentation = "https://github.com/sandialabs/talkpipe-writing-assistant#readme"
+"Bug Tracker" = "https://github.com/sandialabs/talkpipe-writing-assistant/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.html", "*.css", "*.js", "*.json"]
+"writing_assistant.app" = ["templates/**/*", "static/**/*"]
+
+[tool.setuptools_scm]
+# Use defaults
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=src/writing_assistant --cov-report=term-missing --cov-report=html --cov-report=xml"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src/writing_assistant"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \\.eggs
+  | \\.git
+  | \\.hg
+  | \\.mypy_cache
+  | \\.tox
+  | \\.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["writing_assistant"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "talkpipe.*",
+    "uvicorn.*",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+#skips = ["B101", "B601"]
+
+[tool.bandit.assert_used]
+skips = ["*/test_*.py", "*/conftest.py"]
