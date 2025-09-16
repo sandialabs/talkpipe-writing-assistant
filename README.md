@@ -22,7 +22,7 @@ pip install writing-assistant
 ### From source
 
 ```bash
-git clone https://github.com/sandialabs/writing-assistant.git
+git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
 cd writing-assistant
 pip install -e .
 ```
@@ -31,10 +31,10 @@ pip install -e .
 
 ```bash
 # Production deployment
-docker-compose up writing-assistant
+docker-compose up talkpipe-writing-assistant
 
 # Development with live reload
-docker-compose --profile dev up writing-assistant-dev
+docker-compose --profile dev up talkpipe-writing-assistant-dev
 ```
 
 ## Usage
@@ -45,8 +45,6 @@ Start the writing assistant server:
 
 ```bash
 writing-assistant
-# or
-writing-assistant-server
 ```
 
 The application will be available at http://localhost:8001
