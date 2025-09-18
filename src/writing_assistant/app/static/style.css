@@ -363,6 +363,10 @@ header h1 {
     overflow: hidden;
     letter-spacing: 0.025em;
     box-shadow: var(--shadow-sm);
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn:hover {
@@ -390,6 +394,7 @@ header h1 {
     font-size: 12px;
     margin: 0 4px;
     border-radius: var(--radius-md);
+    height: 32px;
 }
 
 .btn-danger {
@@ -440,13 +445,14 @@ header h1 {
     color: white;
     border: 1px solid transparent;
     opacity: 0.7;
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
     font-size: 10px;
+    padding: 0;
 }
 
 .btn-muted:hover {
@@ -701,7 +707,6 @@ header h1 {
 .btn-replace-text {
     background: linear-gradient(135deg, var(--warning-color) 0%, #d69e2e 100%);
     color: white;
-    margin-top: 8px;
     font-size: 12px;
     padding: 8px 16px;
     opacity: 0.9;
@@ -709,6 +714,7 @@ header h1 {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
+    height: 32px;
 }
 
 .btn-replace-text:hover {
@@ -729,12 +735,15 @@ header h1 {
     background-color: #3498db;
     color: white;
     font-size: 12px;
-    padding: 6px 12px;
+    padding: 8px 16px;
     transition: background-color 0.3s, opacity 0.3s;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-generate-text:hover:not(:disabled) {
     background-color: #2980b9;
+    transform: translateY(-2px);
 }
 
 .btn-generate-text:disabled {
@@ -746,12 +755,13 @@ header h1 {
 .move-up, .move-down {
     background-color: #95a5a6;
     color: white;
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
+    padding: 0;
 }
 
 .move-up:hover, .move-down:hover {

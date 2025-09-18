@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File
+from fastapi import FastAPI, Request, Form, UploadFile, File, Response
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -17,7 +17,15 @@ app = FastAPI(title="Writing Assistant")
 # Get the directory where this module is located
 app_dir = Path(__file__).parent
 
-app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+app.mount("/static", NoCacheStaticFiles(directory=str(app_dir / "static")), name="static")
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
 class Section:
@@ -38,6 +46,11 @@ class Section:
     
     async def _async_generate_text(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """Internal async method to generate text with proper queuing"""
+        # Don't generate if main_point is empty or whitespace only
+        if not main_point or not main_point.strip():
+            print(f"Skipping generation for section {self.id}: empty main_point")
+            return self.generated_text
+
         request_params = {
             'main_point': main_point,
             'text': text,
@@ -48,54 +61,53 @@ class Section:
         }
 
         async with self._generation_lock:
-            # If there's a current task running
+            # Cancel any existing task to prevent queue buildup
             if self._current_task and not self._current_task.done():
-                # Store this as the pending request (replacing any existing one)
-                self._pending_request = request_params
-                return self.generated_text  # Return current text immediately
+                self._current_task.cancel()
+                try:
+                    await self._current_task
+                except asyncio.CancelledError:
+                    pass
 
-            # No current task, start this request immediately
+            # Clear any pending request
+            self._pending_request = None
+
+            # Start new generation immediately
             self._current_task = asyncio.create_task(self._process_generation_queue(request_params))
 
         # Don't await here - let it run in background
         return self.generated_text
     
     async def _process_generation_queue(self, initial_params: dict):
-        """Process generation requests, ensuring max 2 requests (current + pending)"""
-        while True:
+        """Process single generation request"""
+        try:
             # Update section state with current request
             self.main_point = initial_params['main_point']
             self.user_text = initial_params['text']
 
             # Run the actual generation
             loop = asyncio.get_event_loop()
-            try:
-                result = await loop.run_in_executor(
-                    None,
-                    self.generate_text,
-                    initial_params['main_point'],
-                    initial_params['text'],
-                    initial_params['metadata'],
-                    initial_params['title'],
-                    initial_params['prev_paragraph'],
-                    initial_params['next_paragraph']
-                )
-                self.generated_text = result
-            except Exception as e:
-                print(f"Generation error: {e}")
-                # Keep existing text on error
-
-            # Check if there's a pending request
+            result = await loop.run_in_executor(
+                None,
+                self.generate_text,
+                initial_params['main_point'],
+                initial_params['text'],
+                initial_params['metadata'],
+                initial_params['title'],
+                initial_params['prev_paragraph'],
+                initial_params['next_paragraph']
+            )
+            self.generated_text = result
+        except asyncio.CancelledError:
+            print("Generation cancelled")
+            raise
+        except Exception as e:
+            print(f"Generation error: {e}")
+            # Keep existing text on error
+        finally:
+            # Clear current task when done
             async with self._generation_lock:
-                if self._pending_request:
-                    # Process the pending request next
-                    initial_params = self._pending_request
-                    self._pending_request = None
-                    continue
-                else:
-                    # No more requests, clear current task
-                    self._current_task = None
-                    break
+                self._current_task = None
 
     async def _generate_text_task(self, main_point: str, text: str, metadata: 'Metadata' = None, title: str = "", prev_paragraph: str = "", next_paragraph: str = ""):
         """Legacy method - kept for compatibility"""
@@ -311,6 +323,24 @@ async def update_section(section_id: str, main_point: str = Form(""), user_text:
         }
     return {"error": "Section not found"}, 404
 
+@app.patch("/sections/{section_id}")
+async def update_section_data_only(section_id: str, main_point: str = Form(""), user_text: str = Form("")):
+    """Update section data without triggering text generation"""
+    section = next((s for s in document.sections if s.id == section_id), None)
+    if section:
+        # Update fields directly without triggering generation
+        section.main_point = main_point
+        section.user_text = user_text
+
+        return {
+            "id": section.id,
+            "main_point": section.main_point,
+            "user_text": section.user_text,
+            "generated_text": section.generated_text,
+            "order": section.order
+        }
+    return {"error": "Section not found"}, 404
+
 @app.get("/sections/{section_id}/generated")
 async def get_generated_text(section_id: str):
     section = next((s for s in document.sections if s.id == section_id), None)
@@ -446,6 +476,19 @@ async def delete_document(filename: str):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.post("/documents/clear")
+async def clear_document():
+    """Clear the current document and create a fresh one"""
+    global document
+    # Cancel any ongoing generation tasks
+    for section in document.sections:
+        if section._current_task and not section._current_task.done():
+            section._current_task.cancel()
+
+    # Create a new document instance
+    document = Document()
+    return {"status": "success"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8001, reload=True)

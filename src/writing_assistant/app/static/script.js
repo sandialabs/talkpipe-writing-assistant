@@ -193,14 +193,14 @@ class WritingAssistant {
                 <div class="section-content expanded" data-section-content="${section.id}">
                     <div class="form-group">
                         <label>Main Point (single sentence):</label>
-                        <input type="text" class="main-point" value="${section.main_point}" placeholder="Enter the main point...">
+                        <input type="text" class="main-point" placeholder="Enter the main point...">
                     </div>
-                    
+
                     <div class="form-group">
                         <label>Your Text:</label>
-                        <textarea class="user-text" rows="4" placeholder="Enter your text here...">${section.user_text}</textarea>
+                        <textarea class="user-text" rows="4" placeholder="Enter your text here..."></textarea>
                     </div>
-                    
+
                     <div class="form-group">
                         <label>Generated Text:</label>
                         <div class="generated-text-container">
@@ -229,12 +229,43 @@ class WritingAssistant {
         } else {
             sectionsList.appendChild(sectionWrapper);
         }
+
+        // Set values after element is in DOM to avoid triggering input events during creation
+        const sectionElement = sectionWrapper.querySelector('.section');
+        const mainPointInput = sectionElement.querySelector('.main-point');
+        const userTextArea = sectionElement.querySelector('.user-text');
+
+        if (mainPointInput && section.main_point) {
+            mainPointInput.value = section.main_point;
+        }
+        if (userTextArea && section.user_text) {
+            userTextArea.value = section.user_text;
+        }
     }
 
     async generateText(sectionElement) {
         const sectionId = sectionElement.dataset.sectionId;
+        const generateButton = sectionElement.querySelector('.btn-generate-text');
+
+        // Prevent multiple clicks - check if already generating
+        if (generateButton && generateButton.disabled) {
+            return;
+        }
+
+        // Clear any existing polling for this section first
+        if (this.pollingIntervals.has(sectionId)) {
+            clearTimeout(this.pollingIntervals.get(sectionId));
+            this.pollingIntervals.delete(sectionId);
+        }
+
         const mainPoint = sectionElement.querySelector('.main-point').value;
         const userText = sectionElement.querySelector('.user-text').value;
+
+        // Don't generate if main point is empty
+        if (!mainPoint || !mainPoint.trim()) {
+            this.showMessage('Please enter a main point before generating text', 'error');
+            return;
+        }
 
         // Show loading indicator immediately
         const loadingIndicator = sectionElement.querySelector('.loading-indicator');
@@ -243,7 +274,6 @@ class WritingAssistant {
         }
 
         // Disable generate button during generation
-        const generateButton = sectionElement.querySelector('.btn-generate-text');
         if (generateButton) {
             generateButton.disabled = true;
             generateButton.textContent = '⏳ Generating...';
@@ -320,35 +350,15 @@ class WritingAssistant {
                     lastText = data.generated_text;
                 }
 
-                // Continue polling if:
-                // 1. Still generating, OR
-                // 2. Haven't exceeded max polls AND text might still be updating
-                if ((data.is_generating || pollCount < 5) && pollCount < maxPolls) {
+                // Only continue polling if still generating
+                if (data.is_generating && pollCount < maxPolls) {
                     pollCount++;
                     const timeoutId = setTimeout(poll, 1000); // Poll every 1 second
                     this.pollingIntervals.set(sectionId, timeoutId);
                 } else {
-                    // Do one final poll after generation completes to ensure we get the result
-                    if (!data.is_generating && pollCount < maxPolls) {
-                        const finalTimeoutId = setTimeout(async () => {
-                            try {
-                                const finalResponse = await fetch(`/sections/${sectionId}/generated`);
-                                const finalData = await finalResponse.json();
-                                if (finalData.generated_text) {
-                                    generatedTextDiv.textContent = finalData.generated_text;
-                                }
-                            } catch (error) {
-                                console.error('Error in final poll:', error);
-                            }
-                            hideLoadingIndicator();
-                            this.pollingIntervals.delete(sectionId);
-                        }, 1000);
-                        this.pollingIntervals.set(sectionId, finalTimeoutId);
-                    } else {
-                        // Polling complete, clean up
-                        hideLoadingIndicator();
-                        this.pollingIntervals.delete(sectionId);
-                    }
+                    // Generation complete, clean up immediately
+                    hideLoadingIndicator();
+                    this.pollingIntervals.delete(sectionId);
                 }
             } catch (error) {
                 console.error('Error polling for generated text:', error);
@@ -514,7 +524,7 @@ class WritingAssistant {
 
     async saveMetadataToServer(showMessage = true) {
         const metadata = this.getMetadataFromForm();
-        
+
         const formData = new FormData();
         Object.keys(metadata).forEach(key => {
             if (metadata[key] !== null && metadata[key] !== '') {
@@ -527,10 +537,9 @@ class WritingAssistant {
                 method: 'POST',
                 body: formData
             });
-            
+
             if (showMessage) {
                 this.showMessage('Metadata saved successfully!', 'success');
-                this.regenerateAllSections();
             }
         } catch (error) {
             console.error('Error saving metadata:', error);
@@ -576,13 +585,6 @@ class WritingAssistant {
         await this.saveMetadataToServer(false);
     }
 
-    async regenerateAllSections() {
-        // Disabled: No automatic regeneration - users must click generate buttons manually
-        // const sections = document.querySelectorAll('.section');
-        // for (const section of sections) {
-        //     await this.updateSection(section);
-        // }
-    }
 
     showMessage(text, type) {
         const existingMessage = document.querySelector('.message');
@@ -1020,9 +1022,19 @@ class WritingAssistant {
             titleInput.value = title;
             await this.updateTitle(title);
 
-            // Clear all existing sections
+            // Clear all existing sections from frontend
             const sectionsList = document.getElementById('sections-list');
+
+            // Cancel any ongoing polling for existing sections
+            this.pollingIntervals.forEach((timeoutId, sectionId) => {
+                clearTimeout(timeoutId);
+            });
+            this.pollingIntervals.clear();
+
             sectionsList.innerHTML = '<div class="no-sections-message"><p>No sections yet. Click "Add Section" to get started.</p></div>';
+
+            // Clear backend document state
+            await fetch('/documents/clear', { method: 'POST' });
 
             // Create sections from outline
             if (outline) {
@@ -1033,13 +1045,13 @@ class WritingAssistant {
                     });
                     const section = await response.json();
                     
-                    // Update the section with the main point
+                    // Update the section with the main point (data only, no generation)
                     const formData = new FormData();
                     formData.append('main_point', line.trim());
                     formData.append('user_text', '');
-                    
+
                     await fetch(`/sections/${section.id}`, {
-                        method: 'PUT',
+                        method: 'PATCH',
                         body: formData
                     });
                     

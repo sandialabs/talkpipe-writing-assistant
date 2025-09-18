@@ -1,5 +1,6 @@
 from talkpipe import compile
 import threading
+import traceback
 from talkpipe.pipe.basic import fillTemplate
 from talkpipe.pipe.io import Print
 from talkpipe.llm.chat import LLMPrompt
@@ -48,7 +49,13 @@ PROMPT_TEMPLATE = """
 
 
 def new_paragraph(main_point: str, text: str, metadata: Metadata, title: str = "", prev_paragraph: str = "", next_paragraph: str = "") -> str:
-    print(metadata.source, metadata.model)
+    print(f"=== new_paragraph called ===")
+    print(f"Args: main_point='{main_point[:50]}...', text='{text[:50]}...', title='{title}'")
+    print(f"Metadata: {metadata.source}, {metadata.model}")
+    print("Call stack:")
+    traceback.print_stack()
+    print("=== end stack trace ===")
+
     with _paragraph_lock:
         f = (fillTemplate(template=PROMPT_TEMPLATE)
             | Print()
