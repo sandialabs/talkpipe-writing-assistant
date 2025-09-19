@@ -34,6 +34,9 @@ class WritingAssistant {
         generateBtn.addEventListener('click', () => this.generateSuggestionForCurrentSection());
         useSuggestionBtn.addEventListener('click', () => this.useSuggestion());
 
+        // Initialize hotkey system
+        this.initializeHotkeys();
+
         // Header controls
         document.getElementById('new-document-btn').addEventListener('click', () => this.showNewDocumentModal());
         document.getElementById('save-document-btn').addEventListener('click', () => this.saveDocumentToServer());
@@ -204,7 +207,7 @@ class WritingAssistant {
         if (this.currentSectionIndex === -1 || this.sections.length === 0) {
             suggestionText.textContent = 'Position your cursor in a section above to see AI suggestions for that section.';
             generateBtn.disabled = true;
-            generateBtn.textContent = '⚡ Generate';
+            this.setGenerateButtonText('⚡ Generate');
             useSuggestionBtn.disabled = true;
             infoElement.textContent = 'No section selected';
         } else {
@@ -217,11 +220,11 @@ class WritingAssistant {
 
             if (currentSection.generated_text) {
                 suggestionText.textContent = currentSection.generated_text;
-                generateBtn.textContent = '🔄 Regenerate';
+                this.setGenerateButtonText('🔄 Regenerate');
                 useSuggestionBtn.disabled = false;
             } else {
                 suggestionText.textContent = 'Click "Generate" to get AI suggestions for this section.';
-                generateBtn.textContent = '⚡ Generate';
+                this.setGenerateButtonText('⚡ Generate');
                 useSuggestionBtn.disabled = true;
             }
         }
@@ -239,7 +242,7 @@ class WritingAssistant {
 
         // Show loading state
         generateBtn.disabled = true;
-        generateBtn.textContent = '⏳ Generating...';
+        this.setGenerateButtonText('⏳ Generating...');
         suggestionText.textContent = 'Generating AI suggestion...';
 
         try {
@@ -248,12 +251,17 @@ class WritingAssistant {
             const nextSection = this.currentSectionIndex < this.sections.length - 1 ? this.sections[this.currentSectionIndex + 1] : null;
 
             const title = document.getElementById('document-title').value || '';
+
+            // Get selected generation mode
+            const selectedMode = document.querySelector('input[name="generation-mode"]:checked').value;
+
             const formData = new FormData();
             formData.append('main_point', this.extractMainPoint(currentSection.text));
             formData.append('user_text', currentSection.text);
             formData.append('title', title);
             formData.append('prev_paragraph', prevSection ? prevSection.text : '');
             formData.append('next_paragraph', nextSection ? nextSection.text : '');
+            formData.append('generation_mode', selectedMode);
 
             const response = await fetch('/generate-text', {
                 method: 'POST',
@@ -276,7 +284,12 @@ class WritingAssistant {
             suggestionText.textContent = 'Error generating suggestion. Please try again.';
         } finally {
             generateBtn.disabled = false;
-            generateBtn.textContent = '⚡ Generate';
+            // Update button text based on whether we have generated text
+            if (currentSection.generated_text) {
+                this.setGenerateButtonText('🔄 Regenerate');
+            } else {
+                this.setGenerateButtonText('⚡ Generate');
+            }
         }
     }
 
@@ -298,14 +311,28 @@ class WritingAssistant {
         }
 
         const textarea = document.getElementById('document-text');
+
+        // Debug section boundaries
+        console.log('Section replacement debug:');
+        console.log('Current section text:', JSON.stringify(currentSection.text));
+        console.log('Section start pos:', currentSection.startPos);
+        console.log('Section end pos:', currentSection.endPos);
+        console.log('Generated text:', JSON.stringify(currentSection.generated_text));
+
         const beforeSection = this.documentText.substring(0, currentSection.startPos);
         const afterSection = this.documentText.substring(currentSection.endPos);
 
+        console.log('Before section:', JSON.stringify(beforeSection.slice(-10))); // Last 10 chars
+        console.log('After section:', JSON.stringify(afterSection.slice(0, 10))); // First 10 chars
+
+        // Clean the generated text to prevent extra blank lines
+        const cleanGeneratedText = currentSection.generated_text.trim();
+
         // Calculate new cursor position (end of the replaced section)
-        const newCursorPos = beforeSection.length + currentSection.generated_text.length;
+        const newCursorPos = beforeSection.length + cleanGeneratedText.length;
 
         // Replace the current section with the suggestion
-        const newText = beforeSection + currentSection.generated_text + afterSection;
+        const newText = beforeSection + cleanGeneratedText + afterSection;
         textarea.value = newText;
 
         // Set cursor position to end of the replaced section
@@ -485,7 +512,10 @@ class WritingAssistant {
         localStorage.setItem('generationSource', source);
         localStorage.setItem('generationModel', model);
 
-        this.showMessage('AI settings saved successfully!', 'success');
+        // Save hotkey settings
+        this.saveHotkeySettings();
+
+        this.showMessage('AI settings and hotkeys saved successfully!', 'success');
     }
 
     async applySavedAISettings() {
@@ -558,6 +588,142 @@ class WritingAssistant {
                 }
             }
         }
+    }
+
+    // Hotkey Management System
+    initializeHotkeys() {
+        // Load hotkeys from localStorage or use defaults
+        this.hotkeys = {
+            generate: localStorage.getItem('generateHotkey') || 'Ctrl+G',
+            useText: localStorage.getItem('useTextHotkey') || 'Ctrl+U'
+        };
+
+        // Update button labels with current hotkeys
+        this.updateButtonLabels();
+
+        // Set up global hotkey listener
+        this.setupHotkeyListener();
+
+        // Load hotkey values into settings form
+        this.loadHotkeySettings();
+    }
+
+    setupHotkeyListener() {
+        // Remove existing listener if it exists
+        if (this.hotkeyListener) {
+            document.removeEventListener('keydown', this.hotkeyListener);
+        }
+
+        // Create new listener
+        this.hotkeyListener = (e) => {
+            const pressedKey = this.getKeyComboString(e);
+
+            if (pressedKey === this.hotkeys.generate) {
+                e.preventDefault();
+                const generateBtn = document.getElementById('generate-btn');
+                if (!generateBtn.disabled) {
+                    this.generateSuggestionForCurrentSection();
+                }
+            } else if (pressedKey === this.hotkeys.useText) {
+                e.preventDefault();
+                const useSuggestionBtn = document.getElementById('use-suggestion-btn');
+                if (!useSuggestionBtn.disabled) {
+                    this.useSuggestion();
+                }
+            }
+        };
+
+        document.addEventListener('keydown', this.hotkeyListener);
+    }
+
+    getKeyComboString(e) {
+        const parts = [];
+        if (e.ctrlKey) parts.push('Ctrl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey) parts.push('Shift');
+        if (e.metaKey) parts.push('Meta');
+
+        // Get the main key
+        let key = e.key;
+        if (key === ' ') key = 'Space';
+        else if (key === 'Enter') key = 'Enter';
+        else if (key.length === 1) key = key.toUpperCase();
+
+        // Don't include modifier keys as the main key
+        if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
+            parts.push(key);
+        }
+
+        return parts.join('+');
+    }
+
+    parseHotkeyString(hotkeyString) {
+        if (!hotkeyString || typeof hotkeyString !== 'string') return null;
+
+        const parts = hotkeyString.split('+').map(p => p.trim());
+        if (parts.length === 0) return null;
+
+        return {
+            ctrl: parts.includes('Ctrl'),
+            alt: parts.includes('Alt'),
+            shift: parts.includes('Shift'),
+            meta: parts.includes('Meta'),
+            key: parts[parts.length - 1] // Last part is the main key
+        };
+    }
+
+    updateButtonLabels() {
+        this.setGenerateButtonText();
+        this.setUseSuggestionButtonText();
+    }
+
+    setGenerateButtonText(baseText = null) {
+        const generateBtn = document.getElementById('generate-btn');
+        if (!generateBtn) return;
+
+        if (baseText === null) {
+            baseText = generateBtn.textContent.split('(')[0].trim();
+        }
+        generateBtn.textContent = `${baseText} (${this.hotkeys.generate})`;
+    }
+
+    setUseSuggestionButtonText(baseText = null) {
+        const useSuggestionBtn = document.getElementById('use-suggestion-btn');
+        if (!useSuggestionBtn) return;
+
+        if (baseText === null) {
+            baseText = useSuggestionBtn.textContent.split('(')[0].trim();
+        }
+        useSuggestionBtn.textContent = `${baseText} (${this.hotkeys.useText})`;
+    }
+
+    loadHotkeySettings() {
+        const generateInput = document.getElementById('generate-hotkey');
+        const useTextInput = document.getElementById('use-text-hotkey');
+
+        if (generateInput) generateInput.value = this.hotkeys.generate;
+        if (useTextInput) useTextInput.value = this.hotkeys.useText;
+    }
+
+    saveHotkeySettings() {
+        const generateInput = document.getElementById('generate-hotkey');
+        const useTextInput = document.getElementById('use-text-hotkey');
+
+        if (generateInput && generateInput.value.trim()) {
+            this.hotkeys.generate = generateInput.value.trim();
+            localStorage.setItem('generateHotkey', this.hotkeys.generate);
+        }
+
+        if (useTextInput && useTextInput.value.trim()) {
+            this.hotkeys.useText = useTextInput.value.trim();
+            localStorage.setItem('useTextHotkey', this.hotkeys.useText);
+        }
+
+        // Update the system
+        this.updateButtonLabels();
+        this.setupHotkeyListener();
+
+        console.log('Hotkeys updated:', this.hotkeys);
     }
 
     async createNewDocument() {

@@ -262,13 +262,16 @@ header h1 {
 .title-section {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
-    padding: 32px;
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-lg);
+    padding: 16px 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-bottom: 32px;
+    margin-bottom: 24px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .title-section::before {
@@ -282,20 +285,22 @@ header h1 {
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
-.title-section label {
-    display: block;
-    margin-bottom: 12px;
+.title-section .title-label {
+    display: inline-block;
+    margin: 0;
     font-weight: 600;
     color: var(--gray-700);
     font-size: 1.1rem;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 #document-title {
-    width: 100%;
-    padding: 16px 20px;
+    flex: 1;
+    padding: 12px 16px;
     border: 2px solid var(--gray-200);
-    border-radius: var(--radius-lg);
-    font-size: 1.25rem;
+    border-radius: var(--radius-md);
+    font-size: 1.1rem;
     font-weight: 500;
     transition: var(--transition-normal);
     background: rgba(255, 255, 255, 0.8);
@@ -1508,6 +1513,49 @@ input[type="file"]:focus {
     flex-direction: column;
 }
 
+.generation-mode-selection {
+    margin-bottom: 16px;
+}
+
+.generation-mode-options {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-fast);
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--gray-700);
+}
+
+.radio-option:hover {
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--primary-color);
+}
+
+.radio-option input[type="radio"] {
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
+.radio-option input[type="radio"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
 .suggestion-text {
     flex: 1;
     padding: 20px;
@@ -1536,10 +1584,22 @@ input[type="file"]:focus {
     display: flex;
     gap: 12px;
     align-items: center;
+    margin: 16px 0;
+    justify-content: center;
 }
 
 .suggestion-controls .btn {
     flex: 1;
+    max-width: 200px;
+    font-weight: 600;
+}
+
+/* Form help text */
+.form-help {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+    margin-top: 4px;
+    display: block;
 }
 
 /* Settings Modal Tabs */
@@ -1696,5 +1756,23 @@ input[type="file"]:focus {
         max-width: none;
         padding: 12px 16px;
         font-size: 0.9rem;
+    }
+
+    /* Title section mobile adjustments */
+    .title-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 18px;
+    }
+
+    .title-section .title-label {
+        font-size: 0.95rem;
+    }
+
+    #document-title {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 1rem;
     }
 }

@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Writing Assistant</title>
+    <title>TalkPipe Writing Assistant</title>
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-content">
-                <h1>Writing Assistant</h1>
+                <h1>TalkPipe Writing Assistant</h1>
                 <div class="header-controls">
                     <div class="file-controls">
                         <button id="new-document-btn" class="btn btn-success btn-small">📄 New</button>
@@ -28,7 +30,7 @@
         </header>
 
         <div class="title-section">
-            <label for="document-title">Document Title:</label>
+            <label for="document-title" class="title-label">Document Title:</label>
             <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
         </div>
 
@@ -58,11 +60,31 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                             </div>
                         </div>
                         <div class="suggestion-content">
-                            <div id="suggestion-text" class="suggestion-text">Position your cursor in a section above to see AI suggestions for that section.</div>
-                            <div class="suggestion-controls">
-                                <button id="generate-btn" class="btn btn-primary btn-small" disabled>⚡ Generate</button>
-                                <button id="use-suggestion-btn" class="btn btn-success btn-small" disabled>← Use This Text</button>
+                            <div class="generation-mode-selection">
+                                <div class="generation-mode-options">
+                                    <label class="radio-option">
+                                        <input type="radio" name="generation-mode" value="ideas" checked>
+                                        <span>Ideas</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="generation-mode" value="rewrite">
+                                        <span>Rewrite</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="generation-mode" value="improve">
+                                        <span>Improve</span>
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="generation-mode" value="proofread">
+                                        <span>Proofread</span>
+                                    </label>
+                                </div>
                             </div>
+                            <div class="suggestion-controls">
+                                <button id="generate-btn" class="btn btn-primary btn-small" disabled>⚡ Generate (Ctrl+G)</button>
+                                <button id="use-suggestion-btn" class="btn btn-success btn-small" disabled>← Use This Text (Ctrl+U)</button>
+                            </div>
+                            <div id="suggestion-text" class="suggestion-text">Position your cursor in a section above to see AI suggestions for that section.</div>
                         </div>
                     </div>
                 </div>
@@ -148,6 +170,21 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                 <div class="form-group">
                                     <label for="ai-model">Model:</label>
                                     <input type="text" id="ai-model" name="model" placeholder="e.g., gpt-4, claude-3, llama-2...">
+                                </div>
+
+                                <div class="settings-section">
+                                    <h4>Hotkeys</h4>
+                                    <div class="form-group">
+                                        <label for="generate-hotkey">Generate Text Hotkey:</label>
+                                        <input type="text" id="generate-hotkey" name="generate_hotkey" placeholder="e.g., Ctrl+G, Alt+G, Ctrl+Shift+G" maxlength="20">
+                                        <small class="form-help">Use combinations like Ctrl+G, Alt+Shift+T, etc.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="use-text-hotkey">Use Text Hotkey:</label>
+                                        <input type="text" id="use-text-hotkey" name="use_text_hotkey" placeholder="e.g., Ctrl+U, Alt+U, Ctrl+Enter" maxlength="20">
+                                        <small class="form-help">Use combinations like Ctrl+U, Alt+Shift+A, etc.</small>
+                                    </div>
                                 </div>
 
                                 <div class="form-actions">

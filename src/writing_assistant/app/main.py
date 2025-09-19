@@ -254,6 +254,11 @@ document = Document()
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "document": document})
 
+@app.get("/favicon.ico")
+async def favicon():
+    favicon_path = app_dir / "static" / "favicon.ico"
+    return FileResponse(favicon_path, media_type="image/x-icon")
+
 @app.get("/metadata")
 async def get_metadata():
     return {
@@ -502,7 +507,8 @@ async def generate_text(
     user_text: str = Form(""),
     title: str = Form(""),
     prev_paragraph: str = Form(""),
-    next_paragraph: str = Form("")
+    next_paragraph: str = Form(""),
+    generation_mode: str = Form("ideas")
 ):
     """Generate text for a section using the new interface format"""
     try:
@@ -513,7 +519,8 @@ async def generate_text(
             metadata=document.metadata,
             title=title,
             prev_paragraph=prev_paragraph,
-            next_paragraph=next_paragraph
+            next_paragraph=next_paragraph,
+            generation_mode=generation_mode
         )
 
         return {"generated_text": generated_text}
