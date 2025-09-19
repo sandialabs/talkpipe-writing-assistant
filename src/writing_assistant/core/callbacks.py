@@ -49,18 +49,10 @@ PROMPT_TEMPLATE = """
 
 
 def new_paragraph(main_point: str, text: str, metadata: Metadata, title: str = "", prev_paragraph: str = "", next_paragraph: str = "") -> str:
-    print(f"=== new_paragraph called ===")
-    print(f"Args: main_point='{main_point[:50]}...', text='{text[:50]}...', title='{title}'")
-    print(f"Metadata: {metadata.source}, {metadata.model}")
-    print("Call stack:")
-    traceback.print_stack()
-    print("=== end stack trace ===")
 
     with _paragraph_lock:
         f = (fillTemplate(template=PROMPT_TEMPLATE)
-            | Print()
-            #| LLMPrompt(system_prompt=SYSTEM_PROMPT, multi_turn=False, source=metadata.source, model=metadata.model)
-            | LLMPrompt(system_prompt=SYSTEM_PROMPT, multi_turn=False, source="openai", model="gpt-5-2025-08-07")
+            | LLMPrompt(system_prompt=SYSTEM_PROMPT, multi_turn=False, source=metadata.source, model=metadata.model)
             | Print())
         f = f.as_function(single_in=True, single_out=True)
 

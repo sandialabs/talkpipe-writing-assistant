@@ -1,121 +1,350 @@
 class WritingAssistant {
     constructor() {
-        this.pollingIntervals = new Map(); // Track polling for each section
+        this.sections = [];
+        this.currentSectionIndex = -1;
+        this.documentText = '';
+        this.documentTitle = '';
         this.init();
     }
 
-    init() {
+    async init() {
         this.setupEventListeners();
-        this.updateSectionNumbers();
         this.loadMetadata();
-        this.setupHamburgerMenu();
-        this.initializeExistingSections();
+        // Apply saved AI settings to the initial document
+        await this.applySavedAISettings();
+        this.loadExistingDocument();
+        this.setupModals();
     }
 
     setupEventListeners() {
         const titleInput = document.getElementById('document-title');
-        const addSectionBtn = document.getElementById('add-section-btn');
-        const sectionsList = document.getElementById('sections-list');
-        
+        const documentTextarea = document.getElementById('document-text');
+        const generateBtn = document.getElementById('generate-btn');
+        const useSuggestionBtn = document.getElementById('use-suggestion-btn');
+
+        // Document title
+        titleInput.addEventListener('input', () => this.handleTitleChange());
+
+        // Document text editing and cursor tracking
+        documentTextarea.addEventListener('input', () => this.handleDocumentTextChange());
+        documentTextarea.addEventListener('click', () => this.handleCursorChange());
+        documentTextarea.addEventListener('keyup', () => this.handleCursorChange());
+
+        // AI suggestion controls
+        generateBtn.addEventListener('click', () => this.generateSuggestionForCurrentSection());
+        useSuggestionBtn.addEventListener('click', () => this.useSuggestion());
+
+        // Header controls
+        document.getElementById('new-document-btn').addEventListener('click', () => this.showNewDocumentModal());
+        document.getElementById('save-document-btn').addEventListener('click', () => this.saveDocumentToServer());
+        document.getElementById('load-document-btn').addEventListener('click', () => this.showLoadDocumentModal());
+        document.getElementById('import-document-btn').addEventListener('click', () => this.importDocumentFromFile());
+        document.getElementById('export-document-btn').addEventListener('click', () => this.exportDocumentToFile());
+        document.getElementById('file-input').addEventListener('change', (e) => this.handleFileImport(e));
+        document.getElementById('copy-document-btn').addEventListener('click', () => this.copyDocumentToClipboard());
+        document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
+    }
+
+    setupModals() {
+        // Settings modal
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettingsBtn = document.getElementById('close-settings-modal');
+        const closeSettingsFooterBtn = document.getElementById('close-settings-btn');
         const saveMetadataBtn = document.getElementById('save-metadata-btn');
         const resetMetadataBtn = document.getElementById('reset-metadata-btn');
-        const tabButtons = document.querySelectorAll('.tab-btn');
-        
-        const saveDocumentBtn = document.getElementById('save-document-btn');
-        const downloadCurrentBtn = document.getElementById('download-current-btn');
-        const loadDocumentBtn = document.getElementById('load-document-btn');
-        const refreshDocumentsBtn = document.getElementById('refresh-documents-btn');
-        const loadFileInput = document.getElementById('load-file');
-        const copyDocumentBtn = document.getElementById('copy-document-btn');
-        const newDocumentBtn = document.getElementById('new-document-btn');
-        const expandAllBtn = document.getElementById('expand-all-btn');
-        const collapseAllBtn = document.getElementById('collapse-all-btn');
+        const saveGenerationSettingsBtn = document.getElementById('save-generation-settings-btn');
 
-        titleInput.addEventListener('blur', () => this.updateTitle(titleInput.value));
-        addSectionBtn.addEventListener('click', () => this.addSection());
-        copyDocumentBtn.addEventListener('click', () => this.copyDocumentToClipboard());
-        newDocumentBtn.addEventListener('click', () => this.showNewDocumentModal());
-        expandAllBtn.addEventListener('click', () => this.expandAllSections());
-        collapseAllBtn.addEventListener('click', () => this.collapseAllSections());
-        
+        closeSettingsBtn.addEventListener('click', () => this.hideSettingsModal());
+        closeSettingsFooterBtn.addEventListener('click', () => this.hideSettingsModal());
         saveMetadataBtn.addEventListener('click', () => this.saveMetadata());
         resetMetadataBtn.addEventListener('click', () => this.resetMetadata());
-        
-        saveDocumentBtn.addEventListener('click', () => this.saveDocument());
-        downloadCurrentBtn.addEventListener('click', () => this.downloadDocument());
-        loadDocumentBtn.addEventListener('click', () => this.loadDocument());
+        saveGenerationSettingsBtn.addEventListener('click', () => this.saveGenerationSettings());
+
+        // Settings tabs
+        const settingsTabBtns = document.querySelectorAll('.settings-tab-btn');
+        settingsTabBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => this.switchSettingsTab(e.target.dataset.settingsTab));
+        });
+
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) this.hideSettingsModal();
+        });
+
+        // Load document modal
+        const loadDocumentModal = document.getElementById('load-document-modal');
+        const closeLoadModalBtn = document.getElementById('close-load-modal');
+        const closeLoadModalFooterBtn = document.getElementById('close-load-modal-footer');
+        const refreshDocumentsBtn = document.getElementById('refresh-documents-btn');
+
+        closeLoadModalBtn.addEventListener('click', () => this.hideLoadDocumentModal());
+        closeLoadModalFooterBtn.addEventListener('click', () => this.hideLoadDocumentModal());
         refreshDocumentsBtn.addEventListener('click', () => this.loadDocumentsList());
-        loadFileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        
-        tabButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+
+        loadDocumentModal.addEventListener('click', (e) => {
+            if (e.target === loadDocumentModal) this.hideLoadDocumentModal();
         });
 
-        sectionsList.addEventListener('click', (e) => {
-            console.log('Clicked element:', e.target.className, e.target.tagName);
-            const section = e.target.closest('.section');
-            const sectionWrapper = e.target.closest('.section-wrapper');
+        // New document modal
+        const newDocumentModal = document.getElementById('new-document-modal');
+        const closeNewDocumentBtn = document.getElementById('close-new-document-modal');
+        const cancelNewDocumentBtn = document.getElementById('cancel-new-document-btn');
+        const createNewDocumentBtn = document.getElementById('create-new-document-btn');
 
-            if (e.target.classList.contains('delete-section') && section) {
-                this.deleteSection(section.dataset.sectionId);
-            } else if (e.target.classList.contains('move-up') && section) {
-                this.moveSection(section, 'up');
-            } else if (e.target.classList.contains('move-down') && section) {
-                this.moveSection(section, 'down');
-            } else if (e.target.classList.contains('insert-above-btn') && section) {
-                const position = parseInt(section.dataset.order);
-                this.insertSection(position);
-            } else if (e.target.classList.contains('insert-below-btn') && section) {
-                const position = parseInt(section.dataset.order) + 1;
-                this.insertSection(position);
-            } else if (e.target.classList.contains('btn-replace-text') && section) {
-                this.replaceUserText(section);
-            } else if (e.target.classList.contains('btn-generate-text') && section) {
-                this.generateText(section);
-            } else if (e.target.classList.contains('collapse-toggle') || e.target.classList.contains('collapse-icon')) {
-                e.stopPropagation();
-                this.toggleSectionCollapse(section);
-            } else if (e.target.classList.contains('section-header') ||
-                       e.target.classList.contains('section-title') ||
-                       e.target.classList.contains('section-title-container')) {
-                const headerSection = e.target.closest('.section');
-                if (headerSection && !e.target.closest('.section-controls')) {
-                    this.toggleSectionCollapse(headerSection);
+        closeNewDocumentBtn.addEventListener('click', () => this.hideNewDocumentModal());
+        cancelNewDocumentBtn.addEventListener('click', () => this.hideNewDocumentModal());
+        createNewDocumentBtn.addEventListener('click', () => this.createNewDocument());
+
+        newDocumentModal.addEventListener('click', (e) => {
+            if (e.target === newDocumentModal) this.hideNewDocumentModal();
+        });
+    }
+
+    handleDocumentTextChange() {
+        const textarea = document.getElementById('document-text');
+        this.documentText = textarea.value;
+        this.parseSections();
+        this.handleCursorChange();
+    }
+
+    handleTitleChange() {
+        const titleInput = document.getElementById('document-title');
+        this.documentTitle = titleInput.value;
+        // Don't send to server immediately - let it be managed with the document
+    }
+
+    parseSections() {
+        const text = this.documentText;
+        const oldSections = [...this.sections]; // Save previous sections
+        this.sections = [];
+
+        if (!text.trim()) {
+            this.updateSectionInfo();
+            return;
+        }
+
+        // Split by double newlines (blank lines)
+        const rawSections = text.split(/\n\s*\n/);
+        let currentPos = 0;
+
+        rawSections.forEach((sectionText, index) => {
+            const trimmed = sectionText.trim();
+            if (trimmed) {
+                // Find the actual position of this section in the text
+                const sectionStart = text.indexOf(sectionText, currentPos);
+                const sectionEnd = sectionStart + sectionText.length;
+                currentPos = sectionEnd;
+
+                // Create new section object
+                const newSection = {
+                    id: `section-${index}`,
+                    text: trimmed,
+                    startPos: sectionStart,
+                    endPos: sectionEnd,
+                    generated_text: ''
+                };
+
+                // Try to preserve generated_text from previous sections
+                // Look for a section with the same or similar text content
+                const matchingOldSection = oldSections.find(oldSection => {
+                    // Exact match first
+                    if (oldSection.text === trimmed) {
+                        return true;
+                    }
+                    // If no exact match, check if the old section text is contained in the new text
+                    // This handles cases where the user edited the section slightly
+                    return trimmed.includes(oldSection.text) && oldSection.generated_text;
+                });
+
+                if (matchingOldSection && matchingOldSection.generated_text) {
+                    newSection.generated_text = matchingOldSection.generated_text;
                 }
+
+                this.sections.push(newSection);
             }
         });
 
-        sectionsList.addEventListener('input', (e) => {
-            const section = e.target.closest('.section');
-            if (!section) return;
+        this.updateSectionInfo();
+    }
 
-            if (e.target.classList.contains('main-point')) {
-                // Update section title immediately as user types
-                const sectionTitle = section.querySelector('.section-title');
-                const mainPointValue = e.target.value.trim();
-                sectionTitle.textContent = mainPointValue || 'New Section';
+    handleCursorChange() {
+        const textarea = document.getElementById('document-text');
+        const cursorPos = textarea.selectionStart;
 
-                // No automatic generation - just update the title
+        // Find which section the cursor is in
+        let newSectionIndex = -1;
+        for (let i = 0; i < this.sections.length; i++) {
+            const section = this.sections[i];
+            if (cursorPos >= section.startPos && cursorPos <= section.endPos) {
+                newSectionIndex = i;
+                break;
             }
-            // Removed automatic generation for user-text changes
-        });
+        }
 
-        // New Document Modal Event Listeners
-        const modal = document.getElementById('new-document-modal');
-        const closeModalBtn = document.getElementById('close-new-document-modal');
-        const cancelBtn = document.getElementById('cancel-new-document-btn');
-        const createBtn = document.getElementById('create-new-document-btn');
+        if (newSectionIndex !== this.currentSectionIndex) {
+            this.currentSectionIndex = newSectionIndex;
+            this.updateSuggestionPanel();
+        }
+    }
 
-        closeModalBtn.addEventListener('click', () => this.hideNewDocumentModal());
-        cancelBtn.addEventListener('click', () => this.hideNewDocumentModal());
-        createBtn.addEventListener('click', () => this.createNewDocument());
+    updateSectionInfo() {
+        const infoElement = document.getElementById('current-section-info');
+        if (this.sections.length === 0) {
+            infoElement.textContent = 'No sections detected';
+        } else {
+            infoElement.textContent = `${this.sections.length} section${this.sections.length === 1 ? '' : 's'} detected`;
+        }
+    }
 
-        // Close modal when clicking outside of it
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.hideNewDocumentModal();
+    updateSuggestionPanel() {
+        const suggestionText = document.getElementById('suggestion-text');
+        const generateBtn = document.getElementById('generate-btn');
+        const useSuggestionBtn = document.getElementById('use-suggestion-btn');
+        const infoElement = document.getElementById('current-section-info');
+
+        if (this.currentSectionIndex === -1 || this.sections.length === 0) {
+            suggestionText.textContent = 'Position your cursor in a section above to see AI suggestions for that section.';
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⚡ Generate';
+            useSuggestionBtn.disabled = true;
+            infoElement.textContent = 'No section selected';
+        } else {
+            const currentSection = this.sections[this.currentSectionIndex];
+            const sectionNum = this.currentSectionIndex + 1;
+            infoElement.textContent = `Section ${sectionNum} of ${this.sections.length} selected`;
+
+            // Generate button is always enabled when a section is selected
+            generateBtn.disabled = false;
+
+            if (currentSection.generated_text) {
+                suggestionText.textContent = currentSection.generated_text;
+                generateBtn.textContent = '🔄 Regenerate';
+                useSuggestionBtn.disabled = false;
+            } else {
+                suggestionText.textContent = 'Click "Generate" to get AI suggestions for this section.';
+                generateBtn.textContent = '⚡ Generate';
+                useSuggestionBtn.disabled = true;
             }
-        });
+        }
+    }
+
+    async generateSuggestionForCurrentSection() {
+        if (this.currentSectionIndex === -1 || this.sections.length === 0) {
+            this.showMessage('Please position your cursor in a section first', 'error');
+            return;
+        }
+
+        const currentSection = this.sections[this.currentSectionIndex];
+        const generateBtn = document.getElementById('generate-btn');
+        const suggestionText = document.getElementById('suggestion-text');
+
+        // Show loading state
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Generating...';
+        suggestionText.textContent = 'Generating AI suggestion...';
+
+        try {
+            // Get context (previous and next sections)
+            const prevSection = this.currentSectionIndex > 0 ? this.sections[this.currentSectionIndex - 1] : null;
+            const nextSection = this.currentSectionIndex < this.sections.length - 1 ? this.sections[this.currentSectionIndex + 1] : null;
+
+            const title = document.getElementById('document-title').value || '';
+            const formData = new FormData();
+            formData.append('main_point', this.extractMainPoint(currentSection.text));
+            formData.append('user_text', currentSection.text);
+            formData.append('title', title);
+            formData.append('prev_paragraph', prevSection ? prevSection.text : '');
+            formData.append('next_paragraph', nextSection ? nextSection.text : '');
+
+            const response = await fetch('/generate-text', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.generated_text) {
+                currentSection.generated_text = result.generated_text;
+                this.updateSuggestionPanel();
+                this.showMessage('AI suggestion generated successfully!', 'success');
+            } else {
+                throw new Error('No generated text received');
+            }
+
+        } catch (error) {
+            console.error('Error generating suggestion:', error);
+            this.showMessage('Error generating suggestion. Please try again.', 'error');
+            suggestionText.textContent = 'Error generating suggestion. Please try again.';
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = '⚡ Generate';
+        }
+    }
+
+    extractMainPoint(text) {
+        // Extract the first sentence as the main point
+        const sentences = text.split(/[.!?]+/);
+        return sentences[0].trim() || text.substring(0, 100);
+    }
+
+    useSuggestion() {
+        if (this.currentSectionIndex === -1 || this.sections.length === 0) {
+            return;
+        }
+
+        const currentSection = this.sections[this.currentSectionIndex];
+        if (!currentSection.generated_text) {
+            this.showMessage('No suggestion to use. Generate one first.', 'error');
+            return;
+        }
+
+        const textarea = document.getElementById('document-text');
+        const beforeSection = this.documentText.substring(0, currentSection.startPos);
+        const afterSection = this.documentText.substring(currentSection.endPos);
+
+        // Calculate new cursor position (end of the replaced section)
+        const newCursorPos = beforeSection.length + currentSection.generated_text.length;
+
+        // Replace the current section with the suggestion
+        const newText = beforeSection + currentSection.generated_text + afterSection;
+        textarea.value = newText;
+
+        // Set cursor position to end of the replaced section
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Update internal state - this will preserve suggestions for other sections
+        this.documentText = newText;
+        this.parseSections();
+
+        // Update the current section index to match the new structure
+        // Since we just replaced text, we want to stay in the same logical section
+        for (let i = 0; i < this.sections.length; i++) {
+            if (newCursorPos >= this.sections[i].startPos && newCursorPos <= this.sections[i].endPos) {
+                this.currentSectionIndex = i;
+                break;
+            }
+        }
+
+        this.updateSuggestionPanel();
+        this.showMessage('Suggestion applied successfully!', 'success');
+    }
+
+    async loadExistingDocument() {
+        try {
+            // Load both title and content from the DOM
+            const titleInput = document.getElementById('document-title');
+            const textarea = document.getElementById('document-text');
+
+            this.documentTitle = titleInput.value || '';
+
+            if (textarea.value.trim()) {
+                this.documentText = textarea.value;
+                this.parseSections();
+                this.handleCursorChange();
+            }
+        } catch (error) {
+            console.error('Error loading existing document:', error);
+        }
     }
 
     async updateTitle(title) {
@@ -132,381 +361,68 @@ class WritingAssistant {
         }
     }
 
-    async addSection() {
-        try {
-            const response = await fetch('/sections', {
-                method: 'POST'
-            });
-            const section = await response.json();
-            this.createSectionElement(section);
-            this.updateSectionNumbers();
-        } catch (error) {
-            console.error('Error adding section:', error);
-        }
+    // Modal management methods
+    showSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        modal.classList.add('show');
+        this.loadMetadata();
     }
 
-    async insertSection(position) {
-        const formData = new FormData();
-        formData.append('position', position);
-
-        try {
-            const response = await fetch('/sections', {
-                method: 'POST',
-                body: formData
-            });
-            const section = await response.json();
-            this.createSectionElement(section, position);
-            this.updateSectionNumbers();
-        } catch (error) {
-            console.error('Error inserting section:', error);
-        }
+    hideSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        modal.classList.remove('show');
     }
 
-    createSectionElement(section, position = null) {
-        const sectionsList = document.getElementById('sections-list');
-        const noSectionsMessage = sectionsList.querySelector('.no-sections-message');
-        if (noSectionsMessage) {
-            noSectionsMessage.remove();
-        }
-
-        const sectionWrapper = document.createElement('div');
-        sectionWrapper.className = 'section-wrapper';
-
-        sectionWrapper.innerHTML = `
-            <div class="section" data-section-id="${section.id}" data-order="${section.order}">
-                <div class="section-header" data-collapse-target="${section.id}">
-                    <div class="section-title-container">
-                        <button class="collapse-toggle" title="Expand/Collapse Section">
-                            <span class="collapse-icon">▼</span>
-                        </button>
-                        <span class="section-title">${section.main_point || 'New Section'}</span>
-                    </div>
-                    <div class="section-controls">
-                        <button class="btn btn-small btn-muted insert-above-btn" title="Insert Section Above">+↑</button>
-                        <button class="btn btn-small btn-muted insert-below-btn" title="Insert Section Below">+↓</button>
-                        <button class="btn btn-small move-up" title="Move Up">↑</button>
-                        <button class="btn btn-small move-down" title="Move Down">↓</button>
-                        <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
-                    </div>
-                </div>
-
-                <div class="section-content expanded" data-section-content="${section.id}">
-                    <div class="form-group">
-                        <label>Main Point (single sentence):</label>
-                        <input type="text" class="main-point" placeholder="Enter the main point...">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Your Text:</label>
-                        <textarea class="user-text" rows="4" placeholder="Enter your text here..."></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Generated Text:</label>
-                        <div class="generated-text-container">
-                            <div class="generated-text">${section.generated_text}</div>
-                            <div class="loading-indicator" style="display: none;">
-                                <span class="loading-spinner">⟳</span>
-                                <span class="loading-text">Generating...</span>
-                            </div>
-                            <div class="generated-text-controls">
-                                <button class="btn btn-small btn-primary btn-generate-text" title="Generate new version">⚡ Generate</button>
-                                <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        if (position !== null && position < sectionsList.children.length) {
-            const existingWrappers = Array.from(sectionsList.querySelectorAll('.section-wrapper'));
-            if (existingWrappers[position]) {
-                sectionsList.insertBefore(sectionWrapper, existingWrappers[position]);
-            } else {
-                sectionsList.appendChild(sectionWrapper);
-            }
-        } else {
-            sectionsList.appendChild(sectionWrapper);
-        }
-
-        // Set values after element is in DOM to avoid triggering input events during creation
-        const sectionElement = sectionWrapper.querySelector('.section');
-        const mainPointInput = sectionElement.querySelector('.main-point');
-        const userTextArea = sectionElement.querySelector('.user-text');
-
-        if (mainPointInput && section.main_point) {
-            mainPointInput.value = section.main_point;
-        }
-        if (userTextArea && section.user_text) {
-            userTextArea.value = section.user_text;
-        }
+    showDocumentsModal() {
+        const modal = document.getElementById('documents-modal');
+        modal.classList.add('show');
+        this.loadDocumentsList();
     }
 
-    async generateText(sectionElement) {
-        const sectionId = sectionElement.dataset.sectionId;
-        const generateButton = sectionElement.querySelector('.btn-generate-text');
-
-        // Prevent multiple clicks - check if already generating
-        if (generateButton && generateButton.disabled) {
-            return;
-        }
-
-        // Clear any existing polling for this section first
-        if (this.pollingIntervals.has(sectionId)) {
-            clearTimeout(this.pollingIntervals.get(sectionId));
-            this.pollingIntervals.delete(sectionId);
-        }
-
-        const mainPoint = sectionElement.querySelector('.main-point').value;
-        const userText = sectionElement.querySelector('.user-text').value;
-
-        // Don't generate if main point is empty
-        if (!mainPoint || !mainPoint.trim()) {
-            this.showMessage('Please enter a main point before generating text', 'error');
-            return;
-        }
-
-        // Show loading indicator immediately
-        const loadingIndicator = sectionElement.querySelector('.loading-indicator');
-        if (loadingIndicator) {
-            loadingIndicator.style.display = 'flex';
-        }
-
-        // Disable generate button during generation
-        if (generateButton) {
-            generateButton.disabled = true;
-            generateButton.textContent = '⏳ Generating...';
-        }
-
-        const formData = new FormData();
-        formData.append('main_point', mainPoint);
-        formData.append('user_text', userText);
-
-        try {
-            const response = await fetch(`/sections/${sectionId}`, {
-                method: 'PUT',
-                body: formData
-            });
-            const updatedSection = await response.json();
-
-            const generatedTextDiv = sectionElement.querySelector('.generated-text');
-            generatedTextDiv.textContent = updatedSection.generated_text;
-
-            // Poll for the final result
-            this.pollForGeneratedText(sectionId, sectionElement);
-        } catch (error) {
-            console.error('Error generating text:', error);
-            // Hide loading indicator on error
-            if (loadingIndicator) {
-                loadingIndicator.style.display = 'none';
-            }
-            // Re-enable generate button on error
-            if (generateButton) {
-                generateButton.disabled = false;
-                generateButton.textContent = '⚡ Generate';
-            }
-        }
+    hideDocumentsModal() {
+        const modal = document.getElementById('documents-modal');
+        modal.classList.remove('show');
     }
 
-    async updateSection(sectionElement) {
-        // Legacy method kept for compatibility - now just calls generateText
-        return this.generateText(sectionElement);
+    showNewDocumentModal() {
+        const modal = document.getElementById('new-document-modal');
+        modal.classList.add('show');
+        document.getElementById('new-document-title').value = '';
+        document.getElementById('new-document-outline').value = '';
+        document.getElementById('new-document-title').focus();
     }
 
-    async pollForGeneratedText(sectionId, sectionElement) {
-        // Clear any existing polling for this section
-        if (this.pollingIntervals.has(sectionId)) {
-            clearTimeout(this.pollingIntervals.get(sectionId));
-            this.pollingIntervals.delete(sectionId);
-        }
-
-        const generatedTextDiv = sectionElement.querySelector('.generated-text');
-        const loadingIndicator = sectionElement.querySelector('.loading-indicator');
-
-        const maxPolls = 60; // Poll for up to 60 seconds
-        let pollCount = 0;
-        let lastText = generatedTextDiv.textContent;
-
-        const hideLoadingIndicator = () => {
-            if (loadingIndicator) {
-                loadingIndicator.style.display = 'none';
-            }
-            // Re-enable generate button
-            const generateButton = sectionElement.querySelector('.btn-generate-text');
-            if (generateButton) {
-                generateButton.disabled = false;
-                generateButton.textContent = '⚡ Generate';
-            }
-        };
-
-        const poll = async () => {
-            try {
-                const response = await fetch(`/sections/${sectionId}/generated`);
-                const data = await response.json();
-
-                if (data.generated_text) {
-                    generatedTextDiv.textContent = data.generated_text;
-                    lastText = data.generated_text;
-                }
-
-                // Only continue polling if still generating
-                if (data.is_generating && pollCount < maxPolls) {
-                    pollCount++;
-                    const timeoutId = setTimeout(poll, 1000); // Poll every 1 second
-                    this.pollingIntervals.set(sectionId, timeoutId);
-                } else {
-                    // Generation complete, clean up immediately
-                    hideLoadingIndicator();
-                    this.pollingIntervals.delete(sectionId);
-                }
-            } catch (error) {
-                console.error('Error polling for generated text:', error);
-                hideLoadingIndicator();
-                this.pollingIntervals.delete(sectionId);
-            }
-        };
-
-        // Start polling after a short delay
-        const initialTimeoutId = setTimeout(poll, 1000);
-        this.pollingIntervals.set(sectionId, initialTimeoutId);
+    hideNewDocumentModal() {
+        const modal = document.getElementById('new-document-modal');
+        modal.classList.remove('show');
     }
 
-    async deleteSection(sectionId) {
-        if (!confirm('Are you sure you want to delete this section?')) {
-            return;
-        }
-
-        try {
-            await fetch(`/sections/${sectionId}`, {
-                method: 'DELETE'
-            });
-            
-            const sectionElement = document.querySelector(`[data-section-id="${sectionId}"]`);
-            const sectionWrapper = sectionElement.closest('.section-wrapper');
-            sectionWrapper.remove();
-            this.updateSectionNumbers();
-            
-            const remainingSections = document.querySelectorAll('.section-wrapper');
-            if (remainingSections.length === 0) {
-                const sectionsList = document.getElementById('sections-list');
-                const noSectionsDiv = document.createElement('div');
-                noSectionsDiv.className = 'no-sections-message';
-                noSectionsDiv.innerHTML = '<p>No sections yet. Click "Add Section" to get started.</p>';
-                sectionsList.appendChild(noSectionsDiv);
-            }
-        } catch (error) {
-            console.error('Error deleting section:', error);
-        }
-    }
-
-    async moveSection(sectionElement, direction) {
-        const currentOrder = parseInt(sectionElement.dataset.order);
-        const sections = Array.from(document.querySelectorAll('.section'));
-        const currentIndex = sections.indexOf(sectionElement);
-        
-        let newIndex;
-        if (direction === 'up' && currentIndex > 0) {
-            newIndex = currentIndex - 1;
-        } else if (direction === 'down' && currentIndex < sections.length - 1) {
-            newIndex = currentIndex + 1;
-        } else {
-            return;
-        }
-
-        const sectionId = sectionElement.dataset.sectionId;
-        const formData = new FormData();
-        formData.append('new_position', newIndex);
-
-        try {
-            await fetch(`/sections/${sectionId}/move`, {
-                method: 'PUT',
-                body: formData
-            });
-
-            const sectionsList = document.getElementById('sections-list');
-            const sectionWrappers = Array.from(sectionsList.querySelectorAll('.section-wrapper'));
-            const currentWrapper = sectionElement.closest('.section-wrapper');
-            const currentWrapperIndex = sectionWrappers.indexOf(currentWrapper);
-            
-            if (direction === 'up' && currentWrapperIndex > 0) {
-                const targetWrapper = sectionWrappers[currentWrapperIndex - 1];
-                sectionsList.insertBefore(currentWrapper, targetWrapper);
-            } else if (direction === 'down' && currentWrapperIndex < sectionWrappers.length - 1) {
-                const targetWrapper = sectionWrappers[currentWrapperIndex + 1];
-                sectionsList.insertBefore(currentWrapper, targetWrapper.nextSibling);
-            }
-
-            this.updateSectionNumbers();
-        } catch (error) {
-            console.error('Error moving section:', error);
-        }
-    }
-
-    updateSectionNumbers() {
-        const sections = document.querySelectorAll('.section');
-        sections.forEach((section, index) => {
-            section.dataset.order = index;
-        });
-    }
-
-    toggleSectionCollapse(section) {
-        if (!section) return;
-
-        const content = section.querySelector('.section-content');
-
-        if (!content) {
-            console.log('Could not find content element');
-            return;
-        }
-
-        const isCollapsed = content.classList.contains('collapsed');
-
-        if (isCollapsed) {
-            // Expand
-            content.classList.remove('collapsed');
-            content.classList.add('expanded');
-            section.classList.remove('collapsed');
-        } else {
-            // Collapse
-            content.classList.add('collapsed');
-            content.classList.remove('expanded');
-            section.classList.add('collapsed');
-        }
-    }
-
-    switchTab(tabName) {
-        const tabButtons = document.querySelectorAll('.tab-btn');
-        const tabContents = document.querySelectorAll('.tab-content');
+    switchSettingsTab(tabName) {
+        const tabButtons = document.querySelectorAll('.settings-tab-btn');
+        const tabContents = document.querySelectorAll('.settings-tab-content');
 
         tabButtons.forEach(btn => btn.classList.remove('active'));
         tabContents.forEach(content => content.classList.remove('active'));
 
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(`${tabName}-tab`).classList.add('active');
-        
-        // Load documents list when Documents tab is selected
-        if (tabName === 'documents') {
-            this.loadDocumentsList();
-        }
+        document.querySelector(`[data-settings-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(`${tabName}-settings`).classList.add('active');
     }
 
     async loadMetadata() {
         try {
-            // Load from server only
             const response = await fetch('/metadata');
             const metadata = await response.json();
-            
-            // Load source and model into hamburger menu from localStorage (overriding server values)
+
+            // Load AI settings
             const savedSource = localStorage.getItem('generationSource') || metadata.source || '';
             const savedModel = localStorage.getItem('generationModel') || metadata.model || '';
-            
-            const sourceElement = document.getElementById('hamburger-source');
-            const modelElement = document.getElementById('hamburger-model');
+
+            const sourceElement = document.getElementById('ai-source');
+            const modelElement = document.getElementById('ai-model');
             if (sourceElement) sourceElement.value = savedSource;
             if (modelElement) modelElement.value = savedModel;
-            
-            // Load other metadata into metadata tab
+
+            // Load writing settings
             document.getElementById('writing-style').value = metadata.writing_style || 'formal';
             document.getElementById('target-audience').value = metadata.target_audience || '';
             document.getElementById('tone').value = metadata.tone || 'neutral';
@@ -519,11 +435,16 @@ class WritingAssistant {
     }
 
     async saveMetadata() {
-        await this.saveMetadataToServer(true);
-    }
-
-    async saveMetadataToServer(showMessage = true) {
-        const metadata = this.getMetadataFromForm();
+        const metadata = {
+            source: document.getElementById('ai-source').value,
+            model: document.getElementById('ai-model').value,
+            writing_style: document.getElementById('writing-style').value,
+            target_audience: document.getElementById('target-audience').value,
+            tone: document.getElementById('tone').value,
+            background_context: document.getElementById('background-context').value,
+            generation_directive: document.getElementById('generation-directive').value,
+            word_limit: document.getElementById('word-limit').value || null
+        };
 
         const formData = new FormData();
         Object.keys(metadata).forEach(key => {
@@ -537,44 +458,16 @@ class WritingAssistant {
                 method: 'POST',
                 body: formData
             });
-
-            if (showMessage) {
-                this.showMessage('Metadata saved successfully!', 'success');
-            }
+            this.showMessage('Settings saved successfully!', 'success');
         } catch (error) {
             console.error('Error saving metadata:', error);
-            if (showMessage) {
-                this.showMessage('Error saving metadata', 'error');
-            }
-            throw error; // Rethrow the error so saveDocument can handle it
+            this.showMessage('Error saving settings', 'error');
         }
     }
 
-    getMetadataFromForm() {
-        // Get source and model from hamburger menu
-        const sourceElement = document.getElementById('hamburger-source');
-        const modelElement = document.getElementById('hamburger-model');
-        
-        return {
-            source: sourceElement ? sourceElement.value : '',
-            model: modelElement ? modelElement.value : '',
-            writing_style: document.getElementById('writing-style').value,
-            target_audience: document.getElementById('target-audience').value,
-            tone: document.getElementById('tone').value,
-            background_context: document.getElementById('background-context').value,
-            generation_directive: document.getElementById('generation-directive').value,
-            word_limit: document.getElementById('word-limit').value || null
-        };
-    }
-
     async resetMetadata() {
-        // Reset hamburger menu fields
-        const sourceElement = document.getElementById('hamburger-source');
-        const modelElement = document.getElementById('hamburger-model');
-        if (sourceElement) sourceElement.value = '';
-        if (modelElement) modelElement.value = '';
-        
-        // Reset metadata tab fields
+        document.getElementById('ai-source').value = '';
+        document.getElementById('ai-model').value = '';
         document.getElementById('writing-style').value = 'formal';
         document.getElementById('target-audience').value = '';
         document.getElementById('tone').value = 'neutral';
@@ -582,29 +475,145 @@ class WritingAssistant {
         document.getElementById('generation-directive').value = '';
         document.getElementById('word-limit').value = '';
 
-        await this.saveMetadataToServer(false);
+        await this.saveMetadata();
     }
 
+    saveGenerationSettings() {
+        const source = document.getElementById('ai-source').value;
+        const model = document.getElementById('ai-model').value;
 
-    showMessage(text, type) {
-        const existingMessage = document.querySelector('.message');
-        if (existingMessage) {
-            existingMessage.remove();
+        localStorage.setItem('generationSource', source);
+        localStorage.setItem('generationModel', model);
+
+        this.showMessage('AI settings saved successfully!', 'success');
+    }
+
+    async applySavedAISettings() {
+        // Get saved AI settings from both localStorage and form fields
+        const savedSource = localStorage.getItem('generationSource') || document.getElementById('ai-source')?.value || '';
+        const savedModel = localStorage.getItem('generationModel') || document.getElementById('ai-model')?.value || '';
+
+        console.log('applySavedAISettings called - savedSource:', savedSource, 'savedModel:', savedModel);
+
+        // Always apply some metadata, even if source/model are empty, to ensure defaults are set
+        const metadata = {
+            source: savedSource,
+            model: savedModel,
+            writing_style: 'formal', // Keep existing defaults
+            target_audience: 'general public',
+            tone: 'neutral',
+            background_context: 'none provided',
+            generation_directive: 'use good grammar.  Be concise and clear.',
+            word_limit: 250
+        };
+
+        const formData = new FormData();
+        Object.keys(metadata).forEach(key => {
+            // Always include source and model, even if empty
+            if (key === 'source' || key === 'model' || (metadata[key] !== null && metadata[key] !== '')) {
+                formData.append(key, metadata[key]);
+            }
+        });
+
+        console.log('Sending metadata to server:', Array.from(formData.entries()));
+
+        try {
+            const response = await fetch('/metadata', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            console.log('Metadata update result:', result);
+        } catch (error) {
+            console.error('Error updating metadata:', error);
+        }
+    }
+
+    restoreSavedSections(savedSections) {
+        // If no saved sections, nothing to restore
+        if (!savedSections || !Array.isArray(savedSections)) {
+            return;
         }
 
-        const message = document.createElement('div');
-        message.className = `message message-${type}`;
-        message.textContent = text;
-        
-        const container = document.querySelector('.container');
-        container.insertBefore(message, container.firstChild);
-        
-        setTimeout(() => {
-            message.remove();
-        }, 3000);
+        // Match saved sections with current sections by text content
+        // This handles cases where the text might have minor formatting changes
+        for (let i = 0; i < this.sections.length && i < savedSections.length; i++) {
+            const currentSection = this.sections[i];
+            const savedSection = savedSections[i];
+
+            // If the section text matches (approximately), restore the generated_text
+            if (savedSection && savedSection.generated_text) {
+                // Simple text matching - could be made more sophisticated if needed
+                const currentText = currentSection.text.trim();
+                const savedText = savedSection.text ? savedSection.text.trim() : '';
+
+                // If texts match exactly or are very similar, restore the generated text
+                if (currentText === savedText ||
+                    (currentText.length > 0 && savedText.length > 0 &&
+                     currentText.substring(0, Math.min(100, currentText.length)) ===
+                     savedText.substring(0, Math.min(100, savedText.length)))) {
+
+                    currentSection.generated_text = savedSection.generated_text;
+                    console.log(`Restored generated_text for section ${i}:`, savedSection.generated_text.substring(0, 50) + '...');
+                }
+            }
+        }
     }
 
+    async createNewDocument() {
+        const title = document.getElementById('new-document-title').value.trim();
+        const content = document.getElementById('new-document-outline').value.trim();
 
+        if (!title && !content) {
+            this.showMessage('Please provide either a title or initial content.', 'error');
+            return;
+        }
+
+        try {
+            // Clear current document
+            await fetch('/documents/clear', { method: 'POST' });
+
+            // Apply saved AI settings to the new document
+            await this.applySavedAISettings();
+
+            // Set new title in both state and DOM
+            this.documentTitle = title;
+            const titleInput = document.getElementById('document-title');
+            titleInput.value = title;
+
+            // Set new content in both state and DOM
+            this.documentText = content;
+            const textarea = document.getElementById('document-text');
+            textarea.value = content;
+
+            this.parseSections();
+            this.handleCursorChange();
+
+            this.hideNewDocumentModal();
+            this.showMessage('New document created successfully!', 'success');
+        } catch (error) {
+            console.error('Error creating new document:', error);
+            this.showMessage('Error creating new document. Please try again.', 'error');
+        }
+    }
+
+    async copyDocumentToClipboard() {
+        try {
+            let documentText = '';
+            if (this.documentTitle) {
+                documentText += this.documentTitle + '\n\n';
+            }
+            documentText += this.documentText || '(No content)';
+
+            await navigator.clipboard.writeText(documentText);
+            this.showMessage('Document copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Failed to copy to clipboard:', error);
+            this.showMessage('Failed to copy to clipboard. Please try again.', 'error');
+        }
+    }
+
+    // Document management methods (simplified versions)
     async saveDocument() {
         const filename = document.getElementById('save-filename').value.trim();
         if (!filename) {
@@ -613,13 +622,21 @@ class WritingAssistant {
         }
 
         try {
-            // First, save the current metadata to ensure it's up to date (without regenerating)
-            await this.saveMetadataToServer(false);
-            
+            await this.saveMetadata();
+
+            const documentData = {
+                title: this.documentTitle,
+                content: this.documentText,
+                sections: this.sections,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
             const formData = new FormData();
             formData.append('filename', filename);
+            formData.append('document_data', JSON.stringify(documentData));
 
-            const response = await fetch('/documents/save', {
+            const response = await fetch('/documents/save-document', {
                 method: 'POST',
                 body: formData
             });
@@ -628,7 +645,6 @@ class WritingAssistant {
             if (result.status === 'success') {
                 this.showMessage(`Document saved as ${result.filename}`, 'success');
                 document.getElementById('save-filename').value = '';
-                this.loadDocumentsList();
             } else {
                 this.showMessage(`Error: ${result.message}`, 'error');
             }
@@ -640,28 +656,14 @@ class WritingAssistant {
 
     async downloadDocument() {
         try {
-            const response = await fetch('/metadata');
-            const metadata = await response.json();
-            
-            const documentData = {
-                title: document.getElementById('document-title').value,
-                sections: [],
-                metadata: metadata,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
+            const title = this.documentTitle || 'document';
 
-            // Get current sections
-            const sections = document.querySelectorAll('.section');
-            sections.forEach((section, index) => {
-                documentData.sections.push({
-                    id: section.dataset.sectionId,
-                    main_point: section.querySelector('.main-point').value,
-                    user_text: section.querySelector('.user-text').value,
-                    generated_text: section.querySelector('.generated-text').textContent,
-                    order: index
-                });
-            });
+            const documentData = {
+                title: title,
+                content: this.documentText,
+                sections: this.sections,
+                created_at: new Date().toISOString()
+            };
 
             const blob = new Blob([JSON.stringify(documentData, null, 2)], {
                 type: 'application/json'
@@ -669,7 +671,7 @@ class WritingAssistant {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = (documentData.title || 'document') + '.json';
+            a.download = title + '.json';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -689,23 +691,33 @@ class WritingAssistant {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-
         try {
-            const response = await fetch('/documents/load', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
+            const file = fileInput.files[0];
+            const content = await file.text();
+            const documentData = JSON.parse(content);
 
-            if (result.status === 'success') {
-                this.showMessage('Document loaded successfully', 'success');
-                // Reload the page to reflect the loaded document
-                window.location.reload();
+            // Load document data into both state and DOM
+            if (documentData.title) {
+                this.documentTitle = documentData.title;
+                document.getElementById('document-title').value = documentData.title;
             } else {
-                this.showMessage(`Error: ${result.message}`, 'error');
+                this.documentTitle = '';
+                document.getElementById('document-title').value = '';
             }
+
+            if (documentData.content) {
+                this.documentText = documentData.content;
+                document.getElementById('document-text').value = documentData.content;
+                this.parseSections();
+                this.handleCursorChange();
+            } else {
+                this.documentText = '';
+                document.getElementById('document-text').value = '';
+                this.parseSections();
+                this.handleCursorChange();
+            }
+
+            this.showMessage('Document loaded successfully', 'success');
         } catch (error) {
             console.error('Error loading document:', error);
             this.showMessage('Error loading document', 'error');
@@ -721,103 +733,172 @@ class WritingAssistant {
     }
 
     async loadDocumentsList() {
+        const listContainer = document.getElementById('documents-list');
+
         try {
             const response = await fetch('/documents/list');
             const result = await response.json();
-            
-            const listContainer = document.getElementById('documents-list');
-            
+
             if (result.error) {
                 listContainer.innerHTML = `<p class="error">Error loading documents: ${result.error}</p>`;
                 return;
             }
 
-            if (result.files.length === 0) {
+            const files = result.files || [];
+
+            if (files.length === 0) {
                 listContainer.innerHTML = '<p class="no-documents">No saved documents found.</p>';
                 return;
             }
 
-            listContainer.innerHTML = result.files.map(file => `
-                <div class="document-item">
-                    <div class="document-info">
-                        <span class="document-name">${file.filename}</span>
-                        <span class="document-date">${new Date(file.modified).toLocaleDateString()}</span>
-                        <span class="document-size">${this.formatFileSize(file.size)}</span>
+            // Create document list HTML
+            let html = '';
+            files.forEach(file => {
+                const sizeKB = Math.round(file.size / 1024 * 10) / 10;
+                const date = new Date(file.modified).toLocaleDateString();
+                const time = new Date(file.modified).toLocaleTimeString();
+
+                html += `
+                    <div class="document-item">
+                        <div class="document-info">
+                            <div class="document-name">${file.filename}</div>
+                            <div class="document-date">Modified: ${date} at ${time}</div>
+                            <div class="document-size">Size: ${sizeKB} KB</div>
+                        </div>
+                        <div class="document-actions">
+                            <button class="btn btn-primary btn-small load-document-btn" data-filename="${file.filename}">Load</button>
+                            <button class="btn btn-secondary btn-small download-document-btn" data-filename="${file.filename}">Download</button>
+                            <button class="btn btn-danger btn-small delete-document-btn" data-filename="${file.filename}">Delete</button>
+                        </div>
                     </div>
-                    <div class="document-actions">
-                        <button class="btn btn-small btn-primary" onclick="writingAssistant.loadSavedDocument('${file.filename}')">Load</button>
-                        <button class="btn btn-small" onclick="writingAssistant.downloadSavedDocument('${file.filename}')">Download</button>
-                        <button class="btn btn-small btn-danger" onclick="writingAssistant.deleteSavedDocument('${file.filename}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            });
+
+            listContainer.innerHTML = html;
+
+            // Add event listeners for document actions
+            this.setupDocumentActionListeners();
+
         } catch (error) {
             console.error('Error loading documents list:', error);
-            document.getElementById('documents-list').innerHTML = '<p class="error">Error loading documents list</p>';
+            listContainer.innerHTML = '<p class="error">Error loading documents list.</p>';
         }
     }
 
-    async downloadSavedDocument(filename) {
+    setupDocumentActionListeners() {
+        // Load document buttons
+        document.querySelectorAll('.load-document-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const filename = e.target.dataset.filename;
+                this.loadDocumentByFilename(filename);
+            });
+        });
+
+        // Download document buttons
+        document.querySelectorAll('.download-document-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const filename = e.target.dataset.filename;
+                this.downloadDocumentByFilename(filename);
+            });
+        });
+
+        // Delete document buttons
+        document.querySelectorAll('.delete-document-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const filename = e.target.dataset.filename;
+                this.deleteDocumentByFilename(filename);
+            });
+        });
+    }
+
+    async loadDocumentByFilename(filename) {
         try {
             const response = await fetch(`/documents/download/${filename}`);
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            } else {
-                this.showMessage('Error downloading file', 'error');
+
+            if (!response.ok) {
+                throw new Error('Document not found');
             }
-        } catch (error) {
-            console.error('Error downloading document:', error);
-            this.showMessage('Error downloading document', 'error');
-        }
-    }
 
-    async loadSavedDocument(filename) {
-        if (!confirm(`Load "${filename}"? This will replace the current document.`)) {
-            return;
-        }
+            const blob = await response.blob();
+            const text = await blob.text();
+            const documentData = JSON.parse(text);
 
-        try {
-            const response = await fetch(`/documents/load/${filename}`, {
-                method: 'POST'
-            });
-            const result = await response.json();
-
-            if (result.status === 'success') {
-                this.showMessage(`Document "${result.title || filename}" loaded successfully`, 'success');
-                // Reload the page to reflect the loaded document
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+            // Load document data into both state and DOM
+            if (documentData.title) {
+                this.documentTitle = documentData.title;
+                document.getElementById('document-title').value = documentData.title;
             } else {
-                this.showMessage(`Error: ${result.message}`, 'error');
+                this.documentTitle = '';
+                document.getElementById('document-title').value = '';
             }
+
+            if (documentData.content) {
+                this.documentText = documentData.content;
+                document.getElementById('document-text').value = documentData.content;
+                this.parseSections();
+                // Restore saved section data (including generated_text)
+                this.restoreSavedSections(documentData.sections);
+                this.handleCursorChange();
+            } else {
+                this.documentText = '';
+                document.getElementById('document-text').value = '';
+                this.parseSections();
+                this.handleCursorChange();
+            }
+
+            this.hideDocumentsModal();
+            this.showMessage(`Document "${filename}" loaded successfully!`, 'success');
         } catch (error) {
             console.error('Error loading document:', error);
             this.showMessage('Error loading document', 'error');
         }
     }
 
-    async deleteSavedDocument(filename) {
+    async downloadDocumentByFilename(filename) {
+        try {
+            const response = await fetch(`/documents/download/${filename}`);
+
+            if (!response.ok) {
+                throw new Error('Document not found');
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showMessage(`Document "${filename}" downloaded`, 'success');
+        } catch (error) {
+            console.error('Error downloading document:', error);
+            this.showMessage('Error downloading document', 'error');
+        }
+    }
+
+    async deleteDocumentByFilename(filename) {
         if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
             return;
         }
 
         try {
-            const response = await fetch(`/documents/${filename}`, {
+            // We need to add a delete endpoint
+            const response = await fetch(`/documents/delete/${filename}`, {
                 method: 'DELETE'
             });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete document');
+            }
+
             const result = await response.json();
 
             if (result.status === 'success') {
-                this.showMessage('Document deleted', 'success');
+                this.showMessage(`Document "${filename}" deleted successfully`, 'success');
+                // Refresh the documents list
                 this.loadDocumentsList();
             } else {
                 this.showMessage(`Error: ${result.message}`, 'error');
@@ -828,294 +909,316 @@ class WritingAssistant {
         }
     }
 
-    formatFileSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-        return Math.round(bytes / (1024 * 1024)) + ' MB';
-    }
+    // SERVER SAVE/LOAD METHODS
+    async saveDocumentToServer() {
+        const filename = prompt('Enter a filename for your document:', this.documentTitle || 'document');
 
-    setupHamburgerMenu() {
-        const hamburgerBtn = document.getElementById('hamburger-btn');
-        const hamburgerDropdown = document.getElementById('hamburger-dropdown');
-        const saveGenerationSettingsBtn = document.getElementById('save-generation-settings-btn');
-
-        if (hamburgerBtn && hamburgerDropdown) {
-            hamburgerBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                hamburgerBtn.classList.toggle('active');
-                hamburgerDropdown.classList.toggle('show');
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!hamburgerDropdown.contains(e.target) && !hamburgerBtn.contains(e.target)) {
-                    hamburgerBtn.classList.remove('active');
-                    hamburgerDropdown.classList.remove('show');
-                }
-            });
+        if (!filename) {
+            return; // User cancelled
         }
 
-        if (saveGenerationSettingsBtn) {
-            saveGenerationSettingsBtn.addEventListener('click', () => this.saveGenerationSettings());
-        }
-
-        this.loadGenerationSettings();
-    }
-
-    saveGenerationSettings() {
-        const source = document.getElementById('hamburger-source').value;
-        const model = document.getElementById('hamburger-model').value;
-
-        localStorage.setItem('generationSource', source);
-        localStorage.setItem('generationModel', model);
-
-        const sourceField = document.querySelector('input[name="source"]');
-        const modelField = document.querySelector('input[name="model"]');
-        
-        if (sourceField) sourceField.value = source;
-        if (modelField) modelField.value = model;
-
-        this.showMessage('Generation settings saved successfully!', 'success');
-
-        const hamburgerBtn = document.getElementById('hamburger-btn');
-        const hamburgerDropdown = document.getElementById('hamburger-dropdown');
-        hamburgerBtn.classList.remove('active');
-        hamburgerDropdown.classList.remove('show');
-    }
-
-    loadGenerationSettings() {
-        const savedSource = localStorage.getItem('generationSource') || '';
-        const savedModel = localStorage.getItem('generationModel') || '';
-
-        const hamburgerSource = document.getElementById('hamburger-source');
-        const hamburgerModel = document.getElementById('hamburger-model');
-
-        if (hamburgerSource) hamburgerSource.value = savedSource;
-        if (hamburgerModel) hamburgerModel.value = savedModel;
-
-        const sourceField = document.querySelector('input[name="source"]');
-        const modelField = document.querySelector('input[name="model"]');
-        
-        if (sourceField) sourceField.value = savedSource;
-        if (modelField) modelField.value = savedModel;
-    }
-
-    replaceUserText(section) {
-        const generatedTextDiv = section.querySelector('.generated-text');
-        const userTextArea = section.querySelector('.user-text');
-
-        if (generatedTextDiv && userTextArea) {
-            const generatedText = generatedTextDiv.textContent.trim();
-
-            if (generatedText) {
-                userTextArea.value = generatedText;
-
-                // No automatic generation - just replace the text
-                this.showMessage('Text replaced successfully!', 'success');
-            } else {
-                this.showMessage('No generated text to replace with.', 'error');
-            }
-        }
-    }
-
-    async copyDocumentToClipboard() {
         try {
-            const titleInput = document.getElementById('document-title');
-            const title = titleInput.value.trim();
-            
-            const sections = document.querySelectorAll('.section');
-            const sectionTexts = [];
-            
-            sections.forEach((section) => {
-                const userTextArea = section.querySelector('.user-text');
-                if (userTextArea && userTextArea.value.trim()) {
-                    sectionTexts.push(userTextArea.value.trim());
-                }
+            await this.saveMetadata();
+
+            const documentData = {
+                title: this.documentTitle,
+                content: this.documentText,
+                sections: this.sections,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('document_data', JSON.stringify(documentData));
+
+            const response = await fetch('/documents/save-document', {
+                method: 'POST',
+                body: formData
             });
-            
-            let documentText = '';
-            
-            if (title) {
-                documentText += title + '\n\n';
-            }
-            
-            if (sectionTexts.length > 0) {
-                documentText += sectionTexts.join('\n\n');
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                this.showMessage(`Document saved as "${result.filename}"`, 'success');
             } else {
-                documentText += '(No content in sections)';
+                this.showMessage(`Error: ${result.message}`, 'error');
             }
-            
-            await navigator.clipboard.writeText(documentText);
-            this.showMessage('Document copied to clipboard!', 'success');
         } catch (error) {
-            console.error('Failed to copy to clipboard:', error);
-            
-            try {
-                const titleInput = document.getElementById('document-title');
-                const title = titleInput.value.trim();
-                
-                const sections = document.querySelectorAll('.section');
-                const sectionTexts = [];
-                
-                sections.forEach((section) => {
-                    const userTextArea = section.querySelector('.user-text');
-                    if (userTextArea && userTextArea.value.trim()) {
-                        sectionTexts.push(userTextArea.value.trim());
-                    }
-                });
-                
-                let documentText = '';
-                
-                if (title) {
-                    documentText += title + '\n\n';
-                }
-                
-                if (sectionTexts.length > 0) {
-                    documentText += sectionTexts.join('\n\n');
-                } else {
-                    documentText += '(No content in sections)';
-                }
-                
-                const textArea = document.createElement('textarea');
-                textArea.value = documentText;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                
-                this.showMessage('Document copied to clipboard!', 'success');
-            } catch (fallbackError) {
-                console.error('Fallback copy also failed:', fallbackError);
-                this.showMessage('Failed to copy to clipboard. Please try again.', 'error');
-            }
+            console.error('Error saving document:', error);
+            this.showMessage('Error saving document', 'error');
         }
     }
 
-    showNewDocumentModal() {
-        const modal = document.getElementById('new-document-modal');
+    showLoadDocumentModal() {
+        const modal = document.getElementById('load-document-modal');
         modal.classList.add('show');
-        
-        // Clear previous values
-        document.getElementById('new-document-title').value = '';
-        document.getElementById('new-document-outline').value = '';
-        
-        // Focus on title field
-        document.getElementById('new-document-title').focus();
+        this.loadDocumentsList();
     }
 
-    hideNewDocumentModal() {
-        const modal = document.getElementById('new-document-modal');
+    hideLoadDocumentModal() {
+        const modal = document.getElementById('load-document-modal');
         modal.classList.remove('show');
     }
 
-    async createNewDocument() {
-        const title = document.getElementById('new-document-title').value.trim();
-        const outline = document.getElementById('new-document-outline').value.trim();
+    async loadDocumentsList() {
+        const listContainer = document.getElementById('load-documents-list');
 
-        if (!title && !outline) {
-            this.showMessage('Please provide either a title or section outline.', 'error');
+        try {
+            const response = await fetch('/documents/list');
+            const result = await response.json();
+
+            if (result.error) {
+                listContainer.innerHTML = `<p class="error">Error loading documents: ${result.error}</p>`;
+                return;
+            }
+
+            const files = result.files || [];
+
+            if (files.length === 0) {
+                listContainer.innerHTML = '<p class="no-documents">No saved documents found.</p>';
+                return;
+            }
+
+            // Create document list HTML
+            let html = '';
+            files.forEach(file => {
+                const sizeKB = Math.round(file.size / 1024 * 10) / 10;
+                const date = new Date(file.modified).toLocaleDateString();
+                const time = new Date(file.modified).toLocaleTimeString();
+
+                html += `
+                    <div class="document-item">
+                        <div class="document-info">
+                            <div class="document-name">${file.filename}</div>
+                            <div class="document-date">Modified: ${date} at ${time}</div>
+                            <div class="document-size">Size: ${sizeKB} KB</div>
+                        </div>
+                        <div class="document-actions">
+                            <button class="btn btn-primary btn-small load-document-btn" data-filename="${file.filename}">Load</button>
+                            <button class="btn btn-danger btn-small delete-document-btn" data-filename="${file.filename}">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            listContainer.innerHTML = html;
+            this.setupDocumentActionListeners();
+
+        } catch (error) {
+            console.error('Error loading documents list:', error);
+            listContainer.innerHTML = '<p class="error">Error loading documents list.</p>';
+        }
+    }
+
+    setupDocumentActionListeners() {
+        // Load document buttons
+        document.querySelectorAll('.load-document-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const filename = e.target.dataset.filename;
+                this.loadDocumentFromServer(filename);
+            });
+        });
+
+        // Delete document buttons
+        document.querySelectorAll('.delete-document-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const filename = e.target.dataset.filename;
+                this.deleteDocumentFromServer(filename);
+            });
+        });
+    }
+
+    async loadDocumentFromServer(filename) {
+        try {
+            const response = await fetch(`/documents/download/${filename}`);
+
+            if (!response.ok) {
+                throw new Error('Document not found');
+            }
+
+            const blob = await response.blob();
+            const text = await blob.text();
+            const documentData = JSON.parse(text);
+
+            // Load document data into both state and DOM
+            if (documentData.title) {
+                this.documentTitle = documentData.title;
+                document.getElementById('document-title').value = documentData.title;
+            } else {
+                this.documentTitle = '';
+                document.getElementById('document-title').value = '';
+            }
+
+            if (documentData.content) {
+                this.documentText = documentData.content;
+                document.getElementById('document-text').value = documentData.content;
+                this.parseSections();
+                // Restore saved section data (including generated_text)
+                this.restoreSavedSections(documentData.sections);
+                this.handleCursorChange();
+            } else {
+                this.documentText = '';
+                document.getElementById('document-text').value = '';
+                this.parseSections();
+                this.handleCursorChange();
+            }
+
+            this.hideLoadDocumentModal();
+            this.showMessage(`Document "${filename}" loaded successfully!`, 'success');
+        } catch (error) {
+            console.error('Error loading document:', error);
+            this.showMessage('Error loading document', 'error');
+        }
+    }
+
+    async deleteDocumentFromServer(filename) {
+        if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
             return;
         }
 
         try {
-            // First, clear the current document by setting title to empty
-            const titleInput = document.getElementById('document-title');
-            titleInput.value = title;
-            await this.updateTitle(title);
-
-            // Clear all existing sections from frontend
-            const sectionsList = document.getElementById('sections-list');
-
-            // Cancel any ongoing polling for existing sections
-            this.pollingIntervals.forEach((timeoutId, sectionId) => {
-                clearTimeout(timeoutId);
+            const response = await fetch(`/documents/delete/${filename}`, {
+                method: 'DELETE'
             });
-            this.pollingIntervals.clear();
 
-            sectionsList.innerHTML = '<div class="no-sections-message"><p>No sections yet. Click "Add Section" to get started.</p></div>';
-
-            // Clear backend document state
-            await fetch('/documents/clear', { method: 'POST' });
-
-            // Create sections from outline
-            if (outline) {
-                const lines = outline.split('\n').filter(line => line.trim());
-                for (const line of lines) {
-                    const response = await fetch('/sections', {
-                        method: 'POST'
-                    });
-                    const section = await response.json();
-                    
-                    // Update the section with the main point (data only, no generation)
-                    const formData = new FormData();
-                    formData.append('main_point', line.trim());
-                    formData.append('user_text', '');
-
-                    await fetch(`/sections/${section.id}`, {
-                        method: 'PATCH',
-                        body: formData
-                    });
-                    
-                    // Create the section element with updated data
-                    const updatedSection = {...section, main_point: line.trim()};
-                    this.createSectionElement(updatedSection);
-                }
-                
-                this.updateSectionNumbers();
+            if (!response.ok) {
+                throw new Error('Failed to delete document');
             }
 
-            this.hideNewDocumentModal();
-            this.showMessage('New document created successfully!', 'success');
-            
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                this.showMessage(`Document "${filename}" deleted successfully`, 'success');
+                this.loadDocumentsList(); // Refresh the list
+            } else {
+                this.showMessage(`Error: ${result.message}`, 'error');
+            }
         } catch (error) {
-            console.error('Error creating new document:', error);
-            this.showMessage('Error creating new document. Please try again.', 'error');
+            console.error('Error deleting document:', error);
+            this.showMessage('Error deleting document', 'error');
         }
     }
 
-    initializeExistingSections() {
-        // Initialize any sections that were already on the page when loaded
-        const existingSections = document.querySelectorAll('.section');
-        existingSections.forEach(section => {
-            const mainPointInput = section.querySelector('.main-point');
-            const sectionTitle = section.querySelector('.section-title');
+    // LOCAL FILE IMPORT/EXPORT METHODS
+    importDocumentFromFile() {
+        // Trigger the hidden file input
+        document.getElementById('file-input').click();
+    }
 
-            if (mainPointInput && sectionTitle) {
-                // Set initial title from main point value
-                const mainPointValue = mainPointInput.value.trim();
-                sectionTitle.textContent = mainPointValue || 'New Section';
+    async handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
 
-                // Make sure content starts expanded
-                const content = section.querySelector('.section-content');
-                if (content) {
-                    content.classList.add('expanded');
-                    content.classList.remove('collapsed');
+        if (!file.name.endsWith('.json')) {
+            this.showMessage('Please select a JSON file', 'error');
+            event.target.value = '';
+            return;
+        }
+
+        try {
+            const content = await file.text();
+            const documentData = JSON.parse(content);
+
+            // Load document data into both state and DOM
+            if (documentData.title) {
+                this.documentTitle = documentData.title;
+                document.getElementById('document-title').value = documentData.title;
+            } else {
+                this.documentTitle = '';
+                document.getElementById('document-title').value = '';
+            }
+
+            if (documentData.content) {
+                this.documentText = documentData.content;
+                document.getElementById('document-text').value = documentData.content;
+                this.parseSections();
+                // Restore saved section data (including generated_text)
+                this.restoreSavedSections(documentData.sections);
+                this.handleCursorChange();
+            } else {
+                this.documentText = '';
+                document.getElementById('document-text').value = '';
+                this.parseSections();
+                this.handleCursorChange();
+            }
+
+            // Clear the file input so the same file can be loaded again
+            event.target.value = '';
+
+            this.showMessage(`Document "${file.name}" imported successfully!`, 'success');
+        } catch (error) {
+            console.error('Error importing document:', error);
+            this.showMessage('Error importing document. Please check the file format.', 'error');
+            event.target.value = '';
+        }
+    }
+
+    async exportDocumentToFile() {
+        try {
+            const title = this.documentTitle || 'document';
+
+            const documentData = {
+                title: title,
+                content: this.documentText,
+                sections: this.sections,
+                created_at: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(documentData, null, 2)], {
+                type: 'application/json'
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = title + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showMessage('Document exported successfully!', 'success');
+        } catch (error) {
+            console.error('Error exporting document:', error);
+            this.showMessage('Error exporting document', 'error');
+        }
+    }
+
+    showMessage(text, type) {
+        // Remove any existing message
+        const existingMessage = document.querySelector('.message');
+        if (existingMessage) {
+            existingMessage.classList.remove('show');
+            setTimeout(() => existingMessage.remove(), 300);
+        }
+
+        // Create new floating message
+        const message = document.createElement('div');
+        message.className = `message message-${type}`;
+        message.textContent = text;
+
+        // Add to body for proper positioning
+        document.body.appendChild(message);
+
+        // Trigger animation after a brief delay
+        setTimeout(() => {
+            message.classList.add('show');
+        }, 50);
+
+        // Auto-remove after 4 seconds with fade out animation
+        setTimeout(() => {
+            message.classList.remove('show');
+            setTimeout(() => {
+                if (message.parentNode) {
+                    message.remove();
                 }
-            }
-        });
-    }
-
-    expandAllSections() {
-        const sections = document.querySelectorAll('.section');
-        sections.forEach(section => {
-            const content = section.querySelector('.section-content');
-            if (content && content.classList.contains('collapsed')) {
-                this.toggleSectionCollapse(section);
-            }
-        });
-    }
-
-    collapseAllSections() {
-        const sections = document.querySelectorAll('.section');
-        sections.forEach(section => {
-            const content = section.querySelector('.section-content');
-            if (content && !content.classList.contains('collapsed')) {
-                this.toggleSectionCollapse(section);
-            }
-        });
+            }, 300);
+        }, 4000);
     }
 }
 
-// Global reference for onclick handlers
+// Global reference
 let writingAssistant;
 
 document.addEventListener('DOMContentLoaded', () => {

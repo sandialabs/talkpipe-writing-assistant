@@ -11,127 +11,80 @@
         <header>
             <div class="header-content">
                 <h1>Writing Assistant</h1>
-                <div class="hamburger-menu">
-                    <button class="hamburger-btn" id="hamburger-btn">
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                    </button>
-                    <div class="hamburger-dropdown" id="hamburger-dropdown">
-                        <div class="dropdown-header">
-                            <h3>Generation Settings</h3>
+                <div class="header-controls">
+                    <div class="file-controls">
+                        <button id="new-document-btn" class="btn btn-success btn-small">📄 New</button>
+                        <button id="save-document-btn" class="btn btn-primary btn-small">💾 Save</button>
+                        <button id="load-document-btn" class="btn btn-secondary btn-small">📂 Load</button>
+                    </div>
+                    <div class="import-export-controls">
+                        <button id="import-document-btn" class="btn btn-outline btn-small">📥 Import</button>
+                        <button id="export-document-btn" class="btn btn-outline btn-small">📤 Export</button>
+                        <input type="file" id="file-input" accept=".json" style="display: none;">
+                    </div>
+                    <button id="settings-btn" class="btn btn-secondary btn-small">⚙️ Settings</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="title-section">
+            <label for="document-title">Document Title:</label>
+            <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
+        </div>
+
+        <div class="main-content">
+            <div class="editor-container">
+                <div class="editor-header">
+                    <h2>Document</h2>
+                    <div class="editor-controls">
+                        <button id="copy-document-btn" class="btn btn-secondary btn-small">📋 Copy</button>
+                    </div>
+                </div>
+
+                <div class="editor-main">
+                    <div class="document-editor">
+                        <textarea id="document-text" placeholder="Start typing your document here...
+
+Separate sections with blank lines. When you place your cursor in a section, suggestions will appear below.">{% for section in document.sections %}{{ section.user_text }}{% if not loop.last %}
+
+{% endif %}{% endfor %}</textarea>
+                    </div>
+
+                    <div class="suggestion-panel">
+                        <div class="suggestion-header">
+                            <h3>AI Suggestion</h3>
+                            <div class="suggestion-info">
+                                <span id="current-section-info">Select a section to see suggestions</span>
+                            </div>
                         </div>
-                        <div class="dropdown-content">
-                            <div class="form-group">
-                                <label for="hamburger-source">Source:</label>
-                                <input type="text" id="hamburger-source" name="source" placeholder="e.g., OpenAI, Anthropic, local model...">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="hamburger-model">Model:</label>
-                                <input type="text" id="hamburger-model" name="model" placeholder="e.g., gpt-4, claude-3, llama-2...">
-                            </div>
-                            
-                            <div class="form-actions">
-                                <button type="button" id="save-generation-settings-btn" class="btn btn-primary btn-small">Save Settings</button>
+                        <div class="suggestion-content">
+                            <div id="suggestion-text" class="suggestion-text">Position your cursor in a section above to see AI suggestions for that section.</div>
+                            <div class="suggestion-controls">
+                                <button id="generate-btn" class="btn btn-primary btn-small" disabled>⚡ Generate</button>
+                                <button id="use-suggestion-btn" class="btn btn-success btn-small" disabled>← Use This Text</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </header>
-        
-        <div class="title-section">
-            <label for="document-title">Document Title:</label>
-            <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
         </div>
-        
-        <div class="main-content">
-            <div class="tab-container">
-                <div class="tab-navigation">
-                    <button class="tab-btn active" data-tab="sections">Sections</button>
-                    <button class="tab-btn" data-tab="metadata">Metadata & Directives</button>
-                    <button class="tab-btn" data-tab="documents">Documents</button>
-                </div>
-                
-                <div class="tab-content active" id="sections-tab">
-                    <div class="sections-container">
-                        <div class="sections-header">
-                            <h2>Sections</h2>
-                            <div class="sections-controls">
-                                <button id="expand-all-btn" class="btn btn-outline btn-small">⬇ Expand All</button>
-                                <button id="collapse-all-btn" class="btn btn-outline btn-small">⬆ Collapse All</button>
-                                <button id="new-document-btn" class="btn btn-success btn-small">📄 New Document</button>
-                                <button id="copy-document-btn" class="btn btn-secondary btn-small">📋 Copy Document</button>
-                                <button id="add-section-btn" class="btn btn-primary btn-small">➕ Add Section</button>
-                            </div>
-                        </div>
-                        
-                        <div id="sections-list">
-                            {% for section in document.sections %}
-                            <div class="section-wrapper">
-                                <div class="section" data-section-id="{{ section.id }}" data-order="{{ section.order }}">
-                                    <div class="section-header" data-collapse-target="{{ section.id }}">
-                                        <div class="section-title-container">
-                                            <button class="collapse-toggle" title="Expand/Collapse Section">
-                                                <span class="collapse-icon">▼</span>
-                                            </button>
-                                            <span class="section-title">{{ section.main_point or 'New Section' }}</span>
-                                        </div>
-                                        <div class="section-controls">
-                                            <button class="btn btn-small btn-muted insert-above-btn" title="Insert Section Above">+↑</button>
-                                            <button class="btn btn-small btn-muted insert-below-btn" title="Insert Section Below">+↓</button>
-                                            <button class="btn btn-small move-up" title="Move Up">↑</button>
-                                            <button class="btn btn-small move-down" title="Move Down">↓</button>
-                                            <button class="btn btn-small btn-danger delete-section" title="Delete Section">×</button>
-                                        </div>
-                                    </div>
 
-                                <div class="section-content expanded" data-section-content="{{ section.id }}">
-                                    <div class="form-group">
-                                        <label>Main Point (single sentence):</label>
-                                        <input type="text" class="main-point" value="{{ section.main_point }}" placeholder="Enter the main point...">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label>Current Text:</label>
-                                        <textarea class="user-text" rows="4" placeholder="Enter your text here...">{{ section.user_text }}</textarea>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label>Alternative Suggestion:</label>
-                                        <div class="generated-text-container">
-                                            <div class="generated-text">{{ section.generated_text }}</div>
-                                            <div class="generated-text-controls">
-                                                <button class="btn btn-small btn-primary btn-generate-text" title="Generate new version">⚡ Generate</button>
-                                                <button class="btn btn-small btn-replace-text" title="Replace 'Your Text' with generated text">← Use This Text</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                            
-                            {% if not document.sections %}
-                            <div class="no-sections-message">
-                                <p>No sections yet. Click "Add Section" to get started.</p>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close" id="close-settings-modal">×</button>
                 </div>
-                
-                <div class="tab-content" id="metadata-tab">
-                    <div class="metadata-container">
-                        <div class="metadata-header">
-                            <h2>Metadata & Directives</h2>
-                            <p class="metadata-description">Configure how text is generated and provide background context for your writing.</p>
-                        </div>
-                        
+                <div class="modal-body">
+                    <div class="settings-tabs">
+                        <button class="settings-tab-btn active" data-settings-tab="metadata">Writing Settings</button>
+                        <button class="settings-tab-btn" data-settings-tab="generation">AI Settings</button>
+                    </div>
+
+                    <div class="settings-tab-content active" id="metadata-settings">
                         <div class="metadata-form">
                             <div class="settings-section">
-                                <h3>Content Settings</h3>
                                 <div class="form-group">
                                     <label for="writing-style">Writing Style:</label>
                                     <select id="writing-style" name="writing_style">
@@ -178,54 +131,59 @@
                             </div>
                             
                             <div class="form-actions">
-                                <button type="button" id="save-metadata-btn" class="btn btn-primary">Save Metadata</button>
+                                <button type="button" id="save-metadata-btn" class="btn btn-primary">Save Settings</button>
                                 <button type="button" id="reset-metadata-btn" class="btn btn-secondary">Reset to Defaults</button>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="tab-content" id="documents-tab">
-                    <div class="documents-container">
-                        <div class="documents-header">
-                            <h2>Document Management</h2>
-                            <p class="documents-description">Save and load your writing projects with all content and settings.</p>
-                        </div>
-                        
-                        <div class="document-actions">
-                            <div class="save-section">
-                                <h3>Save Current Document</h3>
+
+                    <div class="settings-tab-content" id="generation-settings">
+                        <div class="generation-form">
+                            <div class="settings-section">
                                 <div class="form-group">
-                                    <label for="save-filename">Filename:</label>
-                                    <input type="text" id="save-filename" placeholder="my-document" />
+                                    <label for="ai-source">AI Source:</label>
+                                    <input type="text" id="ai-source" name="source" placeholder="e.g., OpenAI, Anthropic, local model...">
                                 </div>
-                                <button id="save-document-btn" class="btn btn-primary">Save Document</button>
-                                <button id="download-current-btn" class="btn btn-secondary">Download as JSON</button>
-                            </div>
-                            
-                            <div class="load-section">
-                                <h3>Load Document</h3>
+
                                 <div class="form-group">
-                                    <label for="load-file">Choose file:</label>
-                                    <input type="file" id="load-file" accept=".json" />
+                                    <label for="ai-model">Model:</label>
+                                    <input type="text" id="ai-model" name="model" placeholder="e.g., gpt-4, claude-3, llama-2...">
                                 </div>
-                                <button id="load-document-btn" class="btn btn-primary">Load Document</button>
-                            </div>
-                            
-                            <div class="saved-documents">
-                                <h3>Saved Documents</h3>
-                                <div class="documents-list" id="documents-list">
-                                    <!-- Documents will be loaded here -->
+
+                                <div class="form-actions">
+                                    <button type="button" id="save-generation-settings-btn" class="btn btn-primary">Save AI Settings</button>
                                 </div>
-                                <button id="refresh-documents-btn" class="btn btn-secondary">Refresh List</button>
                             </div>
                         </div>
                     </div>
                 </div>
+                <div class="modal-footer">
+                    <button id="close-settings-btn" class="btn btn-secondary">Close</button>
+                </div>
             </div>
         </div>
+
+        <!-- Load Document Modal -->
+        <div id="load-document-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Load Document</h2>
+                    <button class="modal-close" id="close-load-modal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div id="load-documents-list" class="documents-list">
+                        <!-- Documents will be loaded here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="refresh-documents-btn" class="btn btn-secondary">Refresh</button>
+                    <button id="close-load-modal-footer" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
     </div>
-    
+
     <!-- New Document Modal -->
     <div id="new-document-modal" class="modal">
         <div class="modal-content">
@@ -239,8 +197,8 @@
                     <input type="text" id="new-document-title" placeholder="Enter document title...">
                 </div>
                 <div class="form-group">
-                    <label for="new-document-outline">Section Outline:</label>
-                    <textarea id="new-document-outline" rows="8" placeholder="Enter one main point per line. Each line will become a section.&#10;&#10;Example:&#10;Introduction to the topic&#10;Key benefits and advantages&#10;Implementation steps&#10;Conclusion and next steps"></textarea>
+                    <label for="new-document-outline">Initial Content:</label>
+                    <textarea id="new-document-outline" rows="8" placeholder="Enter your initial document content here.&#10;&#10;Separate sections with blank lines.&#10;Each paragraph or section will be processed individually for AI suggestions."></textarea>
                 </div>
             </div>
             <div class="modal-footer">

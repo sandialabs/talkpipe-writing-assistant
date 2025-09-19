@@ -278,6 +278,10 @@ async def update_metadata(
     source: str = Form(""),
     model: str = Form("")
 ):
+    print(f"=== Updating metadata ===")
+    print(f"Received source: '{source}', model: '{model}'")
+    print(f"Received writing_style: '{writing_style}', target_audience: '{target_audience}'")
+
     document.metadata.writing_style = writing_style
     document.metadata.target_audience = target_audience
     document.metadata.tone = tone
@@ -286,6 +290,9 @@ async def update_metadata(
     document.metadata.word_limit = word_limit
     document.metadata.source = source
     document.metadata.model = model
+
+    print(f"After update - metadata.source: '{document.metadata.source}', metadata.model: '{document.metadata.model}'")
+    print("=== End metadata update ===")
     return {"status": "success"}
 
 @app.post("/title")
@@ -488,6 +495,76 @@ async def clear_document():
     # Create a new document instance
     document = Document()
     return {"status": "success"}
+
+@app.post("/generate-text")
+async def generate_text(
+    main_point: str = Form(""),
+    user_text: str = Form(""),
+    title: str = Form(""),
+    prev_paragraph: str = Form(""),
+    next_paragraph: str = Form("")
+):
+    """Generate text for a section using the new interface format"""
+    try:
+        # Use the existing text generation function
+        generated_text = cb.new_paragraph(
+            main_point=main_point,
+            text=user_text,
+            metadata=document.metadata,
+            title=title,
+            prev_paragraph=prev_paragraph,
+            next_paragraph=next_paragraph
+        )
+
+        return {"generated_text": generated_text}
+    except Exception as e:
+        print(f"Error generating text: {e}")
+        return {"error": str(e)}, 500
+
+@app.post("/documents/save-document")
+async def save_document_new_format(
+    filename: str = Form(...),
+    document_data: str = Form(...)
+):
+    """Save document in the new interface format"""
+    try:
+        if not filename.endswith('.json'):
+            filename += '.json'
+
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in ('.', '-', '_')).strip()
+
+        docs_dir = get_documents_dir()
+        filepath = docs_dir / filename
+
+        # Parse the document data
+        document_dict = json.loads(document_data)
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(document_dict, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "filename": filename, "path": str(filepath)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/documents/delete/{filename}")
+async def delete_document(filename: str):
+    """Delete a saved document"""
+    try:
+        docs_dir = get_documents_dir()
+        filepath = docs_dir / filename
+
+        if not filepath.exists():
+            return {"status": "error", "message": "File not found"}
+
+        # Safety check - only delete .json files in the documents directory
+        if not filename.endswith('.json') or '..' in filename:
+            return {"status": "error", "message": "Invalid filename"}
+
+        filepath.unlink()
+        return {"status": "success", "message": f"Document {filename} deleted successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
