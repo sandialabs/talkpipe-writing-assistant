@@ -4,6 +4,7 @@ class WritingAssistant {
         this.currentSectionIndex = -1;
         this.documentText = '';
         this.documentTitle = '';
+        this.currentFilename = null;
         this.init();
     }
 
@@ -14,6 +15,8 @@ class WritingAssistant {
         await this.applySavedAISettings();
         this.loadExistingDocument();
         this.setupModals();
+        // Initialize filename display
+        this.updateFilenameDisplay();
     }
 
     setupEventListeners() {
@@ -40,6 +43,7 @@ class WritingAssistant {
         // Header controls
         document.getElementById('new-document-btn').addEventListener('click', () => this.showNewDocumentModal());
         document.getElementById('save-document-btn').addEventListener('click', () => this.saveDocumentToServer());
+        document.getElementById('save-as-document-btn').addEventListener('click', () => this.showSaveAsModal());
         document.getElementById('load-document-btn').addEventListener('click', () => this.showLoadDocumentModal());
         document.getElementById('import-document-btn').addEventListener('click', () => this.importDocumentFromFile());
         document.getElementById('export-document-btn').addEventListener('click', () => this.exportDocumentToFile());
@@ -73,6 +77,27 @@ class WritingAssistant {
             if (e.target === settingsModal) this.hideSettingsModal();
         });
 
+        // Add Enter key handler for Settings modal
+        settingsModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                // Don't trigger if we're in a textarea (allow normal line breaks)
+                if (e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                e.preventDefault();
+                // Save settings based on which tab is active
+                const activeTab = document.querySelector('.settings-tab-content.active');
+                if (activeTab && activeTab.id === 'metadata-settings') {
+                    this.saveMetadata();
+                } else if (activeTab && activeTab.id === 'generation-settings') {
+                    this.saveGenerationSettings();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideSettingsModal();
+            }
+        });
+
         // Load document modal
         const loadDocumentModal = document.getElementById('load-document-modal');
         const closeLoadModalBtn = document.getElementById('close-load-modal');
@@ -87,6 +112,14 @@ class WritingAssistant {
             if (e.target === loadDocumentModal) this.hideLoadDocumentModal();
         });
 
+        // Add Enter key handler for Load Document modal
+        loadDocumentModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideLoadDocumentModal();
+            }
+        });
+
         // New document modal
         const newDocumentModal = document.getElementById('new-document-modal');
         const closeNewDocumentBtn = document.getElementById('close-new-document-modal');
@@ -99,6 +132,46 @@ class WritingAssistant {
 
         newDocumentModal.addEventListener('click', (e) => {
             if (e.target === newDocumentModal) this.hideNewDocumentModal();
+        });
+
+        // Add Enter key handler for New Document modal
+        newDocumentModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                // Don't trigger if we're in the textarea (allow normal line breaks)
+                if (e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                e.preventDefault();
+                this.createNewDocument();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideNewDocumentModal();
+            }
+        });
+
+        // Save As modal
+        const saveAsModal = document.getElementById('save-as-modal');
+        const closeSaveAsBtn = document.getElementById('close-save-as-modal');
+        const cancelSaveAsBtn = document.getElementById('cancel-save-as-btn');
+        const confirmSaveAsBtn = document.getElementById('confirm-save-as-btn');
+
+        closeSaveAsBtn.addEventListener('click', () => this.hideSaveAsModal());
+        cancelSaveAsBtn.addEventListener('click', () => this.hideSaveAsModal());
+        confirmSaveAsBtn.addEventListener('click', () => this.saveDocumentAs());
+
+        saveAsModal.addEventListener('click', (e) => {
+            if (e.target === saveAsModal) this.hideSaveAsModal();
+        });
+
+        // Add Enter key handler for Save As modal
+        saveAsModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.saveDocumentAs();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideSaveAsModal();
+            }
         });
     }
 
@@ -421,6 +494,18 @@ class WritingAssistant {
 
     hideNewDocumentModal() {
         const modal = document.getElementById('new-document-modal');
+        modal.classList.remove('show');
+    }
+
+    showSaveAsModal() {
+        const modal = document.getElementById('save-as-modal');
+        modal.classList.add('show');
+        document.getElementById('save-as-filename').value = this.documentTitle || '';
+        document.getElementById('save-as-filename').focus();
+    }
+
+    hideSaveAsModal() {
+        const modal = document.getElementById('save-as-modal');
         modal.classList.remove('show');
     }
 
@@ -755,6 +840,10 @@ class WritingAssistant {
             this.parseSections();
             this.handleCursorChange();
 
+            // Clear current filename since this is a new document
+            this.currentFilename = null;
+            this.updateFilenameDisplay();
+
             this.hideNewDocumentModal();
             this.showMessage('New document created successfully!', 'success');
         } catch (error) {
@@ -1077,12 +1166,27 @@ class WritingAssistant {
 
     // SERVER SAVE/LOAD METHODS
     async saveDocumentToServer() {
-        const filename = prompt('Enter a filename for your document:', this.documentTitle || 'document');
+        // Try to save with current filename first, or prompt if none exists
+        if (this.currentFilename) {
+            await this.saveWithFilename(this.currentFilename);
+        } else {
+            this.showSaveAsModal();
+        }
+    }
+
+    async saveDocumentAs() {
+        const filename = document.getElementById('save-as-filename').value.trim();
 
         if (!filename) {
-            return; // User cancelled
+            this.showMessage('Please enter a filename', 'error');
+            return;
         }
 
+        this.hideSaveAsModal();
+        await this.saveWithFilename(filename, true); // true for "save as"
+    }
+
+    async saveWithFilename(filename, isSaveAs = false) {
         try {
             await this.saveMetadata();
 
@@ -1095,16 +1199,28 @@ class WritingAssistant {
             };
 
             const formData = new FormData();
-            formData.append('filename', filename);
+
+            if (isSaveAs || !this.currentFilename) {
+                // For save-as or first save, always include the filename
+                formData.append('filename', filename);
+            }
+            // For regular save with existing filename, no filename param needed
+
+            // Always send the document data
             formData.append('document_data', JSON.stringify(documentData));
 
-            const response = await fetch('/documents/save-document', {
+            // Use the backend Document save endpoints which save the actual document state
+            const endpoint = isSaveAs ? '/documents/save-as' : '/documents/save';
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 body: formData
             });
             const result = await response.json();
 
             if (result.status === 'success') {
+                this.currentFilename = result.filename;
+                this.updateFilenameDisplay();
                 this.showMessage(`Document saved as "${result.filename}"`, 'success');
             } else {
                 this.showMessage(`Error: ${result.message}`, 'error');
@@ -1196,13 +1312,24 @@ class WritingAssistant {
 
     async loadDocumentFromServer(filename) {
         try {
-            const response = await fetch(`/documents/download/${filename}`);
+            // Use the load endpoint which sets the current filename on the server
+            const response = await fetch(`/documents/load/${filename}`, {
+                method: 'POST'
+            });
 
             if (!response.ok) {
                 throw new Error('Document not found');
             }
 
-            const blob = await response.blob();
+            const result = await response.json();
+
+            if (result.status !== 'success') {
+                throw new Error(result.message || 'Failed to load document');
+            }
+
+            // Now get the document data from the download endpoint for the content
+            const downloadResponse = await fetch(`/documents/download/${filename}`);
+            const blob = await downloadResponse.blob();
             const text = await blob.text();
             const documentData = JSON.parse(text);
 
@@ -1228,6 +1355,10 @@ class WritingAssistant {
                 this.parseSections();
                 this.handleCursorChange();
             }
+
+            // Set current filename since we loaded from server
+            this.currentFilename = filename;
+            this.updateFilenameDisplay();
 
             this.hideLoadDocumentModal();
             this.showMessage(`Document "${filename}" loaded successfully!`, 'success');
@@ -1310,6 +1441,10 @@ class WritingAssistant {
                 this.handleCursorChange();
             }
 
+            // Clear current filename since this was imported from local file
+            this.currentFilename = null;
+            this.updateFilenameDisplay();
+
             // Clear the file input so the same file can be loaded again
             event.target.value = '';
 
@@ -1348,6 +1483,21 @@ class WritingAssistant {
         } catch (error) {
             console.error('Error exporting document:', error);
             this.showMessage('Error exporting document', 'error');
+        }
+    }
+
+    updateFilenameDisplay() {
+        const filenameElement = document.getElementById('current-filename');
+        if (!filenameElement) return;
+
+        if (this.currentFilename) {
+            // Remove .json extension for display
+            const displayName = this.currentFilename.replace(/\.json$/, '');
+            filenameElement.textContent = displayName;
+            filenameElement.className = 'filename-text saved';
+        } else {
+            filenameElement.textContent = 'Unsaved Document';
+            filenameElement.className = 'filename-text unsaved';
         }
     }
 

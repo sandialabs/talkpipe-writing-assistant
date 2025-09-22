@@ -17,6 +17,7 @@
                     <div class="file-controls">
                         <button id="new-document-btn" class="btn btn-success btn-small">📄 New</button>
                         <button id="save-document-btn" class="btn btn-primary btn-small">💾 Save</button>
+                        <button id="save-as-document-btn" class="btn btn-primary btn-small">💾 Save As</button>
                         <button id="load-document-btn" class="btn btn-secondary btn-small">📂 Load</button>
                     </div>
                     <div class="import-export-controls">
@@ -30,8 +31,15 @@
         </header>
 
         <div class="title-section">
-            <label for="document-title" class="title-label">Document Title:</label>
-            <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
+            <div class="title-row">
+                <div class="title-input-group">
+                    <label for="document-title" class="title-label">Document Title:</label>
+                    <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
+                </div>
+                <div class="filename-display">
+                    <span id="current-filename" class="filename-text">Unsaved Document</span>
+                </div>
+            </div>
         </div>
 
         <div class="main-content">
@@ -219,6 +227,27 @@ Separate sections with blank lines. When you place your cursor in a section, sug
             </div>
         </div>
 
+    </div>
+
+    <!-- Save As Modal -->
+    <div id="save-as-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Save Document As</h2>
+                <button class="modal-close" id="close-save-as-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="save-as-filename">Filename:</label>
+                    <input type="text" id="save-as-filename" placeholder="Enter filename..." class="filename-input">
+                    <small class="form-help">The .json extension will be added automatically</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-save-as-btn" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-save-as-btn" class="btn btn-primary">Save As</button>
+            </div>
+        </div>
     </div>
 
     <!-- New Document Modal -->

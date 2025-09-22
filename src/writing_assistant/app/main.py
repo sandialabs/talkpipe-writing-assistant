@@ -134,6 +134,7 @@ class Document:
         self.metadata = Metadata()
         self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
+        self.current_filename = None
     
     def to_dict(self):
         return {
@@ -391,21 +392,63 @@ async def move_section(section_id: str, new_position: int = Form(...)):
     return {"status": "success"}
 
 @app.post("/documents/save")
-async def save_document(filename: str = Form(...)):
+async def save_document(filename: str = Form(None), document_data: str = Form(None)):
+    try:
+        # Use current filename if no filename provided
+        if filename is None:
+            if document.current_filename is None:
+                return {"status": "error", "message": "No filename provided and no current filename set"}
+            filename = document.current_filename
+
+        if not filename.endswith('.json'):
+            filename += '.json'
+
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in ('.', '-', '_')).strip()
+
+        docs_dir = get_documents_dir()
+        filepath = docs_dir / filename
+
+        # Use document data from frontend if provided, otherwise use server state
+        if document_data:
+            data_to_save = json.loads(document_data)
+        else:
+            data_to_save = document.to_dict()
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+
+        # Update current filename
+        document.current_filename = filename
+
+        return {"status": "success", "filename": filename, "path": str(filepath)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/documents/save-as")
+async def save_document_as(filename: str = Form(...), document_data: str = Form(None)):
     try:
         if not filename.endswith('.json'):
             filename += '.json'
-        
+
         # Sanitize filename
         filename = "".join(c for c in filename if c.isalnum() or c in ('.', '-', '_')).strip()
-        
+
         docs_dir = get_documents_dir()
         filepath = docs_dir / filename
-        document_data = document.to_dict()
-        
+
+        # Use document data from frontend if provided, otherwise use server state
+        if document_data:
+            data_to_save = json.loads(document_data)
+        else:
+            data_to_save = document.to_dict()
+
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(document_data, f, indent=2, ensure_ascii=False)
-        
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+
+        # Update current filename
+        document.current_filename = filename
+
         return {"status": "success", "filename": filename, "path": str(filepath)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -431,9 +474,12 @@ async def load_document(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         document_data = json.loads(contents.decode('utf-8'))
-        
+
         document.from_dict(document_data)
-        
+
+        # Clear current filename since this is loaded from upload
+        document.current_filename = None
+
         return {"status": "success", "title": document.title}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -443,15 +489,18 @@ async def load_document_by_filename(filename: str):
     try:
         docs_dir = get_documents_dir()
         filepath = docs_dir / filename
-        
+
         if not filepath.exists():
             return {"status": "error", "message": "File not found"}
-        
+
         with open(filepath, 'r', encoding='utf-8') as f:
             document_data = json.load(f)
-        
+
         document.from_dict(document_data)
-        
+
+        # Set current filename to the loaded file
+        document.current_filename = filename
+
         return {"status": "success", "title": document.title}
     except Exception as e:
         return {"status": "error", "message": str(e)}

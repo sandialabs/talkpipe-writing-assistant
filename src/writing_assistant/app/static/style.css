@@ -269,9 +269,20 @@ header h1 {
     margin-bottom: 24px;
     position: relative;
     overflow: hidden;
+}
+
+.title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.title-input-group {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex: 1;
 }
 
 .title-section::before {
@@ -312,6 +323,42 @@ header h1 {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     transform: translateY(-1px);
+}
+
+.filename-display {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.filename-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gray-600);
+    background: rgba(255, 255, 255, 0.8);
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filename-text::before {
+    content: "📄";
+    font-size: 0.8rem;
+}
+
+.filename-text.saved {
+    color: var(--success-color);
+    border-color: var(--success-color);
+    background: rgba(72, 187, 120, 0.1);
+}
+
+.filename-text.unsaved {
+    color: var(--warning-color);
+    border-color: var(--warning-color);
+    background: rgba(237, 137, 54, 0.1);
 }
 
 .sections-container {
