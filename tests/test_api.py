@@ -1,6 +1,7 @@
 """Tests for the API endpoints."""
 
 import pytest
+import json
 from fastapi.testclient import TestClient
 
 
@@ -39,44 +40,47 @@ def test_metadata_post(client):
     assert data["tone"] == "friendly"
 
 
-def test_sections_crud(client):
-    """Test basic CRUD operations for sections."""
-    # Create a section
-    response = client.post("/sections")
-    assert response.status_code == 200
-    section_data = response.json()
-    assert "id" in section_data
-    section_id = section_data["id"]
-
-    # Update the section
-    response = client.put(f"/sections/{section_id}", data={
-        "main_point": "Test main point",
-        "user_text": "Test user text"
+def test_generate_text(client):
+    """Test text generation endpoint."""
+    response = client.post("/generate-text", data={
+        "main_point": "Introduction to AI",
+        "user_text": "AI is changing the world",
+        "title": "AI Overview",
+        "generation_mode": "ideas"
     })
     assert response.status_code == 200
-    updated_data = response.json()
-    assert updated_data["main_point"] == "Test main point"
-    assert updated_data["user_text"] == "Test user text"
-
-    # Delete the section
-    response = client.delete(f"/sections/{section_id}")
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    data = response.json()
+    assert "generated_text" in data
+    assert isinstance(data["generated_text"], str)
 
 
-def test_document_operations(client):
-    """Test document save/load operations."""
-    # Create a test document by updating title and adding sections
-    client.post("/title", data={"title": "Test Document"})
-    response = client.post("/sections")
-    section_id = response.json()["id"]
-    client.put(f"/sections/{section_id}", data={
-        "main_point": "Introduction",
-        "user_text": "This is a test document."
-    })
+def test_document_save_and_load(client):
+    """Test document save/load operations with browser-provided data."""
+    # Create test document data (simulating browser state)
+    test_document = {
+        "title": "Test Document",
+        "content": "This is a test document.\n\nThis is another paragraph.",
+        "sections": [
+            {
+                "id": "section-1",
+                "text": "This is a test document.",
+                "generated_text": "AI-generated expansion of the first section"
+            },
+            {
+                "id": "section-2",
+                "text": "This is another paragraph.",
+                "generated_text": "AI-generated expansion of the second section"
+            }
+        ],
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+    }
 
     # Save the document
-    response = client.post("/documents/save", data={"filename": "test_doc"})
+    response = client.post("/documents/save", data={
+        "filename": "test_doc",
+        "document_data": json.dumps(test_document)
+    })
     assert response.status_code == 200
     save_data = response.json()
     assert save_data["status"] == "success"
@@ -90,8 +94,58 @@ def test_document_operations(client):
     assert any(f["filename"] == filename for f in files)
 
     # Load the document
-    response = client.post(f"/documents/load/{filename}")
+    response = client.get(f"/documents/load/{filename}")
     assert response.status_code == 200
     load_data = response.json()
     assert load_data["status"] == "success"
-    assert load_data["title"] == "Test Document"
+    assert load_data["document"]["title"] == "Test Document"
+    assert load_data["document"]["content"] == test_document["content"]
+
+
+def test_document_save_as(client):
+    """Test save-as functionality."""
+    test_document = {
+        "title": "Save As Test",
+        "content": "Testing save as functionality",
+        "sections": [],
+        "created_at": "2024-01-01T00:00:00Z"
+    }
+
+    response = client.post("/documents/save-as", data={
+        "filename": "save_as_test",
+        "document_data": json.dumps(test_document)
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["filename"] == "save_as_test.json"
+
+
+def test_document_delete(client):
+    """Test document deletion."""
+    # First create a document to delete
+    test_document = {
+        "title": "Delete Test",
+        "content": "This will be deleted",
+        "sections": []
+    }
+
+    # Save the document
+    response = client.post("/documents/save", data={
+        "filename": "delete_test",
+        "document_data": json.dumps(test_document)
+    })
+    assert response.status_code == 200
+    filename = response.json()["filename"]
+
+    # Delete the document
+    response = client.delete(f"/documents/delete/{filename}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+
+    # Verify it's gone
+    response = client.get(f"/documents/load/{filename}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"

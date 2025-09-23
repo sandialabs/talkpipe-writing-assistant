@@ -5,6 +5,17 @@ class WritingAssistant {
         this.documentText = '';
         this.documentTitle = '';
         this.currentFilename = null;
+        // Initialize with saved defaults from localStorage or hardcoded fallbacks
+        this.documentMetadata = {
+            writing_style: localStorage.getItem('writingStyle') || 'formal',
+            target_audience: localStorage.getItem('targetAudience') || '',
+            tone: localStorage.getItem('tone') || 'neutral',
+            background_context: localStorage.getItem('backgroundContext') || '',
+            generation_directive: localStorage.getItem('generationDirective') || '',
+            word_limit: localStorage.getItem('wordLimit') || null,
+            source: localStorage.getItem('generationSource') || '',
+            model: localStorage.getItem('generationModel') || ''
+        };
         this.init();
     }
 
@@ -57,15 +68,17 @@ class WritingAssistant {
         const settingsModal = document.getElementById('settings-modal');
         const closeSettingsBtn = document.getElementById('close-settings-modal');
         const closeSettingsFooterBtn = document.getElementById('close-settings-btn');
-        const saveMetadataBtn = document.getElementById('save-metadata-btn');
+        const saveToDocumentBtn = document.getElementById('save-to-document-btn');
+        const saveAsDefaultBtn = document.getElementById('save-as-default-btn');
         const resetMetadataBtn = document.getElementById('reset-metadata-btn');
         const saveGenerationSettingsBtn = document.getElementById('save-generation-settings-btn');
 
-        closeSettingsBtn.addEventListener('click', () => this.hideSettingsModal());
-        closeSettingsFooterBtn.addEventListener('click', () => this.hideSettingsModal());
-        saveMetadataBtn.addEventListener('click', () => this.saveMetadata());
-        resetMetadataBtn.addEventListener('click', () => this.resetMetadata());
-        saveGenerationSettingsBtn.addEventListener('click', () => this.saveGenerationSettings());
+        closeSettingsBtn?.addEventListener('click', () => this.hideSettingsModal());
+        closeSettingsFooterBtn?.addEventListener('click', () => this.hideSettingsModal());
+        saveToDocumentBtn?.addEventListener('click', () => this.saveToDocument());
+        saveAsDefaultBtn?.addEventListener('click', () => this.saveAsDefault());
+        resetMetadataBtn?.addEventListener('click', () => this.resetMetadata());
+        saveGenerationSettingsBtn?.addEventListener('click', () => this.saveGenerationSettings());
 
         // Settings tabs
         const settingsTabBtns = document.querySelectorAll('.settings-tab-btn');
@@ -185,7 +198,7 @@ class WritingAssistant {
     handleTitleChange() {
         const titleInput = document.getElementById('document-title');
         this.documentTitle = titleInput.value;
-        // Don't send to server immediately - let it be managed with the document
+        // All state managed in browser only
     }
 
     parseSections() {
@@ -431,41 +444,32 @@ class WritingAssistant {
 
     async loadExistingDocument() {
         try {
-            // Load both title and content from the DOM
+            // Initialize with empty document since all state is in browser
             const titleInput = document.getElementById('document-title');
             const textarea = document.getElementById('document-text');
 
-            this.documentTitle = titleInput.value || '';
+            this.documentTitle = '';
+            this.documentText = '';
 
-            if (textarea.value.trim()) {
-                this.documentText = textarea.value;
-                this.parseSections();
-                this.handleCursorChange();
-            }
+            titleInput.value = '';
+            textarea.value = '';
+
+            this.parseSections();
+            this.handleCursorChange();
         } catch (error) {
-            console.error('Error loading existing document:', error);
+            console.error('Error initializing document:', error);
         }
     }
 
-    async updateTitle(title) {
-        const formData = new FormData();
-        formData.append('title', title);
-
-        try {
-            await fetch('/title', {
-                method: 'POST',
-                body: formData
-            });
-        } catch (error) {
-            console.error('Error updating title:', error);
-        }
-    }
+    // updateTitle method removed - all state managed in browser
 
     // Modal management methods
     showSettingsModal() {
         const modal = document.getElementById('settings-modal');
         modal.classList.add('show');
-        this.loadMetadata();
+        // Always load the current document's settings into the form when modal opens
+        // This ensures the form displays the current state accurately
+        this.loadCurrentDocumentToSettingsForm();
     }
 
     hideSettingsModal() {
@@ -522,31 +526,47 @@ class WritingAssistant {
 
     async loadMetadata() {
         try {
-            const response = await fetch('/metadata');
-            const metadata = await response.json();
-
-            // Load AI settings
-            const savedSource = localStorage.getItem('generationSource') || metadata.source || '';
-            const savedModel = localStorage.getItem('generationModel') || metadata.model || '';
+            // Load AI settings from localStorage
+            const savedSource = localStorage.getItem('generationSource') || '';
+            const savedModel = localStorage.getItem('generationModel') || '';
 
             const sourceElement = document.getElementById('ai-source');
             const modelElement = document.getElementById('ai-model');
             if (sourceElement) sourceElement.value = savedSource;
             if (modelElement) modelElement.value = savedModel;
 
-            // Load writing settings
-            document.getElementById('writing-style').value = metadata.writing_style || 'formal';
-            document.getElementById('target-audience').value = metadata.target_audience || '';
-            document.getElementById('tone').value = metadata.tone || 'neutral';
-            document.getElementById('background-context').value = metadata.background_context || '';
-            document.getElementById('generation-directive').value = metadata.generation_directive || '';
-            document.getElementById('word-limit').value = metadata.word_limit || '';
+            // Load writing settings from localStorage or use defaults
+            const writingStyle = localStorage.getItem('writingStyle') || 'formal';
+            const targetAudience = localStorage.getItem('targetAudience') || '';
+            const tone = localStorage.getItem('tone') || 'neutral';
+            const backgroundContext = localStorage.getItem('backgroundContext') || '';
+            const generationDirective = localStorage.getItem('generationDirective') || '';
+            const wordLimit = localStorage.getItem('wordLimit') || '';
+
+            document.getElementById('writing-style').value = writingStyle;
+            document.getElementById('target-audience').value = targetAudience;
+            document.getElementById('tone').value = tone;
+            document.getElementById('background-context').value = backgroundContext;
+            document.getElementById('generation-directive').value = generationDirective;
+            document.getElementById('word-limit').value = wordLimit;
+
+            // Initialize documentMetadata with current settings
+            this.documentMetadata = {
+                writing_style: writingStyle,
+                target_audience: targetAudience,
+                tone: tone,
+                background_context: backgroundContext,
+                generation_directive: generationDirective,
+                word_limit: wordLimit || null,
+                source: savedSource,
+                model: savedModel
+            };
         } catch (error) {
             console.error('Error loading metadata:', error);
         }
     }
 
-    async saveMetadata() {
+    async saveToDocument() {
         const metadata = {
             source: document.getElementById('ai-source').value,
             model: document.getElementById('ai-model').value,
@@ -558,6 +578,19 @@ class WritingAssistant {
             word_limit: document.getElementById('word-limit').value || null
         };
 
+        // Update the document's metadata only
+        this.documentMetadata = {
+            writing_style: metadata.writing_style,
+            target_audience: metadata.target_audience,
+            tone: metadata.tone,
+            background_context: metadata.background_context,
+            generation_directive: metadata.generation_directive,
+            word_limit: metadata.word_limit,
+            source: metadata.source,
+            model: metadata.model
+        };
+
+        // Send to server for text generation
         const formData = new FormData();
         Object.keys(metadata).forEach(key => {
             if (metadata[key] !== null && metadata[key] !== '') {
@@ -570,24 +603,65 @@ class WritingAssistant {
                 method: 'POST',
                 body: formData
             });
-            this.showMessage('Settings saved successfully!', 'success');
+            this.showMessage('Settings saved to document!', 'success');
         } catch (error) {
-            console.error('Error saving metadata:', error);
-            this.showMessage('Error saving settings', 'error');
+            console.error('Error saving document metadata:', error);
+            this.showMessage('Error saving document settings', 'error');
         }
     }
 
-    async resetMetadata() {
-        document.getElementById('ai-source').value = '';
-        document.getElementById('ai-model').value = '';
-        document.getElementById('writing-style').value = 'formal';
-        document.getElementById('target-audience').value = '';
-        document.getElementById('tone').value = 'neutral';
-        document.getElementById('background-context').value = '';
-        document.getElementById('generation-directive').value = '';
-        document.getElementById('word-limit').value = '';
+    async saveAsDefault() {
+        const metadata = {
+            source: document.getElementById('ai-source').value,
+            model: document.getElementById('ai-model').value,
+            writing_style: document.getElementById('writing-style').value,
+            target_audience: document.getElementById('target-audience').value,
+            tone: document.getElementById('tone').value,
+            background_context: document.getElementById('background-context').value,
+            generation_directive: document.getElementById('generation-directive').value,
+            word_limit: document.getElementById('word-limit').value || null
+        };
 
-        await this.saveMetadata();
+        // Save to localStorage for global defaults
+        localStorage.setItem('generationSource', metadata.source);
+        localStorage.setItem('generationModel', metadata.model);
+        localStorage.setItem('writingStyle', metadata.writing_style);
+        localStorage.setItem('targetAudience', metadata.target_audience);
+        localStorage.setItem('tone', metadata.tone);
+        localStorage.setItem('backgroundContext', metadata.background_context);
+        localStorage.setItem('generationDirective', metadata.generation_directive);
+        localStorage.setItem('wordLimit', metadata.word_limit || '');
+
+        this.showMessage('Settings saved as default for new documents!', 'success');
+    }
+
+    // Legacy method for backward compatibility
+    async saveMetadata() {
+        // Default to saving to document only
+        await this.saveToDocument();
+    }
+
+    async resetMetadata() {
+        // Load saved defaults from localStorage into the form
+        const savedSource = localStorage.getItem('generationSource') || '';
+        const savedModel = localStorage.getItem('generationModel') || '';
+        const savedWritingStyle = localStorage.getItem('writingStyle') || 'formal';
+        const savedTargetAudience = localStorage.getItem('targetAudience') || '';
+        const savedTone = localStorage.getItem('tone') || 'neutral';
+        const savedBackgroundContext = localStorage.getItem('backgroundContext') || '';
+        const savedGenerationDirective = localStorage.getItem('generationDirective') || '';
+        const savedWordLimit = localStorage.getItem('wordLimit') || '';
+
+        document.getElementById('ai-source').value = savedSource;
+        document.getElementById('ai-model').value = savedModel;
+        document.getElementById('writing-style').value = savedWritingStyle;
+        document.getElementById('target-audience').value = savedTargetAudience;
+        document.getElementById('tone').value = savedTone;
+        document.getElementById('background-context').value = savedBackgroundContext;
+        document.getElementById('generation-directive').value = savedGenerationDirective;
+        document.getElementById('word-limit').value = savedWordLimit;
+
+        this.showMessage('Form reset to saved defaults!', 'success');
     }
 
     saveGenerationSettings() {
@@ -641,6 +715,65 @@ class WritingAssistant {
             console.log('Metadata update result:', result);
         } catch (error) {
             console.error('Error updating metadata:', error);
+        }
+    }
+
+    loadCurrentDocumentToSettingsForm() {
+        // Always merge document metadata with localStorage values
+        // This ensures we show the most up-to-date settings
+        const savedSource = localStorage.getItem('generationSource') || '';
+        const savedModel = localStorage.getItem('generationModel') || '';
+        const savedWritingStyle = localStorage.getItem('writingStyle') || 'formal';
+        const savedTargetAudience = localStorage.getItem('targetAudience') || '';
+        const savedTone = localStorage.getItem('tone') || 'neutral';
+        const savedBackgroundContext = localStorage.getItem('backgroundContext') || '';
+        const savedGenerationDirective = localStorage.getItem('generationDirective') || '';
+        const savedWordLimit = localStorage.getItem('wordLimit') || '';
+
+        // Use document metadata if available, otherwise use localStorage (saved defaults)
+        const fields = [
+            { id: 'writing-style', value: (this.documentMetadata?.writing_style || savedWritingStyle) },
+            { id: 'target-audience', value: (this.documentMetadata?.target_audience || savedTargetAudience) },
+            { id: 'tone', value: (this.documentMetadata?.tone || savedTone) },
+            { id: 'background-context', value: (this.documentMetadata?.background_context || savedBackgroundContext) },
+            { id: 'generation-directive', value: (this.documentMetadata?.generation_directive || savedGenerationDirective) },
+            { id: 'word-limit', value: (this.documentMetadata?.word_limit || savedWordLimit) },
+            { id: 'ai-source', value: (this.documentMetadata?.source || savedSource) },
+            { id: 'ai-model', value: (this.documentMetadata?.model || savedModel) }
+        ];
+
+        fields.forEach(field => {
+            const element = document.getElementById(field.id);
+            if (element) {
+                element.value = field.value;
+                // Trigger change event to ensure UI updates
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+    }
+
+    restoreDocumentMetadata(documentData) {
+        // Restore metadata from document if available
+        if (documentData.metadata) {
+            this.documentMetadata = {
+                writing_style: documentData.metadata.writing_style || 'formal',
+                target_audience: documentData.metadata.target_audience || '',
+                tone: documentData.metadata.tone || 'neutral',
+                background_context: documentData.metadata.background_context || '',
+                generation_directive: documentData.metadata.generation_directive || '',
+                word_limit: documentData.metadata.word_limit || null,
+                source: documentData.metadata.source || '',
+                model: documentData.metadata.model || ''
+            };
+
+            console.log('restoreDocumentMetadata: Setting documentMetadata to:', this.documentMetadata);
+
+            // Update the UI form fields AND the settings modal if it's open
+            // Use setTimeout to ensure DOM updates are processed
+            setTimeout(() => {
+                this.loadCurrentDocumentToSettingsForm();
+            }, 10);
         }
     }
 
@@ -821,10 +954,19 @@ class WritingAssistant {
         }
 
         try {
-            // Clear current document
-            await fetch('/documents/clear', { method: 'POST' });
+            // Reset to saved defaults from localStorage for new document
+            this.documentMetadata = {
+                writing_style: localStorage.getItem('writingStyle') || 'formal',
+                target_audience: localStorage.getItem('targetAudience') || '',
+                tone: localStorage.getItem('tone') || 'neutral',
+                background_context: localStorage.getItem('backgroundContext') || '',
+                generation_directive: localStorage.getItem('generationDirective') || '',
+                word_limit: localStorage.getItem('wordLimit') || null,
+                source: localStorage.getItem('generationSource') || '',
+                model: localStorage.getItem('generationModel') || ''
+            };
 
-            // Apply saved AI settings to the new document
+            // Apply saved AI settings to server
             await this.applySavedAISettings();
 
             // Set new title in both state and DOM
@@ -877,12 +1019,20 @@ class WritingAssistant {
         }
 
         try {
-            await this.saveMetadata();
-
             const documentData = {
                 title: this.documentTitle,
                 content: this.documentText,
                 sections: this.sections,
+                metadata: {
+                    writing_style: document.getElementById('writing-style').value,
+                    target_audience: document.getElementById('target-audience').value,
+                    tone: document.getElementById('tone').value,
+                    background_context: document.getElementById('background-context').value,
+                    generation_directive: document.getElementById('generation-directive').value,
+                    word_limit: document.getElementById('word-limit').value || null,
+                    source: document.getElementById('ai-source').value,
+                    model: document.getElementById('ai-model').value
+                },
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -891,7 +1041,7 @@ class WritingAssistant {
             formData.append('filename', filename);
             formData.append('document_data', JSON.stringify(documentData));
 
-            const response = await fetch('/documents/save-document', {
+            const response = await fetch('/documents/save', {
                 method: 'POST',
                 body: formData
             });
@@ -917,6 +1067,16 @@ class WritingAssistant {
                 title: title,
                 content: this.documentText,
                 sections: this.sections,
+                metadata: {
+                    writing_style: this.documentMetadata.writing_style,
+                    target_audience: this.documentMetadata.target_audience,
+                    tone: this.documentMetadata.tone,
+                    background_context: this.documentMetadata.background_context,
+                    generation_directive: this.documentMetadata.generation_directive,
+                    word_limit: this.documentMetadata.word_limit,
+                    source: this.documentMetadata.source,
+                    model: this.documentMetadata.model
+                },
                 created_at: new Date().toISOString()
             };
 
@@ -1093,6 +1253,8 @@ class WritingAssistant {
                 this.parseSections();
                 // Restore saved section data (including generated_text)
                 this.restoreSavedSections(documentData.sections);
+                // Restore document metadata settings
+                this.restoreDocumentMetadata(documentData);
                 this.handleCursorChange();
             } else {
                 this.documentText = '';
@@ -1188,23 +1350,29 @@ class WritingAssistant {
 
     async saveWithFilename(filename, isSaveAs = false) {
         try {
-            await this.saveMetadata();
-
             const documentData = {
                 title: this.documentTitle,
                 content: this.documentText,
                 sections: this.sections,
+                metadata: {
+                    writing_style: document.getElementById('writing-style').value,
+                    target_audience: document.getElementById('target-audience').value,
+                    tone: document.getElementById('tone').value,
+                    background_context: document.getElementById('background-context').value,
+                    generation_directive: document.getElementById('generation-directive').value,
+                    word_limit: document.getElementById('word-limit').value || null,
+                    source: document.getElementById('ai-source').value,
+                    model: document.getElementById('ai-model').value
+                },
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
 
             const formData = new FormData();
 
-            if (isSaveAs || !this.currentFilename) {
-                // For save-as or first save, always include the filename
-                formData.append('filename', filename);
-            }
-            // For regular save with existing filename, no filename param needed
+            // Always include filename - use existing filename for regular save or provided filename for save-as/first save
+            const saveFilename = isSaveAs || !this.currentFilename ? filename : this.currentFilename;
+            formData.append('filename', saveFilename);
 
             // Always send the document data
             formData.append('document_data', JSON.stringify(documentData));
@@ -1311,11 +1479,10 @@ class WritingAssistant {
     }
 
     async loadDocumentFromServer(filename) {
+        console.log('loadDocumentFromServer: called with filename:', filename);
         try {
-            // Use the load endpoint which sets the current filename on the server
-            const response = await fetch(`/documents/load/${filename}`, {
-                method: 'POST'
-            });
+            // Get document data directly from the load endpoint
+            const response = await fetch(`/documents/load/${filename}`);
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1327,11 +1494,7 @@ class WritingAssistant {
                 throw new Error(result.message || 'Failed to load document');
             }
 
-            // Now get the document data from the download endpoint for the content
-            const downloadResponse = await fetch(`/documents/download/${filename}`);
-            const blob = await downloadResponse.blob();
-            const text = await blob.text();
-            const documentData = JSON.parse(text);
+            const documentData = result.document;
 
             // Load document data into both state and DOM
             if (documentData.title) {
@@ -1356,7 +1519,10 @@ class WritingAssistant {
                 this.handleCursorChange();
             }
 
-            // Set current filename since we loaded from server
+            // Always restore document metadata settings, regardless of content
+            this.restoreDocumentMetadata(documentData);
+
+            // Set current filename
             this.currentFilename = filename;
             this.updateFilenameDisplay();
 
@@ -1433,6 +1599,8 @@ class WritingAssistant {
                 this.parseSections();
                 // Restore saved section data (including generated_text)
                 this.restoreSavedSections(documentData.sections);
+                // Restore document metadata settings
+                this.restoreDocumentMetadata(documentData);
                 this.handleCursorChange();
             } else {
                 this.documentText = '';
@@ -1464,6 +1632,16 @@ class WritingAssistant {
                 title: title,
                 content: this.documentText,
                 sections: this.sections,
+                metadata: {
+                    writing_style: this.documentMetadata.writing_style,
+                    target_audience: this.documentMetadata.target_audience,
+                    tone: this.documentMetadata.tone,
+                    background_context: this.documentMetadata.background_context,
+                    generation_directive: this.documentMetadata.generation_directive,
+                    word_limit: this.documentMetadata.word_limit,
+                    source: this.documentMetadata.source,
+                    model: this.documentMetadata.model
+                },
                 created_at: new Date().toISOString()
             };
 

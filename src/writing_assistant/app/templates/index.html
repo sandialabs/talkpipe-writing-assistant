@@ -34,7 +34,7 @@
             <div class="title-row">
                 <div class="title-input-group">
                     <label for="document-title" class="title-label">Document Title:</label>
-                    <input type="text" id="document-title" value="{{ document.title }}" placeholder="Enter document title...">
+                    <input type="text" id="document-title" value="" placeholder="Enter document title...">
                 </div>
                 <div class="filename-display">
                     <span id="current-filename" class="filename-text">Unsaved Document</span>
@@ -55,9 +55,7 @@
                     <div class="document-editor">
                         <textarea id="document-text" placeholder="Start typing your document here...
 
-Separate sections with blank lines. When you place your cursor in a section, suggestions will appear below.">{% for section in document.sections %}{{ section.user_text }}{% if not loop.last %}
-
-{% endif %}{% endfor %}</textarea>
+Separate sections with blank lines. When you place your cursor in a section, suggestions will appear below."></textarea>
                     </div>
 
                     <div class="suggestion-panel">
@@ -161,8 +159,9 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                             </div>
                             
                             <div class="form-actions">
-                                <button type="button" id="save-metadata-btn" class="btn btn-primary">Save Settings</button>
-                                <button type="button" id="reset-metadata-btn" class="btn btn-secondary">Reset to Defaults</button>
+                                <button type="button" id="save-to-document-btn" class="btn btn-primary">💾 Save to Document</button>
+                                <button type="button" id="save-as-default-btn" class="btn btn-success">🌐 Save as Default</button>
+                                <button type="button" id="reset-metadata-btn" class="btn btn-secondary">🔄 Reset to Defaults</button>
                             </div>
                         </div>
                     </div>
