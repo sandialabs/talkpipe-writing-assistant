@@ -67,14 +67,12 @@ class WritingAssistant {
         // Settings modal
         const settingsModal = document.getElementById('settings-modal');
         const closeSettingsBtn = document.getElementById('close-settings-modal');
-        const closeSettingsFooterBtn = document.getElementById('close-settings-btn');
         const saveToDocumentBtn = document.getElementById('save-to-document-btn');
         const saveAsDefaultBtn = document.getElementById('save-as-default-btn');
         const resetMetadataBtn = document.getElementById('reset-metadata-btn');
         const saveGenerationSettingsBtn = document.getElementById('save-generation-settings-btn');
 
         closeSettingsBtn?.addEventListener('click', () => this.hideSettingsModal());
-        closeSettingsFooterBtn?.addEventListener('click', () => this.hideSettingsModal());
         saveToDocumentBtn?.addEventListener('click', () => this.saveToDocument());
         saveAsDefaultBtn?.addEventListener('click', () => this.saveAsDefault());
         resetMetadataBtn?.addEventListener('click', () => this.resetMetadata());
