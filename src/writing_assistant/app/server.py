@@ -1,5 +1,6 @@
 """Entry point for the writing assistant web server."""
 
+import argparse
 import os
 import uvicorn
 from .main import app
@@ -7,11 +8,28 @@ from .main import app
 
 def main():
     """Main entry point for the writing assistant server."""
-    host = os.getenv("WRITING_ASSISTANT_HOST", "localhost")
-    port = int(os.getenv("WRITING_ASSISTANT_PORT", "8001"))
-    reload = os.getenv("WRITING_ASSISTANT_RELOAD", "false").lower() == "true"
+    parser = argparse.ArgumentParser(description="Writing Assistant Web Server")
+    parser.add_argument(
+        "--host",
+        default=os.getenv("WRITING_ASSISTANT_HOST", "localhost"),
+        help="Host to bind to (default: localhost, or WRITING_ASSISTANT_HOST env var)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("WRITING_ASSISTANT_PORT", "8001")),
+        help="Port to bind to (default: 8001, or WRITING_ASSISTANT_PORT env var)"
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        default=os.getenv("WRITING_ASSISTANT_RELOAD", "false").lower() == "true",
+        help="Enable auto-reload (default: false, or WRITING_ASSISTANT_RELOAD env var)"
+    )
 
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    args = parser.parse_args()
+
+    uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":
