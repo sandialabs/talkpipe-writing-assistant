@@ -47,9 +47,8 @@ def get_system_prompt(generation_mode: str) -> str:
         return f"""
         Proofread and correct the current paragraph draft for grammar, spelling, and style.
         {base_context}
-        Focus on fixing any errors while maintaining the original voice and meaning.
+        Focus on fixing any errors.
         Make minimal changes - only what's necessary for correctness and clarity.
-        If no draft is provided, write a well-edited new paragraph.
         """
     else:
         # Default to rewrite
@@ -87,6 +86,9 @@ PROMPT_TEMPLATE = """
     ===============
     
     Paragraph after the current paragraph: {next_paragraph}
+
+    Based on the above information, {generation_mode} the current paragraph draft.
+    {system_prompt}
 """
 
 
@@ -96,14 +98,15 @@ def new_paragraph(main_point: str, text: str, metadata: Metadata, title: str = "
         # Get the appropriate system prompt based on generation mode
         system_prompt = get_system_prompt(generation_mode)
         print(f"=== Generation mode: {generation_mode} ===")
+        print(f"=== System prompt: {system_prompt} ===")
 
         f = (fillTemplate(template=PROMPT_TEMPLATE)
-            | LLMPrompt(system_prompt=system_prompt, multi_turn=False, source=metadata.source, model=metadata.model)
-            | Print())
+            | Print()
+            | LLMPrompt(system_prompt=system_prompt, multi_turn=False, source=metadata.source, model=metadata.model))
         f = f.as_function(single_in=True, single_out=True)
 
 
-        result = f({"main_point": main_point, "text": text, "metadata": metadata, "title": title, "prev_paragraph": prev_paragraph, "next_paragraph": next_paragraph})
+        result = f({"main_point": main_point, "text": text, "metadata": metadata, "title": title, "prev_paragraph": prev_paragraph, "next_paragraph": next_paragraph, "generation_mode": generation_mode, "system_prompt": system_prompt})
 
         # Clean up the result to prevent extra newlines
         if isinstance(result, str):

@@ -347,6 +347,16 @@ class WritingAssistant {
             formData.append('next_paragraph', nextSection ? nextSection.text : '');
             formData.append('generation_mode', selectedMode);
 
+            // Send metadata with each request - read current values from form fields
+            formData.append('writing_style', document.getElementById('writing-style')?.value || this.documentMetadata.writing_style || 'formal');
+            formData.append('target_audience', document.getElementById('target-audience')?.value || this.documentMetadata.target_audience || '');
+            formData.append('tone', document.getElementById('tone')?.value || this.documentMetadata.tone || 'neutral');
+            formData.append('background_context', document.getElementById('background-context')?.value || this.documentMetadata.background_context || '');
+            formData.append('generation_directive', document.getElementById('generation-directive')?.value || this.documentMetadata.generation_directive || '');
+            formData.append('word_limit', document.getElementById('word-limit')?.value || this.documentMetadata.word_limit || '');
+            formData.append('source', document.getElementById('ai-source')?.value || this.documentMetadata.source || '');
+            formData.append('model', document.getElementById('ai-model')?.value || this.documentMetadata.model || '');
+
             const response = await fetch('/generate-text', {
                 method: 'POST',
                 body: formData
@@ -588,24 +598,8 @@ class WritingAssistant {
             model: metadata.model
         };
 
-        // Send to server for text generation
-        const formData = new FormData();
-        Object.keys(metadata).forEach(key => {
-            if (metadata[key] !== null && metadata[key] !== '') {
-                formData.append(key, metadata[key]);
-            }
-        });
-
-        try {
-            await fetch('/metadata', {
-                method: 'POST',
-                body: formData
-            });
-            this.showMessage('Settings saved to document!', 'success');
-        } catch (error) {
-            console.error('Error saving document metadata:', error);
-            this.showMessage('Error saving document settings', 'error');
-        }
+        // Settings saved to document (no server call needed - sent with each generation request)
+        this.showMessage('Settings saved to document!', 'success');
     }
 
     async saveAsDefault() {
@@ -675,45 +669,10 @@ class WritingAssistant {
         this.showMessage('AI settings and hotkeys saved successfully!', 'success');
     }
 
-    async applySavedAISettings() {
-        // Get saved AI settings from both localStorage and form fields
-        const savedSource = localStorage.getItem('generationSource') || document.getElementById('ai-source')?.value || '';
-        const savedModel = localStorage.getItem('generationModel') || document.getElementById('ai-model')?.value || '';
-
-        console.log('applySavedAISettings called - savedSource:', savedSource, 'savedModel:', savedModel);
-
-        // Always apply some metadata, even if source/model are empty, to ensure defaults are set
-        const metadata = {
-            source: savedSource,
-            model: savedModel,
-            writing_style: 'formal', // Keep existing defaults
-            target_audience: 'general public',
-            tone: 'neutral',
-            background_context: 'none provided',
-            generation_directive: 'use good grammar.  Be concise and clear.',
-            word_limit: 250
-        };
-
-        const formData = new FormData();
-        Object.keys(metadata).forEach(key => {
-            // Always include source and model, even if empty
-            if (key === 'source' || key === 'model' || (metadata[key] !== null && metadata[key] !== '')) {
-                formData.append(key, metadata[key]);
-            }
-        });
-
-        console.log('Sending metadata to server:', Array.from(formData.entries()));
-
-        try {
-            const response = await fetch('/metadata', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-            console.log('Metadata update result:', result);
-        } catch (error) {
-            console.error('Error updating metadata:', error);
-        }
+    applySavedAISettings() {
+        // No server call needed - metadata is sent with each generation request
+        // This method kept for compatibility but does nothing
+        console.log('applySavedAISettings: No action needed - using stateless approach');
     }
 
     loadCurrentDocumentToSettingsForm() {
@@ -964,8 +923,8 @@ class WritingAssistant {
                 model: localStorage.getItem('generationModel') || ''
             };
 
-            // Apply saved AI settings to server
-            await this.applySavedAISettings();
+            // Apply saved AI settings (no server call needed)
+            this.applySavedAISettings();
 
             // Set new title in both state and DOM
             this.documentTitle = title;

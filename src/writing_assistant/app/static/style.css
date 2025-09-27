@@ -85,13 +85,18 @@ body {
     line-height: 1.6;
     color: var(--gray-800);
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
 }
 
 .container {
     width: 100%;
+    height: 100vh;
     margin: 0;
-    padding: 32px 24px;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     animation: fadeInUp 0.6s ease-out;
 }
 
@@ -107,13 +112,14 @@ body {
 }
 
 header {
-    margin-bottom: 40px;
-    padding: 32px;
+    margin-bottom: 16px;
+    padding: 20px 24px;
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
     border: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
 }
 
 .header-content {
@@ -262,13 +268,14 @@ header h1 {
 .title-section {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
-    padding: 16px 24px;
+    padding: 12px 20px;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .title-row {
@@ -829,8 +836,11 @@ header h1 {
 }
 
 .main-content {
-    margin-top: 32px;
+    flex: 1;
     position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Enhanced floating action styles */
@@ -1456,6 +1466,9 @@ input[type="file"]:focus {
     border: 1px solid rgba(255, 255, 255, 0.2);
     overflow: hidden;
     position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .editor-container::before {
@@ -1473,9 +1486,10 @@ input[type="file"]:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 24px 32px;
+    padding: 16px 24px;
     background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.8) 100%);
     border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
 }
 
 .editor-header h2 {
@@ -1494,20 +1508,23 @@ input[type="file"]:focus {
 .editor-main {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    min-height: 600px;
     gap: 0;
+    flex: 1;
+    overflow: hidden;
 }
 
 .document-editor {
-    padding: 32px;
+    padding: 20px;
     border-right: 1px solid var(--gray-200);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 #document-text {
     width: 100%;
-    height: 100%;
-    min-height: 500px;
-    padding: 24px;
+    flex: 1;
+    padding: 20px;
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-lg);
     font-size: 1rem;
@@ -1519,6 +1536,7 @@ input[type="file"]:focus {
     transition: var(--transition-normal);
     white-space: pre-wrap;
     word-wrap: break-word;
+    overflow-y: auto;
 }
 
 #document-text:focus {
@@ -1529,16 +1547,18 @@ input[type="file"]:focus {
 }
 
 .suggestion-panel {
-    padding: 32px 24px;
+    padding: 20px 16px;
     background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.9) 100%);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .suggestion-header {
-    margin-bottom: 20px;
-    padding-bottom: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
 }
 
 .suggestion-header h3 {
@@ -1561,7 +1581,8 @@ input[type="file"]:focus {
 }
 
 .generation-mode-selection {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
 }
 
 .generation-mode-options {
@@ -1605,7 +1626,7 @@ input[type="file"]:focus {
 
 .suggestion-text {
     flex: 1;
-    padding: 20px;
+    padding: 16px;
     background: rgba(255, 255, 255, 0.8);
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-lg);
@@ -1615,10 +1636,10 @@ input[type="file"]:focus {
     color: var(--gray-800);
     white-space: pre-wrap;
     word-wrap: break-word;
-    min-height: 200px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     box-shadow: inset var(--shadow-sm);
     transition: var(--transition-normal);
+    overflow-y: auto;
 }
 
 .suggestion-text:empty::before {
@@ -1631,8 +1652,9 @@ input[type="file"]:focus {
     display: flex;
     gap: 12px;
     align-items: center;
-    margin: 16px 0;
+    margin: 12px 0;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .suggestion-controls .btn {
@@ -1703,7 +1725,7 @@ input[type="file"]:focus {
 @media (max-width: 1200px) {
     .editor-main {
         grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
+        grid-template-rows: 1fr 1fr;
     }
 
     .document-editor {
@@ -1712,22 +1734,27 @@ input[type="file"]:focus {
     }
 
     .suggestion-panel {
-        min-height: 300px;
+        /* Remove min-height to allow flex to control size */
     }
 
     #document-text {
-        min-height: 400px;
+        /* Remove min-height to allow flex to control size */
     }
 }
 
 @media (max-width: 768px) {
     .container {
-        padding: 16px 12px;
+        padding: 12px 8px;
+    }
+
+    header {
+        padding: 16px 20px;
+        margin-bottom: 12px;
     }
 
     .header-content {
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
         text-align: center;
     }
 
@@ -1746,10 +1773,32 @@ input[type="file"]:focus {
         gap: 4px;
     }
 
+    .title-section {
+        padding: 10px 16px;
+        margin-bottom: 12px;
+    }
+
+    .title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .title-section .title-label {
+        font-size: 0.95rem;
+    }
+
+    #document-title {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 1rem;
+    }
+
     .editor-header {
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
         text-align: center;
+        padding: 12px 16px;
     }
 
     .editor-controls {
@@ -1759,27 +1808,27 @@ input[type="file"]:focus {
 
     .editor-main {
         grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
     }
 
     .document-editor,
     .suggestion-panel {
-        padding: 20px 16px;
+        padding: 16px 12px;
     }
 
     #document-text {
-        min-height: 300px;
-        padding: 16px;
+        padding: 12px;
         font-size: 0.95rem;
     }
 
     .suggestion-text {
-        min-height: 150px;
-        padding: 16px;
+        padding: 12px;
         font-size: 0.95rem;
     }
 
     .suggestion-controls {
         flex-direction: column;
+        margin: 8px 0;
     }
 
     .suggestion-controls .btn {
@@ -1803,23 +1852,5 @@ input[type="file"]:focus {
         max-width: none;
         padding: 12px 16px;
         font-size: 0.9rem;
-    }
-
-    /* Title section mobile adjustments */
-    .title-section {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 14px 18px;
-    }
-
-    .title-section .title-label {
-        font-size: 0.95rem;
-    }
-
-    #document-title {
-        width: 100%;
-        padding: 10px 14px;
-        font-size: 1rem;
     }
 }

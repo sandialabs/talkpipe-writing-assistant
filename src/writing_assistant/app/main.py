@@ -28,8 +28,7 @@ class NoCacheStaticFiles(StaticFiles):
 app.mount("/static", NoCacheStaticFiles(directory=str(app_dir / "static")), name="static")
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
-# Current metadata state for the stateless API
-current_metadata = Metadata()
+# No server-side state - all metadata sent with requests
 
 # Helper function to get documents directory
 def get_documents_dir():
@@ -49,46 +48,7 @@ async def favicon():
     favicon_path = app_dir / "static" / "favicon.ico"
     return FileResponse(favicon_path, media_type="image/x-icon")
 
-@app.get("/metadata")
-async def get_metadata():
-    return {
-        "writing_style": current_metadata.writing_style,
-        "target_audience": current_metadata.target_audience,
-        "tone": current_metadata.tone,
-        "background_context": current_metadata.background_context,
-        "generation_directive": current_metadata.generation_directive,
-        "word_limit": current_metadata.word_limit,
-        "source": current_metadata.source,
-        "model": current_metadata.model
-    }
-
-@app.post("/metadata")
-async def update_metadata(
-    writing_style: str = Form("formal"),
-    target_audience: str = Form(""),
-    tone: str = Form("neutral"),
-    background_context: str = Form(""),
-    generation_directive: str = Form(""),
-    word_limit: Optional[int] = Form(None),
-    source: str = Form(""),
-    model: str = Form("")
-):
-    print(f"=== Updating metadata ===")
-    print(f"Received source: '{source}', model: '{model}'")
-    print(f"Received writing_style: '{writing_style}', target_audience: '{target_audience}'")
-
-    current_metadata.writing_style = writing_style
-    current_metadata.target_audience = target_audience
-    current_metadata.tone = tone
-    current_metadata.background_context = background_context
-    current_metadata.generation_directive = generation_directive
-    current_metadata.word_limit = word_limit
-    current_metadata.source = source
-    current_metadata.model = model
-
-    print(f"After update - metadata.source: '{current_metadata.source}', metadata.model: '{current_metadata.model}'")
-    print("=== End metadata update ===")
-    return {"status": "success"}
+# Metadata endpoints removed - all metadata sent with generation requests
 
 @app.post("/documents/save")
 async def save_document(filename: str = Form(...), document_data: str = Form(...)):
@@ -195,15 +155,33 @@ async def generate_text(
     title: str = Form(""),
     prev_paragraph: str = Form(""),
     next_paragraph: str = Form(""),
-    generation_mode: str = Form("ideas")
+    generation_mode: str = Form("ideas"),
+    writing_style: str = Form("formal"),
+    target_audience: str = Form(""),
+    tone: str = Form("neutral"),
+    background_context: str = Form(""),
+    generation_directive: str = Form(""),
+    word_limit: Optional[int] = Form(None),
+    source: str = Form(""),
+    model: str = Form("")
 ):
-    """Generate text for a section - stateless endpoint"""
+    """Generate text for a section - fully stateless endpoint"""
     try:
-        # Use current metadata for generation
+        # Create metadata from request parameters
+        metadata = Metadata()
+        metadata.writing_style = writing_style
+        metadata.target_audience = target_audience
+        metadata.tone = tone
+        metadata.background_context = background_context
+        metadata.generation_directive = generation_directive
+        metadata.word_limit = word_limit
+        metadata.source = source
+        metadata.model = model
+
         generated_text = cb.new_paragraph(
             main_point=main_point,
             text=user_text,
-            metadata=current_metadata,
+            metadata=metadata,
             title=title,
             prev_paragraph=prev_paragraph,
             next_paragraph=next_paragraph,
