@@ -1,6 +1,10 @@
-# Writing Assistant
+<center><img src="docs/logo.png" width=400></center>
 
-AI-powered writing assistant for structured document generation using the TalkPipe framework.
+# 
+
+An AI-powered writing assistant that transforms how you create structured documents. Built on the TalkPipe framework, this application combines intelligent content generation with intuitive document management, enabling writers to craft professional documents with contextually-aware AI assistance that understands your style, audience, and objectives.
+
+<center><img src="docs/screenshot.png" width=500></center>
 
 ## Features
 
