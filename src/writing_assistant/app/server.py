@@ -29,6 +29,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Import here to get the auth token
+    from .main import AUTH_TOKEN
+
+    print(f"\n🔐 Writing Assistant Server")
+    print(f"📝 Access your writing assistant at: http://{args.host}:{args.port}/?token={AUTH_TOKEN}")
+    print(f"🔑 Authentication token: {AUTH_TOKEN}")
+    print("=" * 80)
+
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 

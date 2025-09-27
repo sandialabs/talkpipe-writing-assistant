@@ -5,6 +5,8 @@ class WritingAssistant {
         this.documentText = '';
         this.documentTitle = '';
         this.currentFilename = null;
+        // Get authentication token from URL
+        this.authToken = new URLSearchParams(window.location.search).get('token');
         // Initialize with saved defaults from localStorage or hardcoded fallbacks
         this.documentMetadata = {
             writing_style: localStorage.getItem('writingStyle') || 'formal',
@@ -28,6 +30,12 @@ class WritingAssistant {
         this.setupModals();
         // Initialize filename display
         this.updateFilenameDisplay();
+    }
+
+    // Helper method to add authentication token to URLs
+    addTokenToUrl(url) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${this.authToken}`;
     }
 
     setupEventListeners() {
@@ -61,6 +69,9 @@ class WritingAssistant {
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileImport(e));
         document.getElementById('copy-document-btn').addEventListener('click', () => this.copyDocumentToClipboard());
         document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
+
+        // Resize handle
+        this.setupResizeHandle();
     }
 
     setupModals() {
@@ -182,6 +193,92 @@ class WritingAssistant {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 this.hideSaveAsModal();
+            }
+        });
+    }
+
+    setupResizeHandle() {
+        const resizeHandle = document.getElementById('resize-handle');
+        const editorMain = document.querySelector('.editor-main');
+        let isResizing = false;
+        let startX = 0;
+        let startWidths = [];
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+
+            // Get current computed styles
+            const computedStyle = window.getComputedStyle(editorMain);
+            const currentColumns = computedStyle.gridTemplateColumns.split(' ');
+
+            // Parse current column widths
+            startWidths = currentColumns.map(width => {
+                if (width.endsWith('fr')) {
+                    return parseFloat(width);
+                } else if (width.endsWith('px')) {
+                    return parseFloat(width);
+                } else {
+                    return 0;
+                }
+            });
+
+            // Add visual feedback
+            resizeHandle.classList.add('dragging');
+            document.body.classList.add('no-select');
+
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const deltaX = e.clientX - startX;
+            const containerWidth = editorMain.offsetWidth;
+
+            // Convert pixel movement to fraction change
+            const fractionChange = (deltaX / containerWidth) * (startWidths[0] + startWidths[2]);
+
+            // Calculate new fractions
+            let leftFraction = startWidths[0] + fractionChange;
+            let rightFraction = startWidths[2] - fractionChange;
+
+            // Enforce minimum sizes (0.5fr minimum for each side)
+            leftFraction = Math.max(0.5, Math.min(leftFraction, startWidths[0] + startWidths[2] - 0.5));
+            rightFraction = Math.max(0.5, Math.min(rightFraction, startWidths[0] + startWidths[2] - 0.5));
+
+            // Ensure they add up to the original total
+            const total = leftFraction + rightFraction;
+            const originalTotal = startWidths[0] + startWidths[2];
+            if (total !== originalTotal) {
+                const ratio = originalTotal / total;
+                leftFraction *= ratio;
+                rightFraction *= ratio;
+            }
+
+            // Update grid template
+            editorMain.style.gridTemplateColumns = `${leftFraction}fr 4px ${rightFraction}fr`;
+
+            e.preventDefault();
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle.classList.remove('dragging');
+                document.body.classList.remove('no-select');
+            }
+        });
+
+        // Handle escape key to cancel resize
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isResizing) {
+                isResizing = false;
+                resizeHandle.classList.remove('dragging');
+                document.body.classList.remove('no-select');
+
+                // Reset to original columns
+                editorMain.style.gridTemplateColumns = `${startWidths[0]}fr 4px ${startWidths[2]}fr`;
             }
         });
     }
@@ -357,7 +454,7 @@ class WritingAssistant {
             formData.append('source', document.getElementById('ai-source')?.value || this.documentMetadata.source || '');
             formData.append('model', document.getElementById('ai-model')?.value || this.documentMetadata.model || '');
 
-            const response = await fetch('/generate-text', {
+            const response = await fetch(this.addTokenToUrl('/generate-text'), {
                 method: 'POST',
                 body: formData
             });
@@ -708,6 +805,9 @@ class WritingAssistant {
                 element.dispatchEvent(new Event('input', { bubbles: true }));
             }
         });
+
+        // Also load hotkey settings
+        this.loadHotkeySettings();
     }
 
     restoreDocumentMetadata(documentData) {
@@ -998,7 +1098,7 @@ class WritingAssistant {
             formData.append('filename', filename);
             formData.append('document_data', JSON.stringify(documentData));
 
-            const response = await fetch('/documents/save', {
+            const response = await fetch(this.addTokenToUrl('/documents/save'), {
                 method: 'POST',
                 body: formData
             });
@@ -1108,7 +1208,7 @@ class WritingAssistant {
         const listContainer = document.getElementById('documents-list');
 
         try {
-            const response = await fetch('/documents/list');
+            const response = await fetch(this.addTokenToUrl('/documents/list'));
             const result = await response.json();
 
             if (result.error) {
@@ -1185,7 +1285,7 @@ class WritingAssistant {
 
     async loadDocumentByFilename(filename) {
         try {
-            const response = await fetch(`/documents/download/${filename}`);
+            const response = await fetch(this.addTokenToUrl(`/documents/download/${filename}`));
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1230,7 +1330,7 @@ class WritingAssistant {
 
     async downloadDocumentByFilename(filename) {
         try {
-            const response = await fetch(`/documents/download/${filename}`);
+            const response = await fetch(this.addTokenToUrl(`/documents/download/${filename}`));
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1260,7 +1360,7 @@ class WritingAssistant {
 
         try {
             // We need to add a delete endpoint
-            const response = await fetch(`/documents/delete/${filename}`, {
+            const response = await fetch(this.addTokenToUrl(`/documents/delete/${filename}`), {
                 method: 'DELETE'
             });
 
@@ -1337,7 +1437,7 @@ class WritingAssistant {
             // Use the backend Document save endpoints which save the actual document state
             const endpoint = isSaveAs ? '/documents/save-as' : '/documents/save';
 
-            const response = await fetch(endpoint, {
+            const response = await fetch(this.addTokenToUrl(endpoint), {
                 method: 'POST',
                 body: formData
             });
@@ -1371,7 +1471,7 @@ class WritingAssistant {
         const listContainer = document.getElementById('load-documents-list');
 
         try {
-            const response = await fetch('/documents/list');
+            const response = await fetch(this.addTokenToUrl('/documents/list'));
             const result = await response.json();
 
             if (result.error) {
@@ -1439,7 +1539,7 @@ class WritingAssistant {
         console.log('loadDocumentFromServer: called with filename:', filename);
         try {
             // Get document data directly from the load endpoint
-            const response = await fetch(`/documents/load/${filename}`);
+            const response = await fetch(this.addTokenToUrl(`/documents/load/${filename}`));
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1497,7 +1597,7 @@ class WritingAssistant {
         }
 
         try {
-            const response = await fetch(`/documents/delete/${filename}`, {
+            const response = await fetch(this.addTokenToUrl(`/documents/delete/${filename}`), {
                 method: 'DELETE'
             });
 

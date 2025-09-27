@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File, Response
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi import FastAPI, Request, Form, UploadFile, File, Response, HTTPException, Depends
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -13,6 +13,9 @@ from ..core import callbacks as cb
 from ..core.definitions import Metadata
 
 app = FastAPI(title="Writing Assistant")
+
+# Generate a random token for this session (like Jupyter does)
+AUTH_TOKEN = str(uuid.uuid4())
 
 # Get the directory where this module is located
 app_dir = Path(__file__).parent
@@ -30,6 +33,14 @@ templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
 # No server-side state - all metadata sent with requests
 
+# Token validation dependency
+def validate_token(request: Request):
+    """Validate the authentication token from query parameter"""
+    token = request.query_params.get("token")
+    if token != AUTH_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid or missing authentication token")
+    return token
+
 # Helper function to get documents directory
 def get_documents_dir():
     home_dir = Path.home()
@@ -37,11 +48,11 @@ def get_documents_dir():
     docs_dir.mkdir(parents=True, exist_ok=True)
     return docs_dir
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, dependencies=[Depends(validate_token)])
 async def read_root(request: Request):
     # Empty document for initial render - all state managed in browser
     empty_document = {"title": "", "sections": []}
-    return templates.TemplateResponse("index.html", {"request": request, "document": empty_document})
+    return templates.TemplateResponse("index.html", {"request": request, "document": empty_document, "auth_token": AUTH_TOKEN})
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -50,7 +61,7 @@ async def favicon():
 
 # Metadata endpoints removed - all metadata sent with generation requests
 
-@app.post("/documents/save")
+@app.post("/documents/save", dependencies=[Depends(validate_token)])
 async def save_document(filename: str = Form(...), document_data: str = Form(...)):
     """Save document data provided by the browser"""
     try:
@@ -73,7 +84,7 @@ async def save_document(filename: str = Form(...), document_data: str = Form(...
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/documents/save-as")
+@app.post("/documents/save-as", dependencies=[Depends(validate_token)])
 async def save_document_as(filename: str = Form(...), document_data: str = Form(...)):
     """Save document data provided by the browser with new filename"""
     try:
@@ -96,7 +107,7 @@ async def save_document_as(filename: str = Form(...), document_data: str = Form(
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/documents/download/{filename}")
+@app.get("/documents/download/{filename}", dependencies=[Depends(validate_token)])
 async def download_document(filename: str):
     try:
         docs_dir = get_documents_dir()
@@ -112,7 +123,7 @@ async def download_document(filename: str):
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/documents/load/{filename}")
+@app.get("/documents/load/{filename}", dependencies=[Depends(validate_token)])
 async def load_document_by_filename(filename: str):
     """Return document data for browser to load"""
     try:
@@ -129,7 +140,7 @@ async def load_document_by_filename(filename: str):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/documents/list")
+@app.get("/documents/list", dependencies=[Depends(validate_token)])
 async def list_documents():
     try:
         docs_dir = get_documents_dir()
@@ -148,7 +159,7 @@ async def list_documents():
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/generate-text")
+@app.post("/generate-text", dependencies=[Depends(validate_token)])
 async def generate_text(
     main_point: str = Form(""),
     user_text: str = Form(""),
@@ -193,7 +204,7 @@ async def generate_text(
         print(f"Error generating text: {e}")
         return {"error": str(e)}, 500
 
-@app.delete("/documents/delete/{filename}")
+@app.delete("/documents/delete/{filename}", dependencies=[Depends(validate_token)])
 async def delete_document(filename: str):
     """Delete a saved document"""
     try:
