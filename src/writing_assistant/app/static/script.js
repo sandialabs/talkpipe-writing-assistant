@@ -5,6 +5,9 @@ class WritingAssistant {
         this.documentText = '';
         this.documentTitle = '';
         this.currentFilename = null;
+        this.autoSaveTimer = null;
+        this.lastSaveTime = null;
+        this.isPerformingSyncSave = false;
         // Get authentication token from URL
         this.authToken = new URLSearchParams(window.location.search).get('token');
         // Initialize with saved defaults from localStorage or hardcoded fallbacks
@@ -30,6 +33,9 @@ class WritingAssistant {
         this.setupModals();
         // Initialize filename display
         this.updateFilenameDisplay();
+        // Setup auto-save and page exit handlers
+        this.setupAutoSave();
+        this.setupPageExitHandler();
     }
 
     // Helper method to add authentication token to URLs
@@ -1446,6 +1452,7 @@ class WritingAssistant {
             if (result.status === 'success') {
                 this.currentFilename = result.filename;
                 this.updateFilenameDisplay();
+                this.lastSaveTime = new Date();
                 this.showMessage(`Document saved as "${result.filename}"`, 'success');
             } else {
                 this.showMessage(`Error: ${result.message}`, 'error');
@@ -1733,6 +1740,127 @@ class WritingAssistant {
         } else {
             filenameElement.textContent = 'Unsaved Document';
             filenameElement.className = 'filename-text unsaved';
+        }
+    }
+
+    setupAutoSave() {
+        // Start auto-save timer (5 minutes = 300000ms)
+        this.startAutoSaveTimer();
+
+        // Reset timer on document changes
+        const titleInput = document.getElementById('document-title');
+        const documentTextarea = document.getElementById('document-text');
+
+        if (titleInput) {
+            titleInput.addEventListener('input', () => {
+                this.resetAutoSaveTimer();
+            });
+        }
+
+        if (documentTextarea) {
+            documentTextarea.addEventListener('input', () => {
+                this.resetAutoSaveTimer();
+            });
+        }
+    }
+
+    startAutoSaveTimer() {
+        this.clearAutoSaveTimer();
+        this.autoSaveTimer = setTimeout(() => {
+            this.performAutoSave();
+        }, 300000); // 5 minutes
+    }
+
+    resetAutoSaveTimer() {
+        this.startAutoSaveTimer();
+    }
+
+    clearAutoSaveTimer() {
+        if (this.autoSaveTimer) {
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = null;
+        }
+    }
+
+    async performAutoSave() {
+        // Only auto-save if document has been saved at least once
+        if (!this.currentFilename) {
+            console.log('Auto-save skipped: Document has not been saved yet');
+            this.startAutoSaveTimer(); // Restart timer
+            return;
+        }
+
+        try {
+            console.log('Performing auto-save...');
+            await this.saveWithFilename(this.currentFilename, false);
+            this.lastSaveTime = new Date();
+            console.log('Auto-save completed successfully');
+        } catch (error) {
+            console.error('Auto-save failed:', error);
+            this.showMessage('Auto-save failed', 'error');
+        }
+
+        // Restart the timer
+        this.startAutoSaveTimer();
+    }
+
+    setupPageExitHandler() {
+        // Save on page unload (if document has been saved before)
+        window.addEventListener('beforeunload', () => {
+            if (this.currentFilename) {
+                // Perform synchronous save before page unload
+                this.performSyncSave();
+            }
+        });
+
+        // Also handle visibility change (when user switches tabs/minimizes)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.currentFilename) {
+                this.performSyncSave();
+            }
+        });
+    }
+
+    performSyncSave() {
+        if (!this.currentFilename || this.isPerformingSyncSave) return;
+
+        this.isPerformingSyncSave = true;
+
+        try {
+            const documentData = {
+                title: this.documentTitle,
+                content: this.documentText,
+                sections: this.sections,
+                metadata: {
+                    writing_style: document.getElementById('writing-style')?.value || this.documentMetadata.writing_style,
+                    target_audience: document.getElementById('target-audience')?.value || this.documentMetadata.target_audience,
+                    tone: document.getElementById('tone')?.value || this.documentMetadata.tone,
+                    background_context: document.getElementById('background-context')?.value || this.documentMetadata.background_context,
+                    generation_directive: document.getElementById('generation-directive')?.value || this.documentMetadata.generation_directive,
+                    word_limit: document.getElementById('word-limit')?.value || this.documentMetadata.word_limit,
+                    source: document.getElementById('ai-source')?.value || this.documentMetadata.source,
+                    model: document.getElementById('ai-model')?.value || this.documentMetadata.model
+                },
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            // Create URL-encoded form data for sendBeacon
+            const params = new URLSearchParams();
+            params.append('filename', this.currentFilename);
+            params.append('document_data', JSON.stringify(documentData));
+
+            // Use sendBeacon for reliable sending during page unload
+            navigator.sendBeacon(this.addTokenToUrl('/documents/save'), params);
+
+            console.log('Sync save performed on page exit');
+        } catch (error) {
+            console.error('Sync save failed:', error);
+        } finally {
+            // Reset flag after a short delay to allow for legitimate subsequent saves
+            setTimeout(() => {
+                this.isPerformingSyncSave = false;
+            }, 1000);
         }
     }
 
