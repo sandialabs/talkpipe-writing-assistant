@@ -443,7 +443,6 @@ class WritingAssistant {
             const selectedMode = document.querySelector('input[name="generation-mode"]:checked').value;
 
             const formData = new FormData();
-            formData.append('main_point', this.extractMainPoint(currentSection.text));
             formData.append('user_text', currentSection.text);
             formData.append('title', title);
             formData.append('prev_paragraph', prevSection ? prevSection.text : '');
@@ -490,11 +489,6 @@ class WritingAssistant {
         }
     }
 
-    extractMainPoint(text) {
-        // Extract the first sentence as the main point
-        const sentences = text.split(/[.!?]+/);
-        return sentences[0].trim() || text.substring(0, 100);
-    }
 
     useSuggestion() {
         if (this.currentSectionIndex === -1 || this.sections.length === 0) {
@@ -1411,7 +1405,7 @@ class WritingAssistant {
         await this.saveWithFilename(filename, true); // true for "save as"
     }
 
-    async saveWithFilename(filename, isSaveAs = false) {
+    async saveWithFilename(filename, isSaveAs = false, isAutoSave = false) {
         try {
             const documentData = {
                 title: this.documentTitle,
@@ -1453,7 +1447,9 @@ class WritingAssistant {
                 this.currentFilename = result.filename;
                 this.updateFilenameDisplay();
                 this.lastSaveTime = new Date();
-                this.showMessage(`Document saved as "${result.filename}"`, 'success');
+                if (!isAutoSave) {
+                    this.showMessage(`Document saved as "${result.filename}"`, 'success');
+                }
             } else {
                 this.showMessage(`Error: ${result.message}`, 'error');
             }
@@ -1792,8 +1788,9 @@ class WritingAssistant {
 
         try {
             console.log('Performing auto-save...');
-            await this.saveWithFilename(this.currentFilename, false);
+            await this.saveWithFilename(this.currentFilename, false, true);
             this.lastSaveTime = new Date();
+            this.showMessage('Document auto-saved', 'success');
             console.log('Auto-save completed successfully');
         } catch (error) {
             console.error('Auto-save failed:', error);

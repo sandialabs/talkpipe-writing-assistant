@@ -1,49 +1,49 @@
 """Tests for the API endpoints."""
 
-import pytest
 import json
-from fastapi.testclient import TestClient
 
 
 def test_root_endpoint(client):
     """Test the root endpoint returns HTML."""
-    response = client.get("/")
+    response = client.get("/?token=test-token")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
 
-def test_metadata_get(client):
-    """Test getting metadata."""
-    response = client.get("/metadata")
-    assert response.status_code == 200
-    data = response.json()
-    assert "writing_style" in data
-    assert "target_audience" in data
-    assert "tone" in data
+# NOTE: Metadata endpoints don't exist in the current implementation
+# Metadata is passed with each request rather than stored server-side
+
+# def test_metadata_get(client):
+#     """Test getting metadata."""
+#     response = client.get("/metadata?token=test-token")
+#     assert response.status_code == 200
+#     data = response.json()
+#     assert "writing_style" in data
+#     assert "target_audience" in data
+#     assert "tone" in data
 
 
-def test_metadata_post(client):
-    """Test updating metadata."""
-    response = client.post("/metadata", data={
-        "writing_style": "casual",
-        "target_audience": "students",
-        "tone": "friendly"
-    })
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
+# def test_metadata_post(client):
+#     """Test updating metadata."""
+#     response = client.post("/metadata?token=test-token", data={
+#         "writing_style": "casual",
+#         "target_audience": "students",
+#         "tone": "friendly"
+#     })
+#     assert response.status_code == 200
+#     assert response.json()["status"] == "success"
 
-    # Verify the change was applied
-    response = client.get("/metadata")
-    data = response.json()
-    assert data["writing_style"] == "casual"
-    assert data["target_audience"] == "students"
-    assert data["tone"] == "friendly"
+#     # Verify the change was applied
+#     response = client.get("/metadata?token=test-token")
+#     data = response.json()
+#     assert data["writing_style"] == "casual"
+#     assert data["target_audience"] == "students"
+#     assert data["tone"] == "friendly"
 
 
 def test_generate_text(client):
     """Test text generation endpoint."""
-    response = client.post("/generate-text", data={
-        "main_point": "Introduction to AI",
+    response = client.post("/generate-text?token=test-token", data={
         "user_text": "AI is changing the world",
         "title": "AI Overview",
         "generation_mode": "ideas"
@@ -77,7 +77,7 @@ def test_document_save_and_load(client):
     }
 
     # Save the document
-    response = client.post("/documents/save", data={
+    response = client.post("/documents/save?token=test-token", data={
         "filename": "test_doc",
         "document_data": json.dumps(test_document)
     })
@@ -87,14 +87,14 @@ def test_document_save_and_load(client):
     filename = save_data["filename"]
 
     # List documents
-    response = client.get("/documents/list")
+    response = client.get("/documents/list?token=test-token")
     assert response.status_code == 200
     files = response.json()["files"]
     assert len(files) > 0
     assert any(f["filename"] == filename for f in files)
 
     # Load the document
-    response = client.get(f"/documents/load/{filename}")
+    response = client.get(f"/documents/load/{filename}?token=test-token")
     assert response.status_code == 200
     load_data = response.json()
     assert load_data["status"] == "success"
@@ -111,7 +111,7 @@ def test_document_save_as(client):
         "created_at": "2024-01-01T00:00:00Z"
     }
 
-    response = client.post("/documents/save-as", data={
+    response = client.post("/documents/save-as?token=test-token", data={
         "filename": "save_as_test",
         "document_data": json.dumps(test_document)
     })
@@ -131,7 +131,7 @@ def test_document_delete(client):
     }
 
     # Save the document
-    response = client.post("/documents/save", data={
+    response = client.post("/documents/save?token=test-token", data={
         "filename": "delete_test",
         "document_data": json.dumps(test_document)
     })
@@ -139,13 +139,13 @@ def test_document_delete(client):
     filename = response.json()["filename"]
 
     # Delete the document
-    response = client.delete(f"/documents/delete/{filename}")
+    response = client.delete(f"/documents/delete/{filename}?token=test-token")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
 
     # Verify it's gone
-    response = client.get(f"/documents/load/{filename}")
+    response = client.get(f"/documents/load/{filename}?token=test-token")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"

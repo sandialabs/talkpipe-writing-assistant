@@ -23,6 +23,9 @@ python -m writing_assistant.app.server
 
 # Development with auto-reload
 WRITING_ASSISTANT_RELOAD=true writing-assistant
+
+# With custom authentication token
+writing-assistant --auth-token YOUR_TOKEN_HERE
 ```
 
 ### Testing
@@ -36,6 +39,8 @@ pytest --cov=src --cov-report=html
 # Run specific test file
 pytest tests/test_api.py
 ```
+
+**Note:** Tests use a predefined authentication token ("test-token") that is configured in `tests/conftest.py`. The test configuration automatically sets this token before running tests, so no additional authentication setup is required for testing.
 
 ### Code Quality
 ```bash

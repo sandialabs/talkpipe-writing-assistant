@@ -3,6 +3,10 @@
 import pytest
 from fastapi.testclient import TestClient
 
+# Set a known token for testing before importing the app
+import writing_assistant.app.main as main_module
+main_module.AUTH_TOKEN = "test-token"
+
 from writing_assistant.app.main import app
 
 
