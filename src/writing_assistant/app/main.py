@@ -248,6 +248,124 @@ async def generate_text(
         print(f"Error generating text: {e}")
         return {"error": str(e)}, 500
 
+def get_snapshots_dir():
+    """Get the snapshots directory within documents"""
+    docs_dir = get_documents_dir()
+    snapshots_dir = docs_dir / "snapshots"
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+    return snapshots_dir
+
+@app.post("/documents/snapshot/{filename}", dependencies=[Depends(validate_token)])
+async def create_snapshot(filename: str):
+    """Create a timestamped snapshot of a document and clean up old snapshots"""
+    try:
+        filepath = get_safe_filepath(filename)
+
+        if not filepath.exists():
+            return {"status": "error", "message": "File not found"}
+
+        # Generate timestamp prefix
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        snapshot_filename = f"{timestamp}_{filename}"
+
+        # Save to snapshots subdirectory
+        snapshots_dir = get_snapshots_dir()
+        snapshot_filepath = snapshots_dir / snapshot_filename
+
+        # Ensure the snapshot filename doesn't contain path traversal
+        try:
+            snapshot_filepath.resolve().relative_to(snapshots_dir.resolve())
+        except ValueError:
+            return {"status": "error", "message": "Invalid snapshot filename"}
+
+        # Read current document and save as snapshot
+        with open(filepath, 'r', encoding='utf-8') as f:
+            document_data = json.load(f)
+
+        with open(snapshot_filepath, 'w', encoding='utf-8') as f:
+            json.dump(document_data, f, indent=2, ensure_ascii=False)
+
+        # Clean up old snapshots - keep only the 10 most recent
+        base_filename = filepath.name
+
+        # Find all snapshots for this document (files matching pattern: YYYYMMDD_HHMMSS_filename)
+        snapshot_pattern = f"*_{base_filename}"
+        snapshots = list(snapshots_dir.glob(snapshot_pattern))
+
+        # Sort by modification time (newest first)
+        snapshots.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+        # Delete snapshots beyond the 10 most recent
+        for old_snapshot in snapshots[10:]:
+            old_snapshot.unlink()
+
+        return {
+            "status": "success",
+            "message": f"Snapshot created: {snapshot_filename}",
+            "snapshot_filename": snapshot_filename
+        }
+    except ValueError as e:
+        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/documents/snapshots/{filename}", dependencies=[Depends(validate_token)])
+async def list_snapshots(filename: str):
+    """List all snapshots for a specific document"""
+    try:
+        # Validate the base filename
+        filepath = get_safe_filepath(filename)
+        base_filename = filepath.name
+
+        snapshots_dir = get_snapshots_dir()
+        snapshot_pattern = f"*_{base_filename}"
+        snapshots = list(snapshots_dir.glob(snapshot_pattern))
+
+        # Sort by modification time (newest first)
+        snapshots.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+        snapshot_list = []
+        for snapshot_path in snapshots:
+            stat = snapshot_path.stat()
+            snapshot_list.append({
+                "filename": snapshot_path.name,
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+            })
+
+        return {"status": "success", "snapshots": snapshot_list}
+    except ValueError as e:
+        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/documents/snapshot/load/{snapshot_filename}", dependencies=[Depends(validate_token)])
+async def load_snapshot(snapshot_filename: str):
+    """Load a specific snapshot's content"""
+    try:
+        # Validate snapshot filename
+        sanitized_filename = validate_and_sanitize_filename(snapshot_filename)
+        snapshots_dir = get_snapshots_dir()
+        snapshot_filepath = snapshots_dir / sanitized_filename
+
+        # Ensure the resolved path is within snapshots directory
+        try:
+            snapshot_filepath.resolve().relative_to(snapshots_dir.resolve())
+        except ValueError:
+            return {"status": "error", "message": "Invalid snapshot filename"}
+
+        if not snapshot_filepath.exists():
+            return {"status": "error", "message": "Snapshot not found"}
+
+        with open(snapshot_filepath, 'r', encoding='utf-8') as f:
+            document_data = json.load(f)
+
+        return {"status": "success", "document": document_data}
+    except ValueError as e:
+        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.delete("/documents/delete/{filename}", dependencies=[Depends(validate_token)])
 async def delete_document(filename: str):
     """Delete a saved document"""

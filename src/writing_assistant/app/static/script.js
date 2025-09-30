@@ -104,6 +104,16 @@ class WritingAssistant {
             this.hideFileMenu();
             this.exportDocumentToFile();
         });
+        document.getElementById('create-snapshot-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.createSnapshot();
+        });
+        document.getElementById('revert-snapshot-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.showRevertSnapshotModal();
+        });
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileImport(e));
         document.getElementById('copy-document-btn').addEventListener('click', () => this.copyDocumentToClipboard());
         document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
@@ -237,6 +247,26 @@ class WritingAssistant {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 this.hideSaveAsModal();
+            }
+        });
+
+        // Revert to Snapshot modal
+        const revertSnapshotModal = document.getElementById('revert-snapshot-modal');
+        const closeRevertSnapshotBtn = document.getElementById('close-revert-snapshot-modal');
+        const closeRevertSnapshotFooterBtn = document.getElementById('close-revert-snapshot-footer');
+
+        closeRevertSnapshotBtn.addEventListener('click', () => this.hideRevertSnapshotModal());
+        closeRevertSnapshotFooterBtn.addEventListener('click', () => this.hideRevertSnapshotModal());
+
+        revertSnapshotModal.addEventListener('click', (e) => {
+            if (e.target === revertSnapshotModal) this.hideRevertSnapshotModal();
+        });
+
+        // Add Escape key handler for Revert to Snapshot modal
+        revertSnapshotModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideRevertSnapshotModal();
             }
         });
     }
@@ -654,6 +684,105 @@ class WritingAssistant {
     hideSaveAsModal() {
         const modal = document.getElementById('save-as-modal');
         modal.classList.remove('show');
+    }
+
+    showRevertSnapshotModal() {
+        if (!this.currentFilename) {
+            this.showMessage('Please save the document first before reverting to a snapshot', 'info');
+            return;
+        }
+
+        const modal = document.getElementById('revert-snapshot-modal');
+        modal.classList.add('show');
+        this.loadSnapshotsList();
+    }
+
+    hideRevertSnapshotModal() {
+        const modal = document.getElementById('revert-snapshot-modal');
+        modal.classList.remove('show');
+    }
+
+    async loadSnapshotsList() {
+        const listContainer = document.getElementById('snapshots-list');
+
+        try {
+            const response = await fetch(this.addTokenToUrl(`/documents/snapshots/${this.currentFilename}`));
+            const result = await response.json();
+
+            if (result.status === 'success' && result.snapshots.length > 0) {
+                listContainer.innerHTML = result.snapshots.map(snapshot => {
+                    const date = new Date(snapshot.modified);
+                    const dateStr = date.toLocaleString();
+                    return `
+                        <div class="document-item">
+                            <div class="document-info">
+                                <div class="document-name">${snapshot.filename}</div>
+                                <div class="document-meta">Modified: ${dateStr} | Size: ${(snapshot.size / 1024).toFixed(2)} KB</div>
+                            </div>
+                            <button class="btn btn-primary btn-small revert-snapshot-item" data-snapshot="${snapshot.filename}">
+                                Revert to This
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+
+                // Add event listeners to revert buttons
+                document.querySelectorAll('.revert-snapshot-item').forEach(btn => {
+                    btn.addEventListener('click', () => this.revertToSnapshot(btn.dataset.snapshot));
+                });
+            } else {
+                listContainer.innerHTML = '<p class="no-documents">No snapshots available for this document.</p>';
+            }
+        } catch (error) {
+            console.error('Error loading snapshots:', error);
+            listContainer.innerHTML = '<p class="error">Error loading snapshots</p>';
+        }
+    }
+
+    async revertToSnapshot(snapshotFilename) {
+        try {
+            const response = await fetch(this.addTokenToUrl(`/documents/snapshot/load/${snapshotFilename}`));
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Load the snapshot data into the current document
+                const doc = result.document;
+
+                // Keep the current filename (don't change it)
+                const currentFilename = this.currentFilename;
+
+                // Load the document content
+                this.documentTitle = doc.title || '';
+                this.documentText = doc.content || '';
+                document.getElementById('document-title').value = this.documentTitle;
+                document.getElementById('document-text').value = this.documentText;
+
+                // Load metadata if present
+                if (doc.metadata) {
+                    document.getElementById('writing-style').value = doc.metadata.writing_style || 'formal';
+                    document.getElementById('target-audience').value = doc.metadata.target_audience || '';
+                    document.getElementById('tone').value = doc.metadata.tone || 'neutral';
+                    document.getElementById('background-context').value = doc.metadata.background_context || '';
+                    document.getElementById('generation-directive').value = doc.metadata.generation_directive || '';
+                    document.getElementById('word-limit').value = doc.metadata.word_limit || '';
+                    document.getElementById('ai-source').value = doc.metadata.source || '';
+                    document.getElementById('ai-model').value = doc.metadata.model || '';
+                }
+
+                // Restore the current filename
+                this.currentFilename = currentFilename;
+
+                // Update sections and UI
+                this.handleDocumentTextChange();
+                this.hideRevertSnapshotModal();
+                this.showMessage(`Reverted to snapshot: ${snapshotFilename}`, 'success');
+            } else {
+                this.showMessage(`Error: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error reverting to snapshot:', error);
+            this.showMessage('Error reverting to snapshot', 'error');
+        }
     }
 
     switchSettingsTab(tabName) {
@@ -1491,6 +1620,35 @@ class WritingAssistant {
 
         this.hideSaveAsModal();
         await this.saveWithFilename(filename, true); // true for "save as"
+    }
+
+    async createSnapshot() {
+        // Check if document has been saved
+        if (!this.currentFilename) {
+            this.showMessage('Please save the document first before creating a snapshot', 'info');
+            this.showSaveAsModal();
+            return;
+        }
+
+        // Save the current document state first
+        await this.saveWithFilename(this.currentFilename);
+
+        // Then create the snapshot
+        try {
+            const response = await fetch(this.addTokenToUrl(`/documents/snapshot/${this.currentFilename}`), {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                this.showMessage(`Snapshot created: ${result.snapshot_filename}`, 'success');
+            } else {
+                this.showMessage(`Error: ${result.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error creating snapshot:', error);
+            this.showMessage('Error creating snapshot', 'error');
+        }
     }
 
     async saveWithFilename(filename, isSaveAs = false, isAutoSave = false) {
