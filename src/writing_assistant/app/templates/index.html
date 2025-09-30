@@ -14,17 +14,21 @@
             <div class="header-content">
                 <h1><img src="/static/logo.png" alt="Writing Assistant Logo" class="header-logo">TalkPipe Writing Assistant</h1>
                 <div class="header-controls">
-                    <div class="file-controls">
-                        <button id="new-document-btn" class="btn btn-success btn-small">📄 New</button>
-                        <button id="save-document-btn" class="btn btn-primary btn-small">💾 Save</button>
-                        <button id="save-as-document-btn" class="btn btn-primary btn-small">💾 Save As</button>
-                        <button id="load-document-btn" class="btn btn-secondary btn-small">📂 Load</button>
-                    </div>
-                    <div class="import-export-controls">
-                        <button id="import-document-btn" class="btn btn-outline btn-small">📥 Import</button>
-                        <button id="export-document-btn" class="btn btn-outline btn-small">📤 Export</button>
+                    <div class="file-menu-dropdown">
+                        <button id="file-menu-btn" class="btn btn-primary btn-small">📁 File ▾</button>
+                        <div id="file-menu-content" class="dropdown-menu">
+                            <a href="#" id="new-document-btn" class="dropdown-item">📄 New</a>
+                            <a href="#" id="save-document-btn" class="dropdown-item">💾 Save</a>
+                            <a href="#" id="save-as-document-btn" class="dropdown-item">💾 Save As</a>
+                            <a href="#" id="load-document-btn" class="dropdown-item">📂 Load</a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" id="import-document-btn" class="dropdown-item">📥 Import</a>
+                            <a href="#" id="export-document-btn" class="dropdown-item">📤 Export</a>
+                        </div>
                         <input type="file" id="file-input" accept=".json" style="display: none;">
                     </div>
+                    <button id="copy-document-btn" class="btn btn-outline btn-small">📋 Copy</button>
+                    <button id="dark-mode-toggle" class="dark-mode-toggle" title="Toggle dark mode"></button>
                     <button id="settings-btn" class="btn btn-secondary btn-small">⚙️ Settings</button>
                 </div>
             </div>

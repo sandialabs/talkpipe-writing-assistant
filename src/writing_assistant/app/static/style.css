@@ -38,6 +38,19 @@
     --danger-color: #ef4444;
     --info-color: #3b82f6;
 
+    /* Light mode colors */
+    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    --surface-primary: rgba(255, 255, 255, 0.95);
+    --surface-secondary: rgba(255, 255, 255, 0.9);
+    --surface-tertiary: rgba(248, 250, 252, 0.6);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-tertiary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.18);
+    --border-subtle: #e2e8f0;
+    --shadow-color: rgba(0, 0, 0, 0.12);
+    --header-gradient: linear-gradient(135deg, #f8fafc 0%, rgba(255, 255, 255, 0.8) 100%);
+
     /* Neutral colors */
     --gray-50: #f7fafc;
     --gray-100: #edf2f7;
@@ -66,6 +79,21 @@
     --transition-fast: all 0.15s ease;
     --transition-normal: all 0.3s ease;
     --transition-slow: all 0.5s ease;
+}
+
+/* Dark mode colors */
+body.dark-mode {
+    --bg-gradient: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+    --surface-primary: rgba(30, 30, 46, 0.95);
+    --surface-secondary: rgba(35, 35, 55, 0.9);
+    --surface-tertiary: rgba(40, 40, 60, 0.7);
+    --text-primary: #e2e8f0;
+    --text-secondary: #cbd5e0;
+    --text-tertiary: #94a3b8;
+    --border-color: rgba(100, 116, 139, 0.3);
+    --border-subtle: rgba(100, 116, 139, 0.2);
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    --header-gradient: linear-gradient(135deg, rgba(30, 30, 46, 0.8) 0%, rgba(35, 35, 55, 0.9) 100%);
 }
 
 /* Enhanced loading indicator styles */
@@ -106,11 +134,12 @@
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.6;
-    color: var(--gray-800);
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    color: var(--text-primary);
+    background: var(--bg-gradient);
     height: 100vh;
     overflow: hidden;
     position: relative;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
 .container {
@@ -138,13 +167,15 @@ body {
 header {
     margin-bottom: 10px;
     padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--surface-primary);
     backdrop-filter: blur(20px) saturate(180%);
     border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px var(--shadow-color), 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color);
     flex-shrink: 0;
     transition: var(--transition-normal);
+    position: relative;
+    z-index: 100;
 }
 
 header:hover {
@@ -305,16 +336,17 @@ header h1 {
 }
 
 .title-section {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--surface-secondary);
     backdrop-filter: blur(10px);
     padding: 10px 16px;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-color);
     margin-bottom: 10px;
     position: relative;
     overflow: hidden;
     flex-shrink: 0;
+    z-index: 10;
 }
 
 .title-row {
@@ -346,7 +378,7 @@ header h1 {
     display: inline-block;
     margin: 0;
     font-weight: 600;
-    color: var(--gray-700);
+    color: var(--text-primary);
     font-size: 1.1rem;
     white-space: nowrap;
     flex-shrink: 0;
@@ -355,13 +387,13 @@ header h1 {
 #document-title {
     flex: 1;
     padding: 8px 12px;
-    border: 2px solid var(--gray-200);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-md);
     font-size: 1rem;
     font-weight: 500;
     transition: var(--transition-normal);
-    background: rgba(255, 255, 255, 0.8);
-    color: var(--gray-800);
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
 }
 
 #document-title:focus {
@@ -721,7 +753,7 @@ header h1 {
     display: block;
     margin-bottom: 12px;
     font-weight: 600;
-    color: var(--gray-700);
+    color: var(--text-primary);
     font-size: 0.95rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -973,14 +1005,14 @@ header h1 {
     cursor: pointer;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--gray-600);
+    color: var(--text-secondary);
     transition: var(--transition-normal);
     border-radius: var(--radius-lg);
     position: relative;
 }
 
 .tab-btn:hover {
-    background: rgba(102, 126, 234, 0.1);
+    background: var(--surface-tertiary);
     color: var(--primary-color);
     transform: translateY(-1px);
 }
@@ -1024,13 +1056,13 @@ header h1 {
 }
 
 .metadata-header h2 {
-    color: #2c3e50;
+    color: var(--text-primary);
     font-weight: 300;
     margin-bottom: 10px;
 }
 
 .metadata-description {
-    color: #7f8c8d;
+    color: var(--text-secondary);
     font-size: 1rem;
     line-height: 1.5;
 }
@@ -1042,17 +1074,17 @@ header h1 {
 
 .settings-section {
     padding: 20px;
-    background-color: #f8f9fa;
+    background: var(--surface-tertiary);
     border-radius: 8px;
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--border-subtle);
 }
 
 .settings-section h3 {
     margin: 0 0 15px 0;
-    color: #2c3e50;
+    color: var(--text-primary);
     font-size: 1.1rem;
     font-weight: 600;
-    border-bottom: 2px solid #3498db;
+    border-bottom: 2px solid var(--primary-color);
     padding-bottom: 5px;
 }
 
@@ -1062,18 +1094,20 @@ header h1 {
 .metadata-form textarea {
     width: 100%;
     padding: 12px;
-    border: 2px solid #e1e5e9;
+    border: 2px solid var(--border-subtle);
     border-radius: 4px;
     font-size: 1rem;
     transition: border-color 0.3s;
     font-family: inherit;
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
 }
 
 .metadata-form select:focus,
 .metadata-form input:focus,
 .metadata-form textarea:focus {
     outline: none;
-    border-color: #3498db;
+    border-color: var(--primary-color);
 }
 
 .metadata-form textarea {
@@ -1247,14 +1281,14 @@ header h1 {
     gap: 12px;
     padding: 15px;
     margin-bottom: 10px;
-    background: white;
-    border: 1px solid #e1e5e9;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
     transition: background-color 0.3s;
 }
 
 .document-item:hover {
-    background-color: #f8f9fa;
+    background: var(--surface-tertiary);
 }
 
 .document-info {
@@ -1265,13 +1299,13 @@ header h1 {
 
 .document-name {
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary);
 }
 
 .document-date,
 .document-size {
     font-size: 0.85rem;
-    color: #7f8c8d;
+    color: var(--text-secondary);
 }
 
 .document-actions {
@@ -1356,11 +1390,11 @@ input[type="file"]:focus {
 }
 
 .modal-content {
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--surface-primary);
     backdrop-filter: blur(24px) saturate(180%);
     border-radius: 24px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-color);
     width: 90%;
     max-width: 600px;
     max-height: 90vh;
@@ -1378,14 +1412,14 @@ input[type="file"]:focus {
     justify-content: space-between;
     align-items: center;
     padding: 20px;
-    border-bottom: 1px solid #e1e5e9;
-    background-color: #f8f9fa;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--header-gradient);
     border-radius: 8px 8px 0 0;
 }
 
 .modal-header h2 {
     margin: 0;
-    color: #2c3e50;
+    color: var(--text-primary);
     font-weight: 300;
 }
 
@@ -1394,7 +1428,7 @@ input[type="file"]:focus {
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: #7f8c8d;
+    color: var(--text-secondary);
     width: 32px;
     height: 32px;
     border-radius: 4px;
@@ -1405,8 +1439,8 @@ input[type="file"]:focus {
 }
 
 .modal-close:hover {
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: var(--surface-tertiary);
+    color: var(--text-primary);
 }
 
 .modal-body {
@@ -1425,17 +1459,19 @@ input[type="file"]:focus {
 .modal-body textarea {
     width: 100%;
     padding: 12px;
-    border: 2px solid #e1e5e9;
+    border: 2px solid var(--border-subtle);
     border-radius: 4px;
     font-size: 1rem;
     font-family: inherit;
     transition: border-color 0.3s;
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
 }
 
 .modal-body input:focus,
 .modal-body textarea:focus {
     outline: none;
-    border-color: #3498db;
+    border-color: var(--primary-color);
 }
 
 .modal-body textarea {
@@ -1448,8 +1484,8 @@ input[type="file"]:focus {
     gap: 12px;
     justify-content: flex-end;
     padding: 20px;
-    border-top: 1px solid #e1e5e9;
-    background-color: #f8f9fa;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--header-gradient);
     border-radius: 0 0 8px 8px;
 }
 
@@ -1474,6 +1510,8 @@ input[type="file"]:focus {
     display: flex;
     gap: 16px;
     align-items: center;
+    position: relative;
+    z-index: 101;
 }
 
 .file-controls {
@@ -1499,16 +1537,17 @@ input[type="file"]:focus {
 }
 
 .editor-container {
-    background: rgba(255, 255, 255, 0.97);
+    background: var(--surface-primary);
     backdrop-filter: blur(20px) saturate(180%);
     border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px var(--shadow-color), 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color);
     overflow: hidden;
     position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
+    z-index: 10;
 }
 
 .editor-container::before {
@@ -1528,14 +1567,14 @@ input[type="file"]:focus {
     justify-content: space-between;
     align-items: center;
     padding: 10px 16px;
-    background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.8) 100%);
-    border-bottom: 1px solid var(--gray-200);
+    background: var(--header-gradient);
+    border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
 }
 
 .editor-header h2 {
     margin: 0;
-    color: var(--gray-700);
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 1.5rem;
 }
@@ -1571,8 +1610,8 @@ input[type="file"]:focus {
     font-family: 'Charter', 'Georgia', 'Times New Roman', serif;
     line-height: 1.7;
     resize: none;
-    background: rgba(248, 250, 252, 0.6);
-    color: #1e293b;
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -1583,13 +1622,13 @@ input[type="file"]:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.08), inset 0 2px 4px rgba(0, 0, 0, 0.02);
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--surface-secondary);
     transform: scale(1.001);
 }
 
 .suggestion-panel {
     padding: 14px 12px;
-    background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.9) 100%);
+    background: var(--header-gradient);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1606,14 +1645,14 @@ input[type="file"]:focus {
 
 .suggestion-header h3 {
     margin: 0 0 8px 0;
-    color: var(--gray-700);
+    color: var(--text-primary);
     font-size: 1.2rem;
     font-weight: 600;
 }
 
 .suggestion-info {
     font-size: 0.9rem;
-    color: var(--gray-600);
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
@@ -1636,8 +1675,8 @@ input[type="file"]:focus {
     align-items: center;
     justify-content: center;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid var(--gray-200);
+    background: var(--surface-tertiary);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
 }
 
@@ -1651,11 +1690,11 @@ input[type="file"]:focus {
     transition: var(--transition-fast);
     font-weight: 500;
     font-size: 0.9rem;
-    color: var(--gray-700);
+    color: var(--text-primary);
 }
 
 .radio-option:hover {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-secondary);
     color: var(--primary-color);
 }
 
@@ -1672,13 +1711,13 @@ input[type="file"]:focus {
 .suggestion-text {
     flex: 1;
     padding: 16px;
-    background: rgba(255, 255, 255, 0.8);
-    border: 2px solid var(--gray-200);
+    background: var(--surface-tertiary);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     font-family: 'Georgia', 'Times New Roman', serif;
     font-size: 1rem;
     line-height: 1.6;
-    color: var(--gray-800);
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-wrap: break-word;
     margin-bottom: 12px;
@@ -1690,7 +1729,7 @@ input[type="file"]:focus {
 
 .suggestion-text:empty::before {
     content: 'AI suggestions will appear here...';
-    color: var(--gray-500);
+    color: var(--text-tertiary);
     font-style: italic;
 }
 
@@ -1953,4 +1992,121 @@ input[type="file"]:focus {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+}
+
+/* Dark mode toggle button */
+.dark-mode-toggle {
+    position: relative;
+    width: 56px;
+    height: 28px;
+    background: var(--gray-300);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    border: none;
+    padding: 0;
+    overflow: hidden;
+}
+
+body.dark-mode .dark-mode-toggle {
+    background: var(--primary-color);
+}
+
+.dark-mode-toggle::before {
+    content: '☀️';
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+body.dark-mode .dark-mode-toggle::before {
+    content: '🌙';
+    left: calc(100% - 22px);
+}
+
+.dark-mode-toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-mode .dark-mode-toggle::after {
+    transform: translateX(28px);
+}
+
+/* File menu dropdown */
+.file-menu-dropdown {
+    position: relative;
+    display: inline-block;
+    z-index: 1100;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    background: var(--surface-primary);
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 8px 0;
+    z-index: 1100;
+    backdrop-filter: blur(20px) saturate(180%);
+    animation: dropdownSlideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    gap: 8px;
+}
+
+.dropdown-item:hover {
+    background: var(--surface-tertiary);
+    color: var(--primary-color);
+}
+
+.dropdown-item:active {
+    background: var(--surface-secondary);
+    transform: scale(0.98);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 8px 0;
 }

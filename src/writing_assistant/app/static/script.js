@@ -36,6 +36,8 @@ class WritingAssistant {
         // Setup auto-save and page exit handlers
         this.setupAutoSave();
         this.setupPageExitHandler();
+        // Initialize dark mode
+        this.initializeDarkMode();
     }
 
     // Helper method to add authentication token to URLs
@@ -65,19 +67,55 @@ class WritingAssistant {
         // Initialize hotkey system
         this.initializeHotkeys();
 
-        // Header controls
-        document.getElementById('new-document-btn').addEventListener('click', () => this.showNewDocumentModal());
-        document.getElementById('save-document-btn').addEventListener('click', () => this.saveDocumentToServer());
-        document.getElementById('save-as-document-btn').addEventListener('click', () => this.showSaveAsModal());
-        document.getElementById('load-document-btn').addEventListener('click', () => this.showLoadDocumentModal());
-        document.getElementById('import-document-btn').addEventListener('click', () => this.importDocumentFromFile());
-        document.getElementById('export-document-btn').addEventListener('click', () => this.exportDocumentToFile());
+        // File menu dropdown
+        document.getElementById('file-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleFileMenu();
+        });
+
+        // Header controls (dropdown items)
+        document.getElementById('new-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.showNewDocumentModal();
+        });
+        document.getElementById('save-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.saveDocumentToServer();
+        });
+        document.getElementById('save-as-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.showSaveAsModal();
+        });
+        document.getElementById('load-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.showLoadDocumentModal();
+        });
+        document.getElementById('import-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.importDocumentFromFile();
+        });
+        document.getElementById('export-document-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideFileMenu();
+            this.exportDocumentToFile();
+        });
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileImport(e));
         document.getElementById('copy-document-btn').addEventListener('click', () => this.copyDocumentToClipboard());
         document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
 
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => this.hideFileMenu());
+
         // Resize handle
         this.setupResizeHandle();
+
+        // Dark mode toggle
+        document.getElementById('dark-mode-toggle').addEventListener('click', () => this.toggleDarkMode());
     }
 
     setupModals() {
@@ -1059,11 +1097,61 @@ class WritingAssistant {
             }
             documentText += this.documentText || '(No content)';
 
-            await navigator.clipboard.writeText(documentText);
-            this.showMessage('Document copied to clipboard!', 'success');
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(documentText);
+                this.showMessage('Document copied to clipboard!', 'success');
+            } else {
+                // Fallback for older browsers or insecure contexts
+                this.fallbackCopyToClipboard(documentText);
+            }
         } catch (error) {
             console.error('Failed to copy to clipboard:', error);
-            this.showMessage('Failed to copy to clipboard. Please try again.', 'error');
+            // Try fallback method
+            try {
+                let documentText = '';
+                if (this.documentTitle) {
+                    documentText += this.documentTitle + '\n\n';
+                }
+                documentText += this.documentText || '(No content)';
+                this.fallbackCopyToClipboard(documentText);
+            } catch (fallbackError) {
+                console.error('Fallback copy also failed:', fallbackError);
+                this.showMessage('Failed to copy to clipboard. Your browser may not support this feature.', 'error');
+            }
+        }
+    }
+
+    fallbackCopyToClipboard(text) {
+        // Create a temporary textarea element
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.top = '0';
+        textarea.style.left = '0';
+        textarea.style.width = '2em';
+        textarea.style.height = '2em';
+        textarea.style.padding = '0';
+        textarea.style.border = 'none';
+        textarea.style.outline = 'none';
+        textarea.style.boxShadow = 'none';
+        textarea.style.background = 'transparent';
+
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                this.showMessage('Document copied to clipboard!', 'success');
+            } else {
+                throw new Error('execCommand failed');
+            }
+        } catch (err) {
+            throw new Error('Fallback copy method failed');
+        } finally {
+            document.body.removeChild(textarea);
         }
     }
 
@@ -1891,6 +1979,56 @@ class WritingAssistant {
                 }
             }, 300);
         }, 4000);
+    }
+
+    // File Menu Dropdown Methods
+    toggleFileMenu() {
+        const dropdown = document.getElementById('file-menu-content');
+        dropdown.classList.toggle('show');
+    }
+
+    hideFileMenu() {
+        const dropdown = document.getElementById('file-menu-content');
+        dropdown.classList.remove('show');
+    }
+
+    // Dark Mode Methods
+    initializeDarkMode() {
+        // Check if user has a saved preference
+        const savedMode = localStorage.getItem('darkMode');
+
+        if (savedMode === 'enabled') {
+            document.body.classList.add('dark-mode');
+        } else if (savedMode === null) {
+            // Check system preference if no saved preference
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+            }
+        }
+
+        // Listen for system preference changes
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                // Only apply if user hasn't manually set a preference
+                if (localStorage.getItem('darkMode') === null) {
+                    if (e.matches) {
+                        document.body.classList.add('dark-mode');
+                    } else {
+                        document.body.classList.remove('dark-mode');
+                    }
+                }
+            });
+        }
+    }
+
+    toggleDarkMode() {
+        const isDarkMode = document.body.classList.toggle('dark-mode');
+
+        // Save preference
+        localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+
+        // Show feedback
+        this.showMessage(isDarkMode ? 'Dark mode enabled' : 'Light mode enabled', 'success');
     }
 }
 
