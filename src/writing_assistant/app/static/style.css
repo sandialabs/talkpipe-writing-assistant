@@ -117,7 +117,7 @@ body {
     width: 100%;
     height: 100vh;
     margin: 0;
-    padding: 16px 24px;
+    padding: 12px 16px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -136,11 +136,11 @@ body {
 }
 
 header {
-    margin-bottom: 16px;
-    padding: 20px 28px;
+    margin-bottom: 10px;
+    padding: 12px 20px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px) saturate(180%);
-    border-radius: 20px;
+    border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.18);
     flex-shrink: 0;
@@ -158,25 +158,25 @@ header:hover {
     align-items: center;
 }
 
+.header-logo {
+    width: 48px;
+    height: 48px;
+    margin-right: 12px;
+    filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
+}
+
 header h1 {
     background: var(--primary-gradient);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    font-size: 2.25rem;
+    font-size: 1.75rem;
     font-weight: 800;
     margin: 0;
     letter-spacing: -0.04em;
     position: relative;
     display: inline-flex;
     align-items: center;
-}
-
-header h1::before {
-    content: '✨';
-    font-size: 1.75rem;
-    margin-right: 12px;
-    filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
 }
 
 .hamburger-menu {
@@ -307,11 +307,11 @@ header h1::before {
 .title-section {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
-    padding: 12px 20px;
+    padding: 10px 16px;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     position: relative;
     overflow: hidden;
     flex-shrink: 0;
@@ -354,10 +354,10 @@ header h1::before {
 
 #document-title {
     flex: 1;
-    padding: 12px 16px;
+    padding: 8px 12px;
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-md);
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 500;
     transition: var(--transition-normal);
     background: rgba(255, 255, 255, 0.8);
@@ -1527,7 +1527,7 @@ input[type="file"]:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 24px;
+    padding: 10px 16px;
     background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.8) 100%);
     border-bottom: 1px solid var(--gray-200);
     flex-shrink: 0;
@@ -1555,7 +1555,7 @@ input[type="file"]:focus {
 }
 
 .document-editor {
-    padding: 20px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1564,12 +1564,12 @@ input[type="file"]:focus {
 #document-text {
     width: 100%;
     flex: 1;
-    padding: 24px;
+    padding: 16px;
     border: 2px solid transparent;
-    border-radius: 16px;
-    font-size: 1.05rem;
+    border-radius: 12px;
+    font-size: 1rem;
     font-family: 'Charter', 'Georgia', 'Times New Roman', serif;
-    line-height: 1.8;
+    line-height: 1.7;
     resize: none;
     background: rgba(248, 250, 252, 0.6);
     color: #1e293b;
@@ -1588,7 +1588,7 @@ input[type="file"]:focus {
 }
 
 .suggestion-panel {
-    padding: 20px 16px;
+    padding: 14px 12px;
     background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.9) 100%);
     display: flex;
     flex-direction: column;
