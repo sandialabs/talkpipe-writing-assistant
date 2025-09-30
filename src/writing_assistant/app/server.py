@@ -37,10 +37,9 @@ def main():
     if args.auth_token:
         import writing_assistant.app.main as main_module
         main_module.AUTH_TOKEN = args.auth_token
-        AUTH_TOKEN = args.auth_token
-    else:
-        # Import here to get the auto-generated auth token
-        from .main import AUTH_TOKEN
+
+    # Import to get the current auth token (auto-generated or custom)
+    from .main import AUTH_TOKEN
 
     print(f"\n🔐 Writing Assistant Server")
     print(f"📝 Access your writing assistant at: http://{args.host}:{args.port}/?token={AUTH_TOKEN}")

@@ -1,14 +1,12 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File, Response, HTTPException, Depends
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 import uuid
 import json
 from datetime import datetime
 from pathlib import Path
-import asyncio
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
 
@@ -134,27 +132,9 @@ async def favicon():
 # Metadata endpoints removed - all metadata sent with generation requests
 
 @app.post("/documents/save", dependencies=[Depends(validate_token)])
+@app.post("/documents/save-as", dependencies=[Depends(validate_token)])
 async def save_document(filename: str = Form(...), document_data: str = Form(...)):
     """Save document data provided by the browser"""
-    try:
-        filepath = get_safe_filepath(filename)
-        sanitized_filename = filepath.name
-
-        # Always use document data from frontend
-        data_to_save = json.loads(document_data)
-
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
-
-        return {"status": "success", "filename": sanitized_filename, "path": str(filepath)}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.post("/documents/save-as", dependencies=[Depends(validate_token)])
-async def save_document_as(filename: str = Form(...), document_data: str = Form(...)):
-    """Save document data provided by the browser with new filename"""
     try:
         filepath = get_safe_filepath(filename)
         sanitized_filename = filepath.name

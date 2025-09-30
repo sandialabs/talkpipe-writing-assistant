@@ -87,7 +87,6 @@ PROMPT_TEMPLATE = """
     Paragraph after the current paragraph: {next_paragraph}
 
     Based on the above information, {generation_mode} the current paragraph draft.
-    {system_prompt}
 """
 
 def new_paragraph(text: str, metadata: Metadata, title: str = "", prev_paragraph: str = "", next_paragraph: str = "", generation_mode: str = "rewrite") -> str:
@@ -104,7 +103,7 @@ def new_paragraph(text: str, metadata: Metadata, title: str = "", prev_paragraph
         f = f.as_function(single_in=True, single_out=True)
 
 
-        result = f({"text": text, "metadata": metadata, "title": title, "prev_paragraph": prev_paragraph, "next_paragraph": next_paragraph, "generation_mode": generation_mode, "system_prompt": system_prompt})
+        result = f({"text": text, "metadata": metadata, "title": title, "prev_paragraph": prev_paragraph, "next_paragraph": next_paragraph, "generation_mode": generation_mode})
 
         # Clean up the result to prevent extra newlines
         if isinstance(result, str):
