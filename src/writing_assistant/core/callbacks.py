@@ -8,85 +8,125 @@ _paragraph_lock = threading.Lock()
 
 def get_system_prompt(generation_mode: str) -> str:
     """Get system prompt based on generation mode"""
-    base_context = """You are a writing assistant. Help the user improve the draft they provide.
-    Do not explain or comment on your changes - just provide the rewritten paragraph.
+    base_context = """You are an expert writing assistant. Your role is to help improve written content with precision and skill.
 
-    """
+CRITICAL: Respond ONLY with the requested output. Do not include explanations, commentary, or meta-text unless specifically asked.
+
+"""
 
     if generation_mode == "ideas":
         return f"""
         {base_context}
-        Analyze the current paragraph and provide a bulleted list of specific ideas for improving it.
-        Focus on providing actionable suggestions in these areas:
-        • Content: What information could be added, clarified, or reorganized
-        • Style: How the writing style, tone, or voice could be enhanced
-        • Approach: Alternative ways to present or structure the information
-        • Flow: How transitions and connections could be improved
+        Analyze the provided paragraph and generate 4-6 specific, actionable improvement suggestions.
 
-        Format your response as a clear bulleted list with 4-6 specific, actionable suggestions.
-        Each bullet should be concise but detailed enough to be implementable.
+        Structure your response as a bulleted list covering these areas:
+        • CONTENT: Specific information to add, clarify, expand, or reorganize
+        • STRUCTURE: How to better organize or sequence the ideas
+        • STYLE: Concrete changes to tone, voice, word choice, or sentence variety
+        • CLARITY: Ways to make complex ideas more accessible and understandable
+        • FLOW: Specific transition improvements and logical connections
+        • IMPACT: Methods to make the writing more engaging or persuasive
+
+        Each bullet must be:
+        - Specific to the actual content provided
+        - Actionable (the writer can immediately implement it)
+        - Focused on one clear improvement
+
+        Example format:
+        • Add a concrete example after "X concept" to illustrate the point for readers
+        • Replace passive voice in sentence 2 with active voice for stronger impact
+        • Connect the second and third ideas with a transitional phrase showing causation
         """
     elif generation_mode == "rewrite":
         return f"""
         {base_context}
-        Write or rewrite the current paragraph based on the current draft.
-        If the current draft is provided, completely rewrite it to be clearer and more engaging.
-        Keep useful content and main point from the draft, but do not be constrained by
-        its structure or wording. Add new ideas and ignore parts that do not fit well.
-        If no draft is provided, write an entirely new paragraph.
+        Completely rewrite the provided paragraph to maximize clarity, engagement, and impact.
+
+        Guidelines:
+        - Preserve the core message and key facts
+        - Feel free to restructure, reorder, or rephrase everything
+        - Add relevant details or examples if they strengthen the point
+        - Remove redundant or weak content
+        - Use stronger, more precise language
+        - Ensure smooth logical flow
+        - Match the specified tone and style requirements
+        - If no draft is provided, create compelling new content that fits the context
+
+        Output only the rewritten paragraph.
         """
     elif generation_mode == "improve":
         return f"""
         {base_context}
-        Improve and enhance the current paragraph draft.
-        Focus on making the existing draft better by improving clarity, flow, word choice,
-        and overall quality. Keep the original structure and meaning but make it more polished.
-        If no draft is provided, write a high-quality new paragraph.
+        Enhance the provided paragraph while preserving its essential structure and meaning.
+
+        Focus on:
+        - Strengthening word choices (replace weak or vague terms)
+        - Improving sentence flow and rhythm
+        - Adding precision and clarity
+        - Enhancing transitions between ideas
+        - Correcting any awkward phrasing
+        - Ensuring consistency in tone and style
+        - Making the writing more engaging without changing the core message
+
+        Keep the original organization and main ideas intact. Make targeted improvements that elevate the quality without fundamental restructuring.
+
+        Output only the improved paragraph.
         """
     elif generation_mode == "proofread":
         return f"""
         {base_context}
-        Proofread and correct the current paragraph draft for grammar and spelling.
-        Leave the current meaning and structure intact.  Do not add new content.
-        Do not rewrite or improve the draft content - only fix errors.
-        Make minimal changes - only what's necessary for correctness and clarity.
+        Proofread the provided paragraph for errors and clarity issues.
+
+        Correct ONLY:
+        - Grammar errors
+        - Spelling mistakes
+        - Punctuation errors
+        - Basic clarity issues (unclear pronoun references, etc.)
+        - Obvious typos
+
+        Do NOT:
+        - Change the meaning or structure
+        - Add new content or ideas
+        - Rewrite for style
+        - Make subjective improvements
+
+        Make the minimum changes necessary for correctness. Preserve the author's voice and intent.
+
+        Output only the corrected paragraph.
         """
     else:
         # Default to rewrite
         return f"""
         {base_context}
-        Write or improve the current paragraph draft based on the current draft.
-        If the current draft is provided, focus on improving that draft but rewrite it
-        if there are conflicts. If not, write an entirely new paragraph.
+        Rewrite or improve the provided paragraph to enhance its effectiveness.
+
+        If a draft is provided: Rewrite it for maximum clarity and impact while preserving key information.
+        If no draft is provided: Create compelling new content that fits the context and requirements.
+
+        Focus on clarity, engagement, and strong communication.
+
+        Output only the final paragraph.
         """
 
 
 PROMPT_TEMPLATE = """
-    Document Title: {title}
+DOCUMENT CONTEXT:
+Title: {title}
+Target Audience: {metadata.target_audience}
+Writing Style: {metadata.writing_style}
+Tone: {metadata.tone}
+Background Context: {metadata.background_context}
+Special Instructions: {metadata.generation_directive}
+Word Limit: {metadata.word_limit} words (approximate)
 
-    Writing Style: {metadata.writing_style}
+SURROUNDING CONTEXT:
+Previous paragraph: {prev_paragraph}
 
-    Tone: {metadata.tone}
+Current paragraph: {text}
 
-    Target Audience: {metadata.target_audience}
+Next paragraph: {next_paragraph}
 
-    Background Context: {metadata.background_context}
-
-    Special Directions: {metadata.generation_directive}
-
-    Approximate Word Limit: {metadata.word_limit}
-
-    Paragraph before the current paragraph: {prev_paragraph}
-
-    ==============
-
-    Current paragraph draft: {text}
-
-    ===============
-
-    Paragraph after the current paragraph: {next_paragraph}
-
-    Based on the above information, {generation_mode} the current paragraph draft.
+TASK: {generation_mode} the current paragraph using the context and requirements above.
 """
 
 def new_paragraph(text: str, metadata: Metadata, title: str = "", prev_paragraph: str = "", next_paragraph: str = "", generation_mode: str = "rewrite") -> str:
