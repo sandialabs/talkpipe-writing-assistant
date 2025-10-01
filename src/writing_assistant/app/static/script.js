@@ -1129,14 +1129,14 @@ class WritingAssistant {
         console.log(`Undo state saved. Stack size: ${this.undoStack.length}`);
     }
     
-    undo() {
+undo() {
         if (this.undoStack.length < 2) {
             this.showMessage('Nothing to undo', 'info');
             return;
         }
-        
+
         const textarea = document.getElementById('document-text');
-        
+
         // Move current state to redo stack
         const currentState = {
             text: textarea.value,
@@ -1145,48 +1145,95 @@ class WritingAssistant {
             timestamp: Date.now()
         };
         this.redoStack.push(currentState);
-        
+
         // Remove current state from undo stack
         this.undoStack.pop();
-        
+
         // Get previous state
         const previousState = this.undoStack[this.undoStack.length - 1];
-        
-        // Apply previous state
+
+        // Store the cursor position before any changes
+        const targetStart = previousState.selectionStart;
+        const targetEnd = previousState.selectionEnd;
+
+        // Apply previous state with the flag set
         this.isUndoRedoOperation = true;
         textarea.value = previousState.text;
         this.documentText = previousState.text;
-        
+
         // Update sections first
         this.parseSections();
-        
-        // Then restore cursor position and update UI
-        textarea.focus();
-        textarea.setSelectionRange(previousState.selectionStart, previousState.selectionEnd);
-        this.handleCursorChange();
-        
-        this.isUndoRedoOperation = false;
-        
+
+        // Safari-specific cursor restoration using multiple animation frames
+        const restoreCursor = () => {
+            textarea.focus();
+            
+            // Force Safari to update its internal state
+            if (textarea.setSelectionRange) {
+                // Set to end first, then to desired position (Safari workaround)
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                
+                // Use setTimeout with 0 delay to ensure Safari processes the previous operation
+                setTimeout(() => {
+                    textarea.setSelectionRange(targetStart, targetEnd);
+                    
+                    // Ensure cursor is visible by scrolling it into view
+                    const textBeforeCursor = textarea.value.substring(0, targetStart);
+                    const lines = textBeforeCursor.split('\n').length;
+                    const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight) || 20;
+                    const scrollTop = Math.max(0, (lines - 5) * lineHeight);
+                    
+                    // Store current scroll position
+                    const currentScroll = textarea.scrollTop;
+                    
+                    // Only scroll if necessary
+                    if (Math.abs(currentScroll - scrollTop) > lineHeight * 2) {
+                        textarea.scrollTop = scrollTop;
+                    }
+                    
+                    // Final cursor position check after a delay
+                    requestAnimationFrame(() => {
+                        // Double-check cursor position for Safari
+                        if (textarea.selectionStart !== targetStart || textarea.selectionEnd !== targetEnd) {
+                            textarea.setSelectionRange(targetStart, targetEnd);
+                        }
+                        
+                        this.isUndoRedoOperation = false;
+                        this.handleCursorChange();
+                    });
+                }, 0);
+            } else {
+                // Fallback for older browsers
+                this.isUndoRedoOperation = false;
+                this.handleCursorChange();
+            }
+        };
+
+        // Use double requestAnimationFrame for Safari compatibility
+        requestAnimationFrame(() => {
+            requestAnimationFrame(restoreCursor);
+        });
+
         // Limit redo stack size
         if (this.redoStack.length > this.maxUndoSteps) {
             this.redoStack.shift();
         }
-        
+
         this.showMessage('Undo applied', 'success');
         console.log(`Undo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
     }
-    
+        
     redo() {
         if (this.redoStack.length === 0) {
             this.showMessage('Nothing to redo', 'info');
             return;
         }
-        
+
         const textarea = document.getElementById('document-text');
-        
+
         // Get next state from redo stack
         const nextState = this.redoStack.pop();
-        
+
         // Save current state to undo stack
         const currentState = {
             text: textarea.value,
@@ -1195,27 +1242,39 @@ class WritingAssistant {
             timestamp: Date.now()
         };
         this.undoStack.push(currentState);
-        
+
         // Apply next state
         this.isUndoRedoOperation = true;
         textarea.value = nextState.text;
         this.documentText = nextState.text;
-        
+
         // Update sections first
         this.parseSections();
-        
-        // Then restore cursor position and update UI
-        textarea.focus();
-        textarea.setSelectionRange(nextState.selectionStart, nextState.selectionEnd);
-        this.handleCursorChange();
-        
+
+        // Use requestAnimationFrame to ensure DOM has updated before restoring cursor
+        // This is especially important for Safari which may lose cursor position otherwise
+        requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(nextState.selectionStart, nextState.selectionEnd);
+
+            // Ensure cursor is visible by scrolling it into view (Safari fix)
+            const cursorPosition = nextState.selectionStart;
+            const textBeforeCursor = textarea.value.substring(0, cursorPosition);
+            const lines = textBeforeCursor.split('\n').length;
+            const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight) || 20;
+            const scrollTop = Math.max(0, (lines - 5) * lineHeight);
+            textarea.scrollTop = scrollTop;
+
+            this.handleCursorChange();
+        });
+
         this.isUndoRedoOperation = false;
-        
+
         // Limit undo stack size
         if (this.undoStack.length > this.maxUndoSteps) {
             this.undoStack.shift();
         }
-        
+
         this.showMessage('Redo applied', 'success');
         console.log(`Redo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
     }
