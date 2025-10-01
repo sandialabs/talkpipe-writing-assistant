@@ -1157,12 +1157,12 @@ class WritingAssistant {
         textarea.value = previousState.text;
         this.documentText = previousState.text;
         
-        // Restore cursor position
+        // Update sections first
+        this.parseSections();
+        
+        // Then restore cursor position and update UI
         textarea.focus();
         textarea.setSelectionRange(previousState.selectionStart, previousState.selectionEnd);
-        
-        // Update sections and UI
-        this.parseSections();
         this.handleCursorChange();
         
         this.isUndoRedoOperation = false;
@@ -1201,12 +1201,12 @@ class WritingAssistant {
         textarea.value = nextState.text;
         this.documentText = nextState.text;
         
-        // Restore cursor position
+        // Update sections first
+        this.parseSections();
+        
+        // Then restore cursor position and update UI
         textarea.focus();
         textarea.setSelectionRange(nextState.selectionStart, nextState.selectionEnd);
-        
-        // Update sections and UI
-        this.parseSections();
         this.handleCursorChange();
         
         this.isUndoRedoOperation = false;
