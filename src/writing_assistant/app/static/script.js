@@ -21,6 +21,16 @@ class WritingAssistant {
             source: localStorage.getItem('generationSource') || '',
             model: localStorage.getItem('generationModel') || ''
         };
+        
+        // Undo/Redo system
+        this.undoStack = [];
+        this.redoStack = [];
+        this.maxUndoSteps = 100;
+        this.lastUndoState = null;
+        this.undoTimer = null;
+        this.undoDelay = 1000; // 1 second delay before saving undo state
+        this.isUndoRedoOperation = false;
+        
         this.init();
     }
 
@@ -63,6 +73,9 @@ class WritingAssistant {
         // AI suggestion controls
         generateBtn.addEventListener('click', () => this.generateSuggestionForCurrentSection());
         useSuggestionBtn.addEventListener('click', () => this.useSuggestion());
+
+        // Initialize undo/redo system
+        this.initializeUndoRedo();
 
         // Initialize hotkey system
         this.initializeHotkeys();
@@ -360,6 +373,12 @@ class WritingAssistant {
     handleDocumentTextChange() {
         const textarea = document.getElementById('document-text');
         this.documentText = textarea.value;
+        
+        // Save undo state if this wasn't an undo/redo operation
+        if (!this.isUndoRedoOperation) {
+            this.scheduleUndoStateSave();
+        }
+        
         this.parseSections();
         this.handleCursorChange();
     }
@@ -571,6 +590,9 @@ class WritingAssistant {
 
         const textarea = document.getElementById('document-text');
 
+        // Save undo state before making changes
+        this.saveUndoState();
+
         // Debug section boundaries
         console.log('Section replacement debug:');
         console.log('Current section text:', JSON.stringify(currentSection.text));
@@ -592,7 +614,11 @@ class WritingAssistant {
 
         // Replace the current section with the suggestion
         const newText = beforeSection + cleanGeneratedText + afterSection;
+        
+        // Mark this as a programmatic change to avoid creating another undo state
+        this.isUndoRedoOperation = true;
         textarea.value = newText;
+        this.isUndoRedoOperation = false;
 
         // Set cursor position to end of the replaced section
         textarea.focus();
@@ -629,6 +655,9 @@ class WritingAssistant {
 
             this.parseSections();
             this.handleCursorChange();
+            
+            // Reset undo history for new document
+            this.clearUndoHistory();
         } catch (error) {
             console.error('Error initializing document:', error);
         }
@@ -1032,6 +1061,173 @@ class WritingAssistant {
         }
     }
 
+    // Undo/Redo System
+    initializeUndoRedo() {
+        const textarea = document.getElementById('document-text');
+        
+        // Save initial state
+        this.saveUndoState();
+        
+        // Handle keyboard shortcuts
+        textarea.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.undo();
+                } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
+                    e.preventDefault();
+                    this.redo();
+                }
+            }
+        });
+        
+        // Save undo state on focus loss (when user clicks away)
+        textarea.addEventListener('blur', () => {
+            this.saveUndoState();
+        });
+    }
+    
+    scheduleUndoStateSave() {
+        // Clear existing timer
+        if (this.undoTimer) {
+            clearTimeout(this.undoTimer);
+        }
+        
+        // Schedule save after delay
+        this.undoTimer = setTimeout(() => {
+            this.saveUndoState();
+        }, this.undoDelay);
+    }
+    
+    saveUndoState() {
+        const textarea = document.getElementById('document-text');
+        const currentState = {
+            text: textarea.value,
+            selectionStart: textarea.selectionStart,
+            selectionEnd: textarea.selectionEnd,
+            timestamp: Date.now()
+        };
+        
+        // Don't save if the text hasn't changed
+        if (this.lastUndoState && this.lastUndoState.text === currentState.text) {
+            return;
+        }
+        
+        // Add to undo stack
+        this.undoStack.push(currentState);
+        
+        // Limit stack size
+        if (this.undoStack.length > this.maxUndoSteps) {
+            this.undoStack.shift();
+        }
+        
+        // Clear redo stack when new state is saved
+        this.redoStack = [];
+        
+        this.lastUndoState = currentState;
+        
+        console.log(`Undo state saved. Stack size: ${this.undoStack.length}`);
+    }
+    
+    undo() {
+        if (this.undoStack.length < 2) {
+            this.showMessage('Nothing to undo', 'info');
+            return;
+        }
+        
+        const textarea = document.getElementById('document-text');
+        
+        // Move current state to redo stack
+        const currentState = {
+            text: textarea.value,
+            selectionStart: textarea.selectionStart,
+            selectionEnd: textarea.selectionEnd,
+            timestamp: Date.now()
+        };
+        this.redoStack.push(currentState);
+        
+        // Remove current state from undo stack
+        this.undoStack.pop();
+        
+        // Get previous state
+        const previousState = this.undoStack[this.undoStack.length - 1];
+        
+        // Apply previous state
+        this.isUndoRedoOperation = true;
+        textarea.value = previousState.text;
+        this.documentText = previousState.text;
+        
+        // Restore cursor position
+        textarea.focus();
+        textarea.setSelectionRange(previousState.selectionStart, previousState.selectionEnd);
+        
+        // Update sections and UI
+        this.parseSections();
+        this.handleCursorChange();
+        
+        this.isUndoRedoOperation = false;
+        
+        // Limit redo stack size
+        if (this.redoStack.length > this.maxUndoSteps) {
+            this.redoStack.shift();
+        }
+        
+        this.showMessage('Undo applied', 'success');
+        console.log(`Undo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
+    }
+    
+    redo() {
+        if (this.redoStack.length === 0) {
+            this.showMessage('Nothing to redo', 'info');
+            return;
+        }
+        
+        const textarea = document.getElementById('document-text');
+        
+        // Get next state from redo stack
+        const nextState = this.redoStack.pop();
+        
+        // Save current state to undo stack
+        const currentState = {
+            text: textarea.value,
+            selectionStart: textarea.selectionStart,
+            selectionEnd: textarea.selectionEnd,
+            timestamp: Date.now()
+        };
+        this.undoStack.push(currentState);
+        
+        // Apply next state
+        this.isUndoRedoOperation = true;
+        textarea.value = nextState.text;
+        this.documentText = nextState.text;
+        
+        // Restore cursor position
+        textarea.focus();
+        textarea.setSelectionRange(nextState.selectionStart, nextState.selectionEnd);
+        
+        // Update sections and UI
+        this.parseSections();
+        this.handleCursorChange();
+        
+        this.isUndoRedoOperation = false;
+        
+        // Limit undo stack size
+        if (this.undoStack.length > this.maxUndoSteps) {
+            this.undoStack.shift();
+        }
+        
+        this.showMessage('Redo applied', 'success');
+        console.log(`Redo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
+    }
+    
+    clearUndoHistory() {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.lastUndoState = null;
+        this.saveUndoState(); // Save current state as first undo point
+        console.log('Undo history cleared');
+    }
+
     // Hotkey Management System
     initializeHotkeys() {
         // Load hotkeys from localStorage or use defaults
@@ -1059,6 +1255,11 @@ class WritingAssistant {
         // Create new listener
         this.hotkeyListener = (e) => {
             const pressedKey = this.getKeyComboString(e);
+
+            // Skip if this is an undo/redo shortcut (handled by undo system)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'y')) {
+                return;
+            }
 
             if (pressedKey === this.hotkeys.generate) {
                 e.preventDefault();
@@ -1211,6 +1412,10 @@ class WritingAssistant {
             this.updateFilenameDisplay();
 
             this.hideNewDocumentModal();
+            
+            // Reset undo history for new document
+            this.clearUndoHistory();
+            
             this.showMessage('New document created successfully!', 'success');
         } catch (error) {
             console.error('Error creating new document:', error);
@@ -1833,6 +2038,10 @@ class WritingAssistant {
             this.updateFilenameDisplay();
 
             this.hideLoadDocumentModal();
+            
+            // Reset undo history for loaded document
+            this.clearUndoHistory();
+            
             this.showMessage(`Document "${filename}" loaded successfully!`, 'success');
         } catch (error) {
             console.error('Error loading document:', error);
