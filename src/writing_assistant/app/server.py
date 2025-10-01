@@ -30,6 +30,12 @@ def main():
         "--auth-token",
         help="Custom authentication token (default: auto-generated UUID)"
     )
+    parser.add_argument(
+        "--disable-custom-env-vars",
+        action="store_true",
+        default=False,
+        help="Disable custom environment variables from the UI (security feature)"
+    )
 
     args = parser.parse_args()
 
@@ -37,6 +43,11 @@ def main():
     if args.auth_token:
         import writing_assistant.app.main as main_module
         main_module.AUTH_TOKEN = args.auth_token
+
+    # Set custom environment variables flag
+    if args.disable_custom_env_vars:
+        import writing_assistant.app.main as main_module
+        main_module.ALLOW_CUSTOM_ENV_VARS = False
 
     # Import to get the current auth token (auto-generated or custom)
     from .main import AUTH_TOKEN

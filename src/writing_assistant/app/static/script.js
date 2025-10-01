@@ -21,7 +21,10 @@ class WritingAssistant {
             source: localStorage.getItem('generationSource') || '',
             model: localStorage.getItem('generationModel') || ''
         };
-        
+
+        // Environment variables
+        this.environmentVariables = this.loadEnvironmentVariables();
+
         // Undo/Redo system
         this.undoStack = [];
         this.redoStack = [];
@@ -30,13 +33,15 @@ class WritingAssistant {
         this.undoTimer = null;
         this.undoDelay = 1000; // 1 second delay before saving undo state
         this.isUndoRedoOperation = false;
-        
+
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
         this.loadMetadata();
+        // Check server configuration
+        await this.loadServerConfig();
         // Apply saved AI settings to the initial document
         await this.applySavedAISettings();
         this.loadExistingDocument();
@@ -54,6 +59,19 @@ class WritingAssistant {
     addTokenToUrl(url) {
         const separator = url.includes('?') ? '&' : '?';
         return `${url}${separator}token=${this.authToken}`;
+    }
+
+    async loadServerConfig() {
+        try {
+            const response = await fetch(this.addTokenToUrl('/config'));
+            const config = await response.json();
+            this.allowCustomEnvVars = config.allow_custom_env_vars;
+            console.log('Server config loaded:', config);
+        } catch (error) {
+            console.error('Error loading server config:', error);
+            // Default to allowing env vars if we can't reach the server
+            this.allowCustomEnvVars = true;
+        }
     }
 
     setupEventListeners() {
@@ -139,6 +157,9 @@ class WritingAssistant {
 
         // Dark mode toggle
         document.getElementById('dark-mode-toggle').addEventListener('click', () => this.toggleDarkMode());
+
+        // Environment variables
+        document.getElementById('add-env-var-btn').addEventListener('click', () => this.addEnvironmentVariableRow());
     }
 
     setupModals() {
@@ -546,6 +567,13 @@ class WritingAssistant {
             formData.append('source', document.getElementById('ai-source')?.value || this.documentMetadata.source || '');
             formData.append('model', document.getElementById('ai-model')?.value || this.documentMetadata.model || '');
 
+            // Send environment variables as JSON (only if allowed by server)
+            if (this.allowCustomEnvVars) {
+                formData.append('environment_variables', JSON.stringify(this.environmentVariables));
+            } else {
+                formData.append('environment_variables', '{}');
+            }
+
             const response = await fetch(this.addTokenToUrl('/generate-text'), {
                 method: 'POST',
                 body: formData
@@ -672,6 +700,19 @@ class WritingAssistant {
         // Always load the current document's settings into the form when modal opens
         // This ensures the form displays the current state accurately
         this.loadCurrentDocumentToSettingsForm();
+
+        // Show/hide environment variables section based on server config
+        const envVarsSection = document.querySelector('.settings-section h4');
+        if (envVarsSection && envVarsSection.textContent === 'Environment Variables') {
+            const envVarsSectionParent = envVarsSection.parentElement;
+            if (this.allowCustomEnvVars) {
+                envVarsSectionParent.style.display = '';
+                // Render environment variables
+                this.renderEnvironmentVariables();
+            } else {
+                envVarsSectionParent.style.display = 'none';
+            }
+        }
     }
 
     hideSettingsModal() {
@@ -956,10 +997,17 @@ class WritingAssistant {
         localStorage.setItem('generationSource', source);
         localStorage.setItem('generationModel', model);
 
+        // Update document metadata with current source and model
+        this.documentMetadata.source = source;
+        this.documentMetadata.model = model;
+
+        // Save environment variables
+        this.saveEnvironmentVariables();
+
         // Save hotkey settings
         this.saveHotkeySettings();
 
-        this.showMessage('AI settings and hotkeys saved successfully!', 'success');
+        this.showMessage('AI settings, environment variables, and hotkeys saved successfully!', 'success');
     }
 
     applySavedAISettings() {
@@ -2455,6 +2503,78 @@ undo() {
 
         // Show feedback
         this.showMessage(isDarkMode ? 'Dark mode enabled' : 'Light mode enabled', 'success');
+    }
+
+    // Environment Variables Management
+    loadEnvironmentVariables() {
+        const saved = localStorage.getItem('environmentVariables');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to parse environment variables:', e);
+                return {};
+            }
+        }
+        return {};
+    }
+
+    saveEnvironmentVariables() {
+        const envVars = {};
+        const container = document.getElementById('env-vars-container');
+        const rows = container.querySelectorAll('.env-var-item');
+
+        rows.forEach(row => {
+            const keyInput = row.querySelector('.env-var-key');
+            const valueInput = row.querySelector('.env-var-value');
+            const key = keyInput.value.trim();
+            const value = valueInput.value.trim();
+
+            if (key && value) {
+                envVars[key] = value;
+            }
+        });
+
+        this.environmentVariables = envVars;
+        localStorage.setItem('environmentVariables', JSON.stringify(envVars));
+    }
+
+    renderEnvironmentVariables() {
+        const container = document.getElementById('env-vars-container');
+        container.innerHTML = '';
+
+        // Render existing environment variables
+        Object.entries(this.environmentVariables).forEach(([key, value]) => {
+            this.addEnvironmentVariableRow(key, value);
+        });
+    }
+
+    addEnvironmentVariableRow(key = '', value = '') {
+        const container = document.getElementById('env-vars-container');
+
+        const row = document.createElement('div');
+        row.className = 'env-var-item';
+
+        row.innerHTML = `
+            <input type="text" class="env-var-key" placeholder="Variable name (e.g., OPENAI_API_KEY)" value="${this.escapeHtml(key)}">
+            <input type="text" class="env-var-value" placeholder="Value" value="${this.escapeHtml(value)}">
+            <button type="button" class="env-var-remove-btn">Remove</button>
+        `;
+
+        // Add event listener to remove button
+        const removeBtn = row.querySelector('.env-var-remove-btn');
+        removeBtn.addEventListener('click', () => {
+            row.remove();
+            // No need to save here, will save when user clicks "Save AI Settings"
+        });
+
+        container.appendChild(row);
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

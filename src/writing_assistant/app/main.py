@@ -5,15 +5,24 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 import uuid
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
 
+# Lock to prevent race conditions when setting environment variables
+# Environment variables are process-wide, so we need to serialize access
+_env_var_lock = threading.Lock()
+
 app = FastAPI(title="Writing Assistant")
 
 # Generate a random token for this session (like Jupyter does)
 AUTH_TOKEN = str(uuid.uuid4())
+
+# Flag to control whether custom environment variables from UI are allowed
+# Can be disabled via --disable-custom-env-vars command line flag
+ALLOW_CUSTOM_ENV_VARS = True
 
 # Get the directory where this module is located
 app_dir = Path(__file__).parent
@@ -129,6 +138,13 @@ async def favicon():
     favicon_path = app_dir / "static" / "favicon.ico"
     return FileResponse(favicon_path, media_type="image/x-icon")
 
+@app.get("/config", dependencies=[Depends(validate_token)])
+async def get_config():
+    """Get server configuration"""
+    return {
+        "allow_custom_env_vars": ALLOW_CUSTOM_ENV_VARS
+    }
+
 # Metadata endpoints removed - all metadata sent with generation requests
 
 @app.post("/documents/save", dependencies=[Depends(validate_token)])
@@ -219,31 +235,62 @@ async def generate_text(
     generation_directive: str = Form(""),
     word_limit: Optional[int] = Form(None),
     source: str = Form(""),
-    model: str = Form("")
+    model: str = Form(""),
+    environment_variables: str = Form("{}")
 ):
     """Generate text for a section - fully stateless endpoint"""
+    import os
+
     try:
-        # Create metadata from request parameters
-        metadata = Metadata()
-        metadata.writing_style = writing_style
-        metadata.target_audience = target_audience
-        metadata.tone = tone
-        metadata.background_context = background_context
-        metadata.generation_directive = generation_directive
-        metadata.word_limit = word_limit
-        metadata.source = source
-        metadata.model = model
+        # Parse environment variables from request
+        env_vars = {}
+        if environment_variables and ALLOW_CUSTOM_ENV_VARS:
+            try:
+                env_vars = json.loads(environment_variables)
+            except json.JSONDecodeError:
+                print(f"Warning: Could not parse environment_variables: {environment_variables}")
+        elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
+            print("Info: Custom environment variables disabled by server configuration")
 
-        generated_text = cb.new_paragraph(
-            text=user_text,
-            metadata=metadata,
-            title=title,
-            prev_paragraph=prev_paragraph,
-            next_paragraph=next_paragraph,
-            generation_mode=generation_mode
-        )
+        # Use a lock to prevent race conditions when modifying process-wide environment variables
+        # This ensures that concurrent requests don't interfere with each other's env vars
+        with _env_var_lock:
+            # Store original environment variables to restore later
+            original_env = {}
+            for key, value in env_vars.items():
+                if key in os.environ:
+                    original_env[key] = os.environ[key]
+                os.environ[key] = str(value)
 
-        return {"generated_text": generated_text}
+            try:
+                # Create metadata from request parameters
+                metadata = Metadata()
+                metadata.writing_style = writing_style
+                metadata.target_audience = target_audience
+                metadata.tone = tone
+                metadata.background_context = background_context
+                metadata.generation_directive = generation_directive
+                metadata.word_limit = word_limit
+                metadata.source = source
+                metadata.model = model
+
+                generated_text = cb.new_paragraph(
+                    text=user_text,
+                    metadata=metadata,
+                    title=title,
+                    prev_paragraph=prev_paragraph,
+                    next_paragraph=next_paragraph,
+                    generation_mode=generation_mode
+                )
+
+                return {"generated_text": generated_text}
+            finally:
+                # Restore original environment variables
+                for key in env_vars.keys():
+                    if key in original_env:
+                        os.environ[key] = original_env[key]
+                    else:
+                        os.environ.pop(key, None)
     except Exception as e:
         print(f"Error generating text: {e}")
         return {"error": str(e)}, 500

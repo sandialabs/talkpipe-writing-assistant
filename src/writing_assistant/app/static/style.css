@@ -1800,10 +1800,88 @@ input[type="file"]:focus {
 }
 
 .generation-form .settings-section {
-    background: var(--gray-50);
-    border: 1px solid var(--gray-200);
+    background: var(--surface-tertiary);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     padding: 24px;
+}
+
+.generation-form .settings-section h4 {
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Environment Variables Styles */
+.env-var-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    align-items: center;
+}
+
+.env-var-item input[type="text"] {
+    padding: 8px 12px;
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
+    transition: var(--transition-normal);
+}
+
+.env-var-item input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.env-var-item input[type="text"]::placeholder {
+    color: var(--text-tertiary);
+}
+
+.env-var-remove-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: var(--transition-fast);
+    height: auto;
+}
+
+.env-var-remove-btn:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+#env-vars-container {
+    margin: 16px 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#env-vars-container:empty::before {
+    content: 'No environment variables configured. Click "Add Environment Variable" to add one.';
+    display: block;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+#add-env-var-btn {
+    margin-top: 8px;
+    width: 100%;
 }
 
 /* Responsive Design for New Interface */

@@ -74,35 +74,71 @@ docker-compose --profile dev up talkpipe-writing-assistant-dev
 
 To use OpenAI models (GPT-4, GPT-5, etc.):
 
-1. Obtain an API key
-2. Set your API key as an environment variable 
+#### Option 1: Server-Level Configuration (Recommended for single-user)
+
+1. Obtain an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Set your API key as an environment variable:
 ```bash
 export OPENAI_API_KEY="sk-your-api-key-here"
 ```
 
 3. Configure in the application:
-   - In the web interface, set the **AI Source** to `openai`
+   - In the web interface, click **Settings** → **AI Settings** tab
+   - Set the **AI Source** to `openai`
    - Set the **Model** to your desired model (e.g., `gpt-4`, `gpt-4-turbo`, `gpt-5`)
+
+#### Option 2: Browser-Based Configuration (Multi-user or temporary credentials)
+
+1. Obtain an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. In the web interface:
+   - Click **Settings** → **AI Settings** tab
+   - Under **Environment Variables**, click **+ Add Environment Variable**
+   - Set `OPENAI_API_KEY` as the variable name
+   - Paste your API key as the value
+   - Click **Save AI Settings**
+
+3. Configure AI settings:
+   - Set the **AI Source** to `openai`
+   - Set the **Model** to your desired model
+
+**Environment Variables in Browser:**
+- Stored securely in your browser's localStorage (never in document files)
+- Apply to all documents automatically
+- Can be disabled server-side with `--disable-custom-env-vars` flag for security
+
+**Security Note:**
+- For shared/multi-user deployments, use server-level configuration only
+- Disable browser-based env vars with: `writing-assistant --disable-custom-env-vars`
+- This prevents users from injecting arbitrary credentials
 
 **Cost Considerations:**
 - OpenAI charges per token (input + output)
-- Check current pricing 
+- Check current pricing at [OpenAI Pricing](https://openai.com/api/pricing/)
 - Typical paragraph generation uses 200-1000 tokens
 
 ### Configuring Ollama
 
 To use local LLMs via Ollama (free, runs on your computer):
 
-1. Install Ollama
-2. Pull a model (first time only)
-3. Start Ollama (if not already running)
+1. Install Ollama from [ollama.com](https://ollama.com)
+2. Pull a model (first time only):
+   ```bash
+   ollama pull llama3.1:8b
+   ```
+3. Start Ollama (if not already running):
+   ```bash
+   ollama serve
+   ```
 4. **Configure in the application**:
-   - In the web interface, set the **AI Source** to `ollama`
+   - In the web interface, click **Settings** → **AI Settings** tab
+   - Set the **AI Source** to `ollama`
    - Set the **Model** to your chosen model (e.g., `llama3.1:8b`, `mistral:7b`)
+
+**No API keys required** - Ollama runs entirely on your local machine!
 
 ### TalkPipe Configuration
 
-The application uses [TalkPipe](https://github.com/sandialabs/talkpipe) for AI integration. TalkPipe automatically detects your configuration:
+The application uses [TalkPipe](https://github.com/sandialabs/talkpipe) for AI integration. TalkPipe automatically detects your configuration from environment variables:
 
 ## Usage
 
@@ -146,11 +182,18 @@ Configure the application with these environment variables:
 writing-assistant [OPTIONS]
 
 Options:
-  --host HOST          Host to bind to (default: localhost)
-  --port PORT          Port to bind to (default: 8001)
-  --reload             Enable auto-reload for development
-  --auth-token TOKEN   Custom authentication token (default: auto-generated UUID)
+  --host HOST                    Host to bind to (default: localhost)
+  --port PORT                    Port to bind to (default: 8001)
+  --reload                       Enable auto-reload for development
+  --auth-token TOKEN             Custom authentication token (default: auto-generated UUID)
+  --disable-custom-env-vars      Disable custom environment variables from UI (security feature)
 ```
+
+**Security Options:**
+- `--disable-custom-env-vars`: Prevents users from configuring environment variables through the browser interface
+  - Use this for shared deployments or when you want centralized credential management
+  - Environment variables must be set at the server level (via shell environment)
+  - The Environment Variables section will be hidden in the UI
 
 ### Using the Web Interface
 

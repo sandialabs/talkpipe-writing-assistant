@@ -189,6 +189,17 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                 </div>
 
                                 <div class="settings-section">
+                                    <h4>Environment Variables</h4>
+                                    <small class="form-help">Configure environment variables for AI services. These are stored in your browser's local storage and sent with each generation request.</small>
+
+                                    <div id="env-vars-container">
+                                        <!-- Environment variables will be added here dynamically -->
+                                    </div>
+
+                                    <button type="button" id="add-env-var-btn" class="btn btn-secondary btn-small">+ Add Environment Variable</button>
+                                </div>
+
+                                <div class="settings-section">
                                     <h4>Hotkeys</h4>
                                     <div class="form-group">
                                         <label for="generate-hotkey">Generate Text Hotkey:</label>
