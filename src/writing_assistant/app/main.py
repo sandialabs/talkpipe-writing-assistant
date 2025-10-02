@@ -223,20 +223,20 @@ async def list_documents():
 
 @app.post("/generate-text", dependencies=[Depends(validate_token)])
 async def generate_text(
-    user_text: str = Form(""),
-    title: str = Form(""),
-    prev_paragraph: str = Form(""),
-    next_paragraph: str = Form(""),
-    generation_mode: str = Form("ideas"),
-    writing_style: str = Form("formal"),
-    target_audience: str = Form(""),
-    tone: str = Form("neutral"),
-    background_context: str = Form(""),
-    generation_directive: str = Form(""),
-    word_limit: Optional[int] = Form(None),
-    source: str = Form(""),
-    model: str = Form(""),
-    environment_variables: str = Form("{}")
+    user_text: str = Form(default=""),
+    title: str = Form(default=""),
+    prev_paragraph: str = Form(default=""),
+    next_paragraph: str = Form(default=""),
+    generation_mode: str = Form(default="ideas"),
+    writing_style: str = Form(default="formal"),
+    target_audience: str = Form(default=""),
+    tone: str = Form(default="neutral"),
+    background_context: str = Form(default=""),
+    generation_directive: str = Form(default=""),
+    word_limit: Optional[int] = Form(default=None),
+    source: str = Form(default=""),
+    model: str = Form(default=""),
+    environment_variables: str = Form(default="{}")
 ):
     """Generate text for a section - fully stateless endpoint"""
     import os

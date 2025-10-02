@@ -563,7 +563,11 @@ class WritingAssistant {
             formData.append('tone', document.getElementById('tone')?.value || this.documentMetadata.tone || 'neutral');
             formData.append('background_context', document.getElementById('background-context')?.value || this.documentMetadata.background_context || '');
             formData.append('generation_directive', document.getElementById('generation-directive')?.value || this.documentMetadata.generation_directive || '');
-            formData.append('word_limit', document.getElementById('word-limit')?.value || this.documentMetadata.word_limit || '');
+            // Only append word_limit if it has a value (to avoid sending empty string for Optional[int])
+            const wordLimitValue = document.getElementById('word-limit')?.value || this.documentMetadata.word_limit;
+            if (wordLimitValue) {
+                formData.append('word_limit', wordLimitValue);
+            }
             formData.append('source', document.getElementById('ai-source')?.value || this.documentMetadata.source || '');
             formData.append('model', document.getElementById('ai-model')?.value || this.documentMetadata.model || '');
 
@@ -1518,11 +1522,14 @@ undo() {
             this.currentFilename = null;
             this.updateFilenameDisplay();
 
+            // Update the settings form to reflect the new document's metadata
+            this.loadCurrentDocumentToSettingsForm();
+
             this.hideNewDocumentModal();
-            
+
             // Reset undo history for new document
             this.clearUndoHistory();
-            
+
             this.showMessage('New document created successfully!', 'success');
         } catch (error) {
             console.error('Error creating new document:', error);
