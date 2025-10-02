@@ -86,6 +86,9 @@ def validate_and_sanitize_filename(filename: str) -> str:
     # Now safely extract just the filename part
     filename = Path(filename).name
 
+    # Sanitize: Replace all spaces with underscores
+    filename = filename.replace(' ', '_')
+
     # Sanitize: only allow alphanumeric, dots, hyphens, underscores
     sanitized = "".join(c for c in filename if c.isalnum() or c in ('.', '-', '_')).strip()
 

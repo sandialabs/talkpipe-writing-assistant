@@ -17,7 +17,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
     if generation_mode == "ideas":
         return f"""
         {base_context}
-        Analyze the provided paragraph and generate 4-6 specific, actionable improvement suggestions.
+        Analyze the current paragraph and generate 4-6 specific, actionable improvement suggestions.
 
         Structure your response as a bulleted list covering these areas:
         • CONTENT: Specific information to add, clarify, expand, or reorganize
@@ -40,7 +40,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
     elif generation_mode == "rewrite":
         return f"""
         {base_context}
-        Completely rewrite the provided paragraph to maximize clarity, engagement, and impact.
+        Completely rewrite the current paragraph to maximize clarity, engagement, and impact.
 
         Guidelines:
         - Preserve the core message and key facts
@@ -57,7 +57,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
     elif generation_mode == "improve":
         return f"""
         {base_context}
-        Enhance the provided paragraph while preserving its essential structure and meaning.
+        Enhance the provided current while preserving its essential structure and meaning.
 
         Focus on:
         - Strengthening word choices (replace weak or vague terms)
@@ -75,7 +75,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
     elif generation_mode == "proofread":
         return f"""
         {base_context}
-        Proofread the provided paragraph for errors and clarity issues.
+        Proofread the current paragraph for errors and clarity issues.
 
         Correct ONLY:
         - Grammar errors
