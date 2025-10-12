@@ -30,7 +30,7 @@ COPY --chown=builder:builder tests/ tests/
 
 # Install Python dependencies and build the package
 RUN python -m pip install --user --upgrade pip setuptools wheel build
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_WRITING_ASSISTANT=0.1.0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TALKPIPE_WRITING_ASSISTANT=0.1.0
 RUN python -m pip install --user -e .[dev]
 RUN python -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during build
 RUN python -m build --wheel
