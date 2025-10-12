@@ -1,33 +1,36 @@
+"""Main FastAPI application with multi-user support."""
+
 from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Optional
-import uuid
 import json
 import threading
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
+from .auth import auth_backend, current_active_user, fastapi_users
+from .database import get_async_session
+from .models import User, Document, DocumentSnapshot
+from .schemas import UserRead, UserCreate, UserUpdate
+
 
 # Lock to prevent race conditions when setting environment variables
-# Environment variables are process-wide, so we need to serialize access
 _env_var_lock = threading.Lock()
 
-app = FastAPI(title="Writing Assistant")
-
-# Generate a random token for this session (like Jupyter does)
-AUTH_TOKEN = str(uuid.uuid4())
-
-# Flag to control whether custom environment variables from UI are allowed
-# Can be disabled via --disable-custom-env-vars command line flag
-ALLOW_CUSTOM_ENV_VARS = True
+app = FastAPI(title="Writing Assistant - Multi-User")
 
 # Get the directory where this module is located
 app_dir = Path(__file__).parent
 
+
 class NoCacheStaticFiles(StaticFiles):
+    """Static files handler that disables caching."""
     def file_response(self, *args, **kwargs) -> Response:
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -35,196 +38,246 @@ class NoCacheStaticFiles(StaticFiles):
         response.headers["Expires"] = "0"
         return response
 
+
 app.mount("/static", NoCacheStaticFiles(directory=str(app_dir / "static")), name="static")
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
-# No server-side state - all metadata sent with requests
+# Flag to control whether custom environment variables from UI are allowed
+ALLOW_CUSTOM_ENV_VARS = True
 
-# Token validation dependency
-def validate_token(request: Request):
-    """Validate the authentication token from query parameter"""
-    token = request.query_params.get("token")
-    if token != AUTH_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid or missing authentication token")
-    return token
 
-# Helper function to get documents directory
-def get_documents_dir():
-    home_dir = Path.home()
-    docs_dir = home_dir / ".writing_assistant" / "documents"
-    docs_dir.mkdir(parents=True, exist_ok=True)
-    return docs_dir
+# Include FastAPI Users authentication routers
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend),
+    prefix="/auth/jwt",
+    tags=["auth"],
+)
 
-def validate_and_sanitize_filename(filename: str) -> str:
-    """
-    Validate and sanitize filename to prevent directory traversal attacks.
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"],
+)
 
-    Args:
-        filename: The filename to validate and sanitize
+app.include_router(
+    fastapi_users.get_reset_password_router(),
+    prefix="/auth",
+    tags=["auth"],
+)
 
-    Returns:
-        str: Sanitized filename
+app.include_router(
+    fastapi_users.get_verify_router(UserRead),
+    prefix="/auth",
+    tags=["auth"],
+)
 
-    Raises:
-        ValueError: If filename is invalid or contains path traversal attempts
-    """
-    if not filename or not filename.strip():
-        raise ValueError("Filename cannot be empty")
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/users",
+    tags=["users"],
+)
 
-    # Check for path traversal attempts BEFORE path normalization
-    if '/' in filename or '\\' in filename:
-        raise ValueError("Invalid filename: path traversal not allowed")
 
-    # Check for .. as a path component (but allow .. within filenames like test..json)
-    if filename == '..' or filename.startswith('../') or filename.startswith('..\\') or '/..' in filename or '\\..' in filename:
-        raise ValueError("Invalid filename: path traversal not allowed")
-
-    # Check for absolute paths or drive letters (Windows)
-    if filename.startswith('/') or ':' in filename or filename.startswith('.'):
-        raise ValueError("Invalid filename: absolute paths not allowed")
-
-    # Now safely extract just the filename part
-    filename = Path(filename).name
-
-    # Sanitize: Replace all spaces with underscores
-    filename = filename.replace(' ', '_')
-
-    # Sanitize: only allow alphanumeric, dots, hyphens, underscores
-    sanitized = "".join(c for c in filename if c.isalnum() or c in ('.', '-', '_')).strip()
-
-    if not sanitized:
-        raise ValueError("Invalid filename: no valid characters remaining after sanitization")
-
-    # Ensure .json extension
-    if not sanitized.endswith('.json'):
-        sanitized += '.json'
-
-    # Additional length check
-    if len(sanitized) > 255:
-        raise ValueError("Filename too long")
-
-    return sanitized
-
-def get_safe_filepath(filename: str) -> Path:
-    """
-    Get a safe filepath within the documents directory.
-
-    Args:
-        filename: The filename to validate
-
-    Returns:
-        Path: Safe filepath within documents directory
-
-    Raises:
-        ValueError: If filename is invalid
-    """
-    sanitized_filename = validate_and_sanitize_filename(filename)
-    docs_dir = get_documents_dir()
-    filepath = docs_dir / sanitized_filename
-
-    # Ensure the resolved path is still within the documents directory
-    try:
-        filepath.resolve().relative_to(docs_dir.resolve())
-    except ValueError:
-        raise ValueError("Invalid filename: path traversal detected")
-
-    return filepath
-
-@app.get("/", response_class=HTMLResponse, dependencies=[Depends(validate_token)])
+@app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    # Empty document for initial render - all state managed in browser
+    """Homepage - redirects to login or main app based on auth status."""
     empty_document = {"title": "", "sections": []}
-    return templates.TemplateResponse("index.html", {"request": request, "document": empty_document, "auth_token": AUTH_TOKEN})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "document": empty_document}
+    )
+
 
 @app.get("/favicon.ico")
 async def favicon():
+    """Serve favicon."""
     favicon_path = app_dir / "static" / "favicon.ico"
     return FileResponse(favicon_path, media_type="image/x-icon")
 
-@app.get("/config", dependencies=[Depends(validate_token)])
+
+@app.get("/config")
 async def get_config():
-    """Get server configuration"""
+    """Get server configuration."""
     return {
-        "allow_custom_env_vars": ALLOW_CUSTOM_ENV_VARS
+        "allow_custom_env_vars": ALLOW_CUSTOM_ENV_VARS,
+        "multi_user_enabled": True,
     }
 
-# Metadata endpoints removed - all metadata sent with generation requests
 
-@app.post("/documents/save", dependencies=[Depends(validate_token)])
-@app.post("/documents/save-as", dependencies=[Depends(validate_token)])
-async def save_document(filename: str = Form(...), document_data: str = Form(...)):
-    """Save document data provided by the browser"""
+@app.get("/auth/check")
+async def check_auth(user: User = Depends(current_active_user)):
+    """Check if user is authenticated."""
+    return {
+        "authenticated": True,
+        "email": user.email,
+        "user_id": str(user.id),
+    }
+
+
+@app.post("/documents/save")
+async def save_document(
+    filename: str = Form(...),
+    document_data: str = Form(...),
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Save or update a document for the current user."""
     try:
-        filepath = get_safe_filepath(filename)
-        sanitized_filename = filepath.name
+        # Parse document data
+        data = json.loads(document_data)
+        title = data.get("title", "")
 
-        # Always use document data from frontend
-        data_to_save = json.loads(document_data)
-
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
-
-        return {"status": "success", "filename": sanitized_filename, "path": str(filepath)}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.get("/documents/download/{filename}", dependencies=[Depends(validate_token)])
-async def download_document(filename: str):
-    try:
-        filepath = get_safe_filepath(filename)
-        if not filepath.exists():
-            return {"error": "File not found"}
-
-        return FileResponse(
-            str(filepath),
-            media_type='application/json',
-            filename=filepath.name
+        # Check if document already exists for this user
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
         )
-    except ValueError as e:
-        return {"error": f"Invalid filename: {str(e)}"}
+        existing_doc = result.scalar_one_or_none()
+
+        if existing_doc:
+            # Update existing document
+            existing_doc.title = title
+            existing_doc.content = document_data
+            existing_doc.updated_at = datetime.utcnow()
+            await db.commit()
+            return {
+                "status": "success",
+                "filename": filename,
+                "message": "Document updated"
+            }
+        else:
+            # Create new document
+            new_doc = Document(
+                user_id=user.id,
+                filename=filename,
+                title=title,
+                content=document_data
+            )
+            db.add(new_doc)
+            await db.commit()
+            return {
+                "status": "success",
+                "filename": filename,
+                "message": "Document created"
+            }
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
-        return {"error": str(e)}
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/documents/load/{filename}", dependencies=[Depends(validate_token)])
-async def load_document_by_filename(filename: str):
-    """Return document data for browser to load"""
+
+@app.post("/documents/save-as")
+async def save_document_as(
+    filename: str = Form(...),
+    document_data: str = Form(...),
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Save document with a new filename."""
+    # Reuse the save_document logic
+    return await save_document(filename, document_data, user, db)
+
+
+@app.get("/documents/download/{filename}")
+async def download_document(
+    filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Download a document as JSON file."""
     try:
-        filepath = get_safe_filepath(filename)
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
+        )
+        doc = result.scalar_one_or_none()
 
-        if not filepath.exists():
-            return {"status": "error", "message": "File not found"}
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-        with open(filepath, 'r', encoding='utf-8') as f:
-            document_data = json.load(f)
+        # Return content as downloadable JSON
+        return Response(
+            content=doc.content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/documents/load/{filename}")
+async def load_document_by_filename(
+    filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Load a specific document."""
+    try:
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
+        )
+        doc = result.scalar_one_or_none()
+
+        if not doc:
+            return {"status": "error", "message": "Document not found"}
+
+        # Parse JSON content
+        document_data = json.loads(doc.content)
 
         return {"status": "success", "document": document_data}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+
+    except json.JSONDecodeError as e:
+        return {"status": "error", "message": f"Invalid JSON in document: {str(e)}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/documents/list", dependencies=[Depends(validate_token)])
-async def list_documents():
+
+@app.get("/documents/list")
+async def list_documents(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """List all documents for the current user."""
     try:
-        docs_dir = get_documents_dir()
+        result = await db.execute(
+            select(Document)
+            .where(Document.user_id == user.id)
+            .order_by(Document.updated_at.desc())
+        )
+        documents = result.scalars().all()
 
-        files = []
-        for filepath in docs_dir.glob("*.json"):
-            stat = filepath.stat()
-            files.append({
-                "filename": filepath.name,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-            })
+        files = [
+            {
+                "filename": doc.filename,
+                "title": doc.title,
+                "size": len(doc.content),
+                "modified": doc.updated_at.isoformat(),
+                "created": doc.created_at.isoformat(),
+            }
+            for doc in documents
+        ]
 
-        files.sort(key=lambda x: x["modified"], reverse=True)
         return {"files": files}
+
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/generate-text", dependencies=[Depends(validate_token)])
+
+@app.post("/generate-text")
 async def generate_text(
     user_text: str = Form(default=""),
     title: str = Form(default=""),
@@ -239,9 +292,10 @@ async def generate_text(
     word_limit: Optional[int] = Form(default=None),
     source: str = Form(default=""),
     model: str = Form(default=""),
-    environment_variables: str = Form(default="{}")
+    environment_variables: str = Form(default="{}"),
+    user: User = Depends(current_active_user),
 ):
-    """Generate text for a section - fully stateless endpoint"""
+    """Generate text for a section - requires authentication."""
     import os
 
     try:
@@ -255,10 +309,9 @@ async def generate_text(
         elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
             print("Info: Custom environment variables disabled by server configuration")
 
-        # Use a lock to prevent race conditions when modifying process-wide environment variables
-        # This ensures that concurrent requests don't interfere with each other's env vars
+        # Use a lock to prevent race conditions
         with _env_var_lock:
-            # Store original environment variables to restore later
+            # Store original environment variables
             original_env = {}
             for key, value in env_vars.items():
                 if key in os.environ:
@@ -294,143 +347,178 @@ async def generate_text(
                         os.environ[key] = original_env[key]
                     else:
                         os.environ.pop(key, None)
+
     except Exception as e:
         print(f"Error generating text: {e}")
         return {"error": str(e)}, 500
 
-def get_snapshots_dir():
-    """Get the snapshots directory within documents"""
-    docs_dir = get_documents_dir()
-    snapshots_dir = docs_dir / "snapshots"
-    snapshots_dir.mkdir(parents=True, exist_ok=True)
-    return snapshots_dir
 
-@app.post("/documents/snapshot/{filename}", dependencies=[Depends(validate_token)])
-async def create_snapshot(filename: str):
-    """Create a timestamped snapshot of a document and clean up old snapshots"""
+@app.post("/documents/snapshot/{filename}")
+async def create_snapshot(
+    filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Create a timestamped snapshot of a document."""
     try:
-        filepath = get_safe_filepath(filename)
+        # Find the document
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
+        )
+        doc = result.scalar_one_or_none()
 
-        if not filepath.exists():
-            return {"status": "error", "message": "File not found"}
+        if not doc:
+            return {"status": "error", "message": "Document not found"}
 
-        # Generate timestamp prefix
+        # Generate snapshot name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        snapshot_filename = f"{timestamp}_{filename}"
+        snapshot_name = f"{timestamp}_{filename}"
 
-        # Save to snapshots subdirectory
-        snapshots_dir = get_snapshots_dir()
-        snapshot_filepath = snapshots_dir / snapshot_filename
+        # Create snapshot
+        snapshot = DocumentSnapshot(
+            document_id=doc.id,
+            snapshot_name=snapshot_name,
+            content=doc.content
+        )
+        db.add(snapshot)
 
-        # Ensure the snapshot filename doesn't contain path traversal
-        try:
-            snapshot_filepath.resolve().relative_to(snapshots_dir.resolve())
-        except ValueError:
-            return {"status": "error", "message": "Invalid snapshot filename"}
+        # Clean up old snapshots - keep only 10 most recent
+        snapshots_result = await db.execute(
+            select(DocumentSnapshot)
+            .where(DocumentSnapshot.document_id == doc.id)
+            .order_by(DocumentSnapshot.created_at.desc())
+        )
+        all_snapshots = snapshots_result.scalars().all()
 
-        # Read current document and save as snapshot
-        with open(filepath, 'r', encoding='utf-8') as f:
-            document_data = json.load(f)
+        # Delete old snapshots beyond the 10 most recent
+        for old_snapshot in all_snapshots[10:]:
+            await db.delete(old_snapshot)
 
-        with open(snapshot_filepath, 'w', encoding='utf-8') as f:
-            json.dump(document_data, f, indent=2, ensure_ascii=False)
-
-        # Clean up old snapshots - keep only the 10 most recent
-        base_filename = filepath.name
-
-        # Find all snapshots for this document (files matching pattern: YYYYMMDD_HHMMSS_filename)
-        snapshot_pattern = f"*_{base_filename}"
-        snapshots = list(snapshots_dir.glob(snapshot_pattern))
-
-        # Sort by modification time (newest first)
-        snapshots.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-        # Delete snapshots beyond the 10 most recent
-        for old_snapshot in snapshots[10:]:
-            old_snapshot.unlink()
+        await db.commit()
 
         return {
             "status": "success",
-            "message": f"Snapshot created: {snapshot_filename}",
-            "snapshot_filename": snapshot_filename
+            "message": f"Snapshot created: {snapshot_name}",
+            "snapshot_filename": snapshot_name
         }
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+
     except Exception as e:
+        await db.rollback()
         return {"status": "error", "message": str(e)}
 
-@app.get("/documents/snapshots/{filename}", dependencies=[Depends(validate_token)])
-async def list_snapshots(filename: str):
-    """List all snapshots for a specific document"""
+
+@app.get("/documents/snapshots/{filename}")
+async def list_snapshots(
+    filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """List all snapshots for a specific document."""
     try:
-        # Validate the base filename
-        filepath = get_safe_filepath(filename)
-        base_filename = filepath.name
+        # Find the document
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
+        )
+        doc = result.scalar_one_or_none()
 
-        snapshots_dir = get_snapshots_dir()
-        snapshot_pattern = f"*_{base_filename}"
-        snapshots = list(snapshots_dir.glob(snapshot_pattern))
+        if not doc:
+            return {"status": "error", "message": "Document not found"}
 
-        # Sort by modification time (newest first)
-        snapshots.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        # Get snapshots
+        snapshots_result = await db.execute(
+            select(DocumentSnapshot)
+            .where(DocumentSnapshot.document_id == doc.id)
+            .order_by(DocumentSnapshot.created_at.desc())
+        )
+        snapshots = snapshots_result.scalars().all()
 
-        snapshot_list = []
-        for snapshot_path in snapshots:
-            stat = snapshot_path.stat()
-            snapshot_list.append({
-                "filename": snapshot_path.name,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-            })
+        snapshot_list = [
+            {
+                "filename": snap.snapshot_name,
+                "size": len(snap.content),
+                "modified": snap.created_at.isoformat()
+            }
+            for snap in snapshots
+        ]
 
         return {"status": "success", "snapshots": snapshot_list}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/documents/snapshot/load/{snapshot_filename}", dependencies=[Depends(validate_token)])
-async def load_snapshot(snapshot_filename: str):
-    """Load a specific snapshot's content"""
+
+@app.get("/documents/snapshot/load/{snapshot_filename}")
+async def load_snapshot(
+    snapshot_filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Load a specific snapshot's content."""
     try:
-        # Validate snapshot filename
-        sanitized_filename = validate_and_sanitize_filename(snapshot_filename)
-        snapshots_dir = get_snapshots_dir()
-        snapshot_filepath = snapshots_dir / sanitized_filename
+        # Find snapshot through document ownership
+        result = await db.execute(
+            select(DocumentSnapshot)
+            .join(Document)
+            .where(
+                Document.user_id == user.id,
+                DocumentSnapshot.snapshot_name == snapshot_filename
+            )
+        )
+        snapshot = result.scalar_one_or_none()
 
-        # Ensure the resolved path is within snapshots directory
-        try:
-            snapshot_filepath.resolve().relative_to(snapshots_dir.resolve())
-        except ValueError:
-            return {"status": "error", "message": "Invalid snapshot filename"}
-
-        if not snapshot_filepath.exists():
+        if not snapshot:
             return {"status": "error", "message": "Snapshot not found"}
 
-        with open(snapshot_filepath, 'r', encoding='utf-8') as f:
-            document_data = json.load(f)
+        # Parse JSON content
+        document_data = json.loads(snapshot.content)
 
         return {"status": "success", "document": document_data}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+
+    except json.JSONDecodeError as e:
+        return {"status": "error", "message": f"Invalid JSON in snapshot: {str(e)}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.delete("/documents/delete/{filename}", dependencies=[Depends(validate_token)])
-async def delete_document(filename: str):
-    """Delete a saved document"""
+
+@app.delete("/documents/delete/{filename}")
+async def delete_document(
+    filename: str,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Delete a document (and all its snapshots)."""
     try:
-        filepath = get_safe_filepath(filename)
+        # Find the document
+        result = await db.execute(
+            select(Document).where(
+                Document.user_id == user.id,
+                Document.filename == filename
+            )
+        )
+        doc = result.scalar_one_or_none()
 
-        if not filepath.exists():
-            return {"status": "error", "message": "File not found"}
+        if not doc:
+            return {"status": "error", "message": "Document not found"}
 
-        filepath.unlink()
-        return {"status": "success", "message": f"Document {filepath.name} deleted successfully"}
-    except ValueError as e:
-        return {"status": "error", "message": f"Invalid filename: {str(e)}"}
+        # Delete document (cascades to snapshots)
+        await db.delete(doc)
+        await db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Document {filename} deleted successfully"
+        }
+
     except Exception as e:
+        await db.rollback()
         return {"status": "error", "message": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn
