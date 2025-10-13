@@ -7,6 +7,42 @@ import uuid
 from fastapi_users.db import SQLAlchemyBaseUserTable
 from sqlalchemy import String, Text, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(36), storing as stringified hex values.
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(PG_UUID())
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return str(value)
+        else:
+            if not isinstance(value, uuid.UUID):
+                return str(uuid.UUID(value))
+            else:
+                return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        else:
+            if not isinstance(value, uuid.UUID):
+                value = uuid.UUID(value)
+            return value
 
 
 class Base(DeclarativeBase):
@@ -19,7 +55,7 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        String(36), primary_key=True, default=uuid.uuid4
+        GUID(), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(
         String(320), unique=True, index=True, nullable=False
@@ -32,6 +68,11 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
     # Additional user fields
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    # User preferences (JSON stored as text)
+    preferences: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, default=None
     )
 
     # Relationship to documents
@@ -48,7 +89,7 @@ class Document(Base):
 
     # User relationship
     user_id: Mapped[uuid.UUID] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Document metadata

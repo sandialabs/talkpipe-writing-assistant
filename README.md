@@ -2,6 +2,8 @@
 
 # TalkPipe Writing Assistant
 
+Making the AI write _with_ you, not _for_ you.
+
 An AI-powered writing assistant that transforms how you create structured documents. This application combines intelligent content generation with intuitive document management, enabling writers to craft professional documents with contextually-aware AI assistance that understands your style, audience, and objectives.
 
 Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this tool helps you:
@@ -16,6 +18,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 
 ## Features
 
+- **Multi-User Support**: JWT-based authentication with per-user document isolation
 - **Structured Document Creation**: Organize your writing into sections with main points and user text
 - **AI-Powered Generation**: Generate contextually-aware paragraph content using advanced language models
 - **Multiple Generation Modes**:
@@ -24,9 +27,11 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
   - **Proofread**: Fix grammar and spelling errors only
   - **Ideas**: Get specific suggestions for enhancement
 - **Real-time Editing**: Dynamic web interface for seamless writing and editing
-- **Document Management**: Save, load, and manage multiple documents with snapshots
+- **Document Management**: Save, load, and manage multiple documents with automatic snapshots
+- **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
 - **Flexible AI Backend**: Support for OpenAI (GPT-4, GPT-5) and Ollama (llama3, mistral, etc.)
+- **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
 ## Installation
@@ -154,15 +159,23 @@ WRITING_ASSISTANT_PORT=8080 writing-assistant
 # Enable auto-reload for development
 WRITING_ASSISTANT_RELOAD=true writing-assistant
 
-# With custom authentication token
-writing-assistant --auth-token YOUR_SECURE_TOKEN_HERE
+# Custom database location
+writing-assistant --db-path /path/to/database.db
+
+# Or use environment variable
+WRITING_ASSISTANT_DB_PATH=/path/to/database.db writing-assistant
+
+# Initialize database without starting server
+writing-assistant --init-db
 ```
 
 When the server starts, it will display:
-- The URL to access the application (including the authentication token)
-- The authentication token itself
+- The URL to access the application
+- Registration and login URLs
+- API documentation URL
+- Database location
 
-**Authentication:** The application uses token-based authentication. A unique token is auto-generated on startup, or you can provide your own using `--auth-token`. You'll need to include this token in the URL query string: `http://localhost:8001/?token=YOUR_TOKEN`
+**Authentication:** The application uses JWT-based multi-user authentication with FastAPI Users. Each user has their own account with secure password storage. New users can register through the web interface at `/register`, and existing users log in at `/login`.
 
 ### Environment Variables
 
@@ -173,6 +186,8 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_HOST` | Server host address | `localhost` |
 | `WRITING_ASSISTANT_PORT` | Server port number | `8001` |
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
+| `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
+| `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
 | `OPENAI_API_KEY` | OpenAI API key for OpenAI models | (none) |
 | `OLLAMA_BASE_URL` | Ollama server URL for local models | `http://localhost:11434` |
 
@@ -185,9 +200,19 @@ Options:
   --host HOST                    Host to bind to (default: localhost)
   --port PORT                    Port to bind to (default: 8001)
   --reload                       Enable auto-reload for development
-  --auth-token TOKEN             Custom authentication token (default: auto-generated UUID)
+  --db-path PATH                 Path to database file (overrides WRITING_ASSISTANT_DB_PATH)
+  --init-db                      Initialize database and exit (useful for setup)
   --disable-custom-env-vars      Disable custom environment variables from UI (security feature)
 ```
+
+**Database Options:**
+- `--db-path PATH`: Specify custom database location
+  - Useful for testing, backups, or deployment scenarios
+  - Takes precedence over `WRITING_ASSISTANT_DB_PATH` environment variable
+  - Example: `writing-assistant --db-path /var/lib/writing-assistant/db.sqlite`
+- `--init-db`: Initialize the database schema without starting the server
+  - Useful for container initialization or database setup scripts
+  - Exits after database creation
 
 **Security Options:**
 - `--disable-custom-env-vars`: Prevents users from configuring environment variables through the browser interface
@@ -201,14 +226,27 @@ Options:
    ```bash
    writing-assistant
    ```
-   The server will display a URL with the authentication token, for example:
+   The server will display:
    ```
-   📝 Access your writing assistant at: http://localhost:8001/?token=abc123...
+   🔐 Writing Assistant Server - Multi-User Edition
+   📝 Access your writing assistant at: http://localhost:8001/
+   🔑 Register a new account at: http://localhost:8001/auth/register
+   🔐 Login at: http://localhost:8001/auth/jwt/login
+   📚 API documentation: http://localhost:8001/docs
+   💾 Database: /home/user/.writing_assistant/writing_assistant.db
    ```
 
-2. **Open your browser** to the URL provided (with the token parameter)
+2. **Create an account** (first time):
+   - Navigate to the registration page
+   - Enter your email and password
+   - Submit to create your account
 
-3. **Configure document metadata**:
+3. **Log in** (returning users):
+   - Navigate to the login page
+   - Enter your email and password
+   - You'll receive a JWT token for authentication
+
+4. **Configure document metadata**:
    - AI Source: `openai` or `ollama`
    - Model: e.g., `gpt-4-turbo` or `llama3.1:8b`
    - Writing style: formal, casual, technical, etc.
@@ -216,7 +254,7 @@ Options:
    - Tone: neutral, persuasive, informative, etc.
    - Word limit: approximate words per paragraph
 
-4. **Create your document**:
+5. **Create your document**:
    - Set the document title
    - Add sections with "Add Section"
    - For each section:
@@ -225,24 +263,38 @@ Options:
      - Click "Generate" to create AI-generated content
      - Use different generation modes as needed
 
-5. **Generation modes**:
+6. **Generation modes**:
    - **Rewrite**: Complete rewrite with new ideas
    - **Improve**: Polish existing text
    - **Proofread**: Fix errors only
    - **Ideas**: Get suggestions for improvement
 
-6. **Save your work**:
-   - Click "Save Document" to persist to disk
+7. **Save your work**:
+   - Click "Save Document" to persist to database
    - Load previous documents from the dropdown
    - Create snapshots to save versions
    - Revert to previous snapshots as needed
 
 ### Document Storage
 
-Documents are saved to `~/.writing_assistant/documents/` as JSON files with:
-- Document metadata and settings
-- All sections with their content
-- Snapshot history for version control
+Documents are stored in an SQLite database with multi-user isolation:
+
+**Default Location:** `~/.writing_assistant/writing_assistant.db`
+
+**Custom Location:** Use `--db-path` or `WRITING_ASSISTANT_DB_PATH` to specify an alternative location
+
+**Database Schema:**
+- **Users table**: Email, hashed passwords, and user preferences
+- **Documents table**: User-scoped documents with metadata and content
+- **Snapshots table**: Version history for each document (up to 10 per document)
+
+**Features:**
+- Per-user document isolation (users only see their own documents)
+- Automatic snapshot management (keeps 10 most recent versions)
+- User-specific preferences (AI settings, writing style, etc.)
+- Cascade deletion (removing a user deletes all their documents)
+
+**Backup:** Simply copy the database file to create a backup. The database can be moved to a different location using the `--db-path` option.
 
 ## Architecture
 
@@ -340,9 +392,21 @@ Contributions are welcome! Please follow these steps:
 - Change the port: `WRITING_ASSISTANT_PORT=8080 writing-assistant`
 - Or kill the process using the port
 
-**"Cannot save document"**
-- Check write permissions to `~/.writing_assistant/documents/`
-- Create the directory if needed: `mkdir -p ~/.writing_assistant/documents/`
+**"Cannot save document"** or **"Database error"**
+- Check write permissions to the database directory (default: `~/.writing_assistant/`)
+- Ensure the directory exists: `mkdir -p ~/.writing_assistant`
+- Try a different database location: `writing-assistant --db-path /tmp/test.db`
+- Initialize the database manually: `writing-assistant --init-db`
+
+**"Authentication failed"** or **"Invalid credentials"**
+- Double-check your email and password
+- Register a new account if you haven't already
+- The database may have been reset - check the database location
+
+**"Cannot connect to database"**
+- Verify the database file exists and is not corrupted
+- Check file permissions on the database file
+- Try initializing a new database: `writing-assistant --db-path /tmp/new.db --init-db`
 
 ## Project Links
 

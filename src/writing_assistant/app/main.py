@@ -80,12 +80,24 @@ app.include_router(
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    """Homepage - redirects to login or main app based on auth status."""
+    """Homepage - main app interface."""
     empty_document = {"title": "", "sections": []}
     return templates.TemplateResponse(
         "index.html",
         {"request": request, "document": empty_document}
     )
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Login page."""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Registration page."""
+    return templates.TemplateResponse("register.html", {"request": request})
 
 
 @app.get("/favicon.ico")
@@ -112,6 +124,47 @@ async def check_auth(user: User = Depends(current_active_user)):
         "email": user.email,
         "user_id": str(user.id),
     }
+
+
+@app.get("/user/preferences")
+async def get_user_preferences(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Get user preferences."""
+    try:
+        # Refresh user to get latest data
+        await db.refresh(user)
+
+        if user.preferences:
+            return {"status": "success", "preferences": json.loads(user.preferences)}
+        else:
+            # Return empty preferences if none saved
+            return {"status": "success", "preferences": {}}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/user/preferences")
+async def save_user_preferences(
+    request: Request,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Save user preferences."""
+    try:
+        # Get JSON data from request body
+        data = await request.json()
+        preferences = data.get("preferences", {})
+
+        # Update user preferences
+        user.preferences = json.dumps(preferences)
+        await db.commit()
+
+        return {"status": "success", "message": "Preferences saved"}
+    except Exception as e:
+        await db.rollback()
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/documents/save")

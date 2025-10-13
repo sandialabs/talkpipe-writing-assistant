@@ -8,8 +8,7 @@ class WritingAssistant {
         this.autoSaveTimer = null;
         this.lastSaveTime = null;
         this.isPerformingSyncSave = false;
-        // Get authentication token from URL
-        this.authToken = new URLSearchParams(window.location.search).get('token');
+        // Authentication is handled via JWT tokens in localStorage (set by login page)
         // Initialize with saved defaults from localStorage or hardcoded fallbacks
         this.documentMetadata = {
             writing_style: localStorage.getItem('writingStyle') || 'formal',
@@ -38,32 +37,73 @@ class WritingAssistant {
     }
 
     async init() {
-        this.setupEventListeners();
-        this.loadMetadata();
-        // Check server configuration
-        await this.loadServerConfig();
-        // Apply saved AI settings to the initial document
-        await this.applySavedAISettings();
-        this.loadExistingDocument();
-        this.setupModals();
-        // Initialize filename display
-        this.updateFilenameDisplay();
-        // Setup auto-save and page exit handlers
-        this.setupAutoSave();
-        this.setupPageExitHandler();
-        // Initialize dark mode
-        this.initializeDarkMode();
+        try {
+            console.log('WritingAssistant: Starting initialization...');
+
+            console.log('WritingAssistant: Setting up event listeners...');
+            this.setupEventListeners();
+
+            console.log('WritingAssistant: Loading metadata...');
+            this.loadMetadata();
+
+            console.log('WritingAssistant: Loading server config...');
+            // Check server configuration
+            await this.loadServerConfig();
+
+            console.log('WritingAssistant: Loading user preferences...');
+            // Load user preferences from server (per-user defaults)
+            await this.loadUserPreferences();
+
+            console.log('WritingAssistant: Applying saved AI settings...');
+            // Apply saved AI settings to the initial document
+            await this.applySavedAISettings();
+
+            console.log('WritingAssistant: Loading existing document...');
+            this.loadExistingDocument();
+
+            console.log('WritingAssistant: Setting up modals...');
+            this.setupModals();
+
+            console.log('WritingAssistant: Updating filename display...');
+            // Initialize filename display
+            this.updateFilenameDisplay();
+
+            console.log('WritingAssistant: Setting up auto-save...');
+            // Setup auto-save and page exit handlers
+            this.setupAutoSave();
+            this.setupPageExitHandler();
+
+            console.log('WritingAssistant: Initializing dark mode...');
+            // Initialize dark mode
+            this.initializeDarkMode();
+
+            console.log('WritingAssistant: Initialization complete!');
+        } catch (error) {
+            console.error('WritingAssistant: Initialization failed:', error);
+            throw error;
+        }
     }
 
-    // Helper method to add authentication token to URLs
-    addTokenToUrl(url) {
-        const separator = url.includes('?') ? '&' : '?';
-        return `${url}${separator}token=${this.authToken}`;
+    // Helper method to get fetch options with authentication headers
+    getAuthFetchOptions(options = {}) {
+        const token = window.getAuthToken ? window.getAuthToken() : localStorage.getItem('access_token');
+        if (token) {
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`
+            };
+        }
+        return options;
+    }
+
+    // Helper method for authenticated GET requests
+    async authFetch(url, options = {}) {
+        return fetch(url, this.getAuthFetchOptions(options));
     }
 
     async loadServerConfig() {
         try {
-            const response = await fetch(this.addTokenToUrl('/config'));
+            const response = await this.authFetch('/config');
             const config = await response.json();
             this.allowCustomEnvVars = config.allow_custom_env_vars;
             console.log('Server config loaded:', config);
@@ -147,6 +187,11 @@ class WritingAssistant {
         });
         document.getElementById('file-input').addEventListener('change', (e) => this.handleFileImport(e));
         document.getElementById('copy-document-btn').addEventListener('click', () => this.copyDocumentToClipboard());
+        // Editor copy button (if it exists)
+        const editorCopyBtn = document.getElementById('copy-document-btn-editor');
+        if (editorCopyBtn) {
+            editorCopyBtn.addEventListener('click', () => this.copyDocumentToClipboard());
+        }
         document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
 
         // Close dropdown when clicking outside
@@ -578,7 +623,7 @@ class WritingAssistant {
                 formData.append('environment_variables', '{}');
             }
 
-            const response = await fetch(this.addTokenToUrl('/generate-text'), {
+            const response = await this.authFetch('/generate-text', {
                 method: 'POST',
                 body: formData
             });
@@ -780,7 +825,7 @@ class WritingAssistant {
         const listContainer = document.getElementById('snapshots-list');
 
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/snapshots/${this.currentFilename}`));
+            const response = await this.authFetch(`/documents/snapshots/${this.currentFilename}`);
             const result = await response.json();
 
             if (result.status === 'success' && result.snapshots.length > 0) {
@@ -815,7 +860,7 @@ class WritingAssistant {
 
     async revertToSnapshot(snapshotFilename) {
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/snapshot/load/${snapshotFilename}`));
+            const response = await this.authFetch(`/documents/snapshot/load/${snapshotFilename}`);
             const result = await response.json();
 
             if (result.status === 'success') {
@@ -941,7 +986,7 @@ class WritingAssistant {
     }
 
     async saveAsDefault() {
-        const metadata = {
+        const preferences = {
             source: document.getElementById('ai-source').value,
             model: document.getElementById('ai-model').value,
             writing_style: document.getElementById('writing-style').value,
@@ -949,20 +994,88 @@ class WritingAssistant {
             tone: document.getElementById('tone').value,
             background_context: document.getElementById('background-context').value,
             generation_directive: document.getElementById('generation-directive').value,
-            word_limit: document.getElementById('word-limit').value || null
+            word_limit: document.getElementById('word-limit').value || null,
+            environment_variables: this.environmentVariables || {}
         };
 
-        // Save to localStorage for global defaults
-        localStorage.setItem('generationSource', metadata.source);
-        localStorage.setItem('generationModel', metadata.model);
-        localStorage.setItem('writingStyle', metadata.writing_style);
-        localStorage.setItem('targetAudience', metadata.target_audience);
-        localStorage.setItem('tone', metadata.tone);
-        localStorage.setItem('backgroundContext', metadata.background_context);
-        localStorage.setItem('generationDirective', metadata.generation_directive);
-        localStorage.setItem('wordLimit', metadata.word_limit || '');
+        try {
+            // Save to server (per-user preferences)
+            const response = await this.authFetch('/user/preferences', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ preferences })
+            });
 
-        this.showMessage('Settings saved as default for new documents!', 'success');
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Also update localStorage as cache
+                localStorage.setItem('generationSource', preferences.source);
+                localStorage.setItem('generationModel', preferences.model);
+                localStorage.setItem('writingStyle', preferences.writing_style);
+                localStorage.setItem('targetAudience', preferences.target_audience);
+                localStorage.setItem('tone', preferences.tone);
+                localStorage.setItem('backgroundContext', preferences.background_context);
+                localStorage.setItem('generationDirective', preferences.generation_directive);
+                localStorage.setItem('wordLimit', preferences.word_limit || '');
+                localStorage.setItem('environmentVariables', JSON.stringify(preferences.environment_variables));
+
+                this.showMessage('Settings saved as default for your account!', 'success');
+            } else {
+                this.showMessage('Error saving preferences: ' + result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving preferences:', error);
+            this.showMessage('Error saving preferences', 'error');
+        }
+    }
+
+    async loadUserPreferences() {
+        try {
+            const response = await this.authFetch('/user/preferences');
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                const prefs = result.preferences || {};
+
+                // Always set localStorage with either user preferences or defaults
+                // This ensures we don't keep the previous user's settings
+                localStorage.setItem('generationSource', prefs.source || '');
+                localStorage.setItem('generationModel', prefs.model || '');
+                localStorage.setItem('writingStyle', prefs.writing_style || 'formal');
+                localStorage.setItem('targetAudience', prefs.target_audience || '');
+                localStorage.setItem('tone', prefs.tone || 'neutral');
+                localStorage.setItem('backgroundContext', prefs.background_context || '');
+                localStorage.setItem('generationDirective', prefs.generation_directive || '');
+                localStorage.setItem('wordLimit', prefs.word_limit || '');
+
+                // Load environment variables (default to empty object if user hasn't saved any)
+                const envVars = prefs.environment_variables || {};
+                localStorage.setItem('environmentVariables', JSON.stringify(envVars));
+                this.environmentVariables = envVars;
+
+                // Reload metadata to apply server preferences
+                this.loadMetadata();
+
+                console.log('User preferences loaded from server');
+            }
+        } catch (error) {
+            console.error('Error loading user preferences:', error);
+            // On error, reset to defaults to avoid keeping previous user's settings
+            localStorage.setItem('generationSource', '');
+            localStorage.setItem('generationModel', '');
+            localStorage.setItem('writingStyle', 'formal');
+            localStorage.setItem('targetAudience', '');
+            localStorage.setItem('tone', 'neutral');
+            localStorage.setItem('backgroundContext', '');
+            localStorage.setItem('generationDirective', '');
+            localStorage.setItem('wordLimit', '');
+            localStorage.setItem('environmentVariables', '{}');
+            this.environmentVariables = {};
+            this.loadMetadata();
+        }
     }
 
     // Legacy method for backward compatibility
@@ -1634,7 +1747,7 @@ undo() {
             formData.append('filename', filename);
             formData.append('document_data', JSON.stringify(documentData));
 
-            const response = await fetch(this.addTokenToUrl('/documents/save'), {
+            const response = await this.authFetch('/documents/save', {
                 method: 'POST',
                 body: formData
             });
@@ -1744,7 +1857,7 @@ undo() {
         const listContainer = document.getElementById('documents-list');
 
         try {
-            const response = await fetch(this.addTokenToUrl('/documents/list'));
+            const response = await this.authFetch('/documents/list');
             const result = await response.json();
 
             if (result.error) {
@@ -1821,7 +1934,7 @@ undo() {
 
     async loadDocumentByFilename(filename) {
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/download/${filename}`));
+            const response = await this.authFetch(`/documents/download/${filename}`);
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1866,7 +1979,7 @@ undo() {
 
     async downloadDocumentByFilename(filename) {
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/download/${filename}`));
+            const response = await this.authFetch(`/documents/download/${filename}`);
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -1896,7 +2009,7 @@ undo() {
 
         try {
             // We need to add a delete endpoint
-            const response = await fetch(this.addTokenToUrl(`/documents/delete/${filename}`), {
+            const response = await this.authFetch(`/documents/delete/${filename}`, {
                 method: 'DELETE'
             });
 
@@ -1954,7 +2067,7 @@ undo() {
 
         // Then create the snapshot
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/snapshot/${this.currentFilename}`), {
+            const response = await this.authFetch(`/documents/snapshot/${this.currentFilename}`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -2002,7 +2115,7 @@ undo() {
             // Use the backend Document save endpoints which save the actual document state
             const endpoint = isSaveAs ? '/documents/save-as' : '/documents/save';
 
-            const response = await fetch(this.addTokenToUrl(endpoint), {
+            const response = await this.authFetch(endpoint, {
                 method: 'POST',
                 body: formData
             });
@@ -2039,7 +2152,7 @@ undo() {
         const listContainer = document.getElementById('load-documents-list');
 
         try {
-            const response = await fetch(this.addTokenToUrl('/documents/list'));
+            const response = await this.authFetch('/documents/list');
             const result = await response.json();
 
             if (result.error) {
@@ -2107,7 +2220,7 @@ undo() {
         console.log('loadDocumentFromServer: called with filename:', filename);
         try {
             // Get document data directly from the load endpoint
-            const response = await fetch(this.addTokenToUrl(`/documents/load/${filename}`));
+            const response = await this.authFetch(`/documents/load/${filename}`);
 
             if (!response.ok) {
                 throw new Error('Document not found');
@@ -2169,7 +2282,7 @@ undo() {
         }
 
         try {
-            const response = await fetch(this.addTokenToUrl(`/documents/delete/${filename}`), {
+            const response = await this.authFetch(`/documents/delete/${filename}`, {
                 method: 'DELETE'
             });
 
@@ -2411,13 +2524,18 @@ undo() {
                 updated_at: new Date().toISOString()
             };
 
-            // Create URL-encoded form data for sendBeacon
-            const params = new URLSearchParams();
-            params.append('filename', this.currentFilename);
-            params.append('document_data', JSON.stringify(documentData));
+            // Create form data for the request
+            const formData = new FormData();
+            formData.append('filename', this.currentFilename);
+            formData.append('document_data', JSON.stringify(documentData));
 
-            // Use sendBeacon for reliable sending during page unload
-            navigator.sendBeacon(this.addTokenToUrl('/documents/save'), params);
+            // Use fetch with keepalive for reliable sending during page unload
+            // This is similar to sendBeacon but supports auth headers
+            fetch('/documents/save', this.getAuthFetchOptions({
+                method: 'POST',
+                body: formData,
+                keepalive: true
+            }));
 
             console.log('Sync save performed on page exit');
         } catch (error) {
@@ -2589,5 +2707,11 @@ undo() {
 let writingAssistant;
 
 document.addEventListener('DOMContentLoaded', () => {
-    writingAssistant = new WritingAssistant();
+    console.log('DOMContentLoaded event fired, creating WritingAssistant...');
+    try {
+        writingAssistant = new WritingAssistant();
+        console.log('WritingAssistant instance created:', writingAssistant);
+    } catch (error) {
+        console.error('Failed to create WritingAssistant:', error);
+    }
 });
