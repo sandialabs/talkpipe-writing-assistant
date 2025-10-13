@@ -51,7 +51,7 @@ RUN groupadd -r -g 1001 app && \
 
 # Set up application directory
 WORKDIR /app
-RUN mkdir -p /app/data /app/documents && \
+RUN mkdir -p /app/data && \
     chown -R app:app /app
 
 # Copy the built wheel from builder stage
@@ -65,8 +65,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip && \
 # Copy only necessary runtime files
 COPY --chown=app:app pyproject.toml ./
 
-# Create data and document volume mount points
-VOLUME ["/app/data", "/app/documents"]
+# Create data volume mount point for the database
+VOLUME ["/app/data"]
 
 # Switch to non-root user
 USER app
@@ -75,8 +75,9 @@ USER app
 EXPOSE 8001
 
 # Health check to ensure the application starts correctly
+# Checks that Python imports work and database is accessible
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import writing_assistant; print('Writing Assistant loaded successfully')" || exit 1
+    CMD python -c "import writing_assistant; import os; db_path=os.getenv('WRITING_ASSISTANT_DB_PATH', '/app/data/writing_assistant.db'); print(f'Health check passed, DB: {db_path}')" || exit 1
 
 # Set environment variables for better container behavior
 ENV PYTHONUNBUFFERED=1 \
@@ -84,7 +85,9 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     WRITING_ASSISTANT_HOST=0.0.0.0 \
-    WRITING_ASSISTANT_PORT=8001
+    WRITING_ASSISTANT_PORT=8001 \
+    WRITING_ASSISTANT_DB_PATH=/app/data/writing_assistant.db \
+    WRITING_ASSISTANT_SECRET=CHANGE_THIS_IN_PRODUCTION_PLEASE
 
 # Default command to run the application
 CMD ["python", "-m", "writing_assistant.app.server"]

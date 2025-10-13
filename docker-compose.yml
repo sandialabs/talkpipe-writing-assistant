@@ -10,12 +10,13 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./data:/app/data
-      - ./documents:/app/documents
-      - writing_assistant_user_docs:/home/app/.writing_assistant/documents
+      # Database volume - persists user data, documents, and snapshots
+      - writing_assistant_db:/app/data
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001
+      - WRITING_ASSISTANT_DB_PATH=/app/data/writing_assistant.db
+      - WRITING_ASSISTANT_SECRET=${WRITING_ASSISTANT_SECRET:-CHANGE_THIS_IN_PRODUCTION}
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     healthcheck:
@@ -39,9 +40,12 @@ services:
     volumes:
       - .:/app
       - writing_assistant_dev_cache:/home/builder/.cache
+      - writing_assistant_dev_db:/app/data
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001
+      - WRITING_ASSISTANT_DB_PATH=/app/data/writing_assistant.db
+      - WRITING_ASSISTANT_SECRET=${WRITING_ASSISTANT_SECRET:-DEV_SECRET_CHANGE_IN_PRODUCTION}
       - PYTHONUNBUFFERED=1
     working_dir: /app
     command: ["python", "-m", "uvicorn", "src.writing_assistant.app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
@@ -51,8 +55,13 @@ services:
       - dev
 
 volumes:
-  writing_assistant_user_docs:
+  # Database volume for production
+  writing_assistant_db:
     driver: local
+  # Database volume for development
+  writing_assistant_dev_db:
+    driver: local
+  # Build cache for development
   writing_assistant_dev_cache:
     driver: local
 
