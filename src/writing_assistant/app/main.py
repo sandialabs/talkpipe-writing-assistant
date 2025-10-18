@@ -357,6 +357,7 @@ async def generate_text(
         if environment_variables and ALLOW_CUSTOM_ENV_VARS:
             try:
                 env_vars = json.loads(environment_variables)
+                print(f"DEBUG: Parsed env vars from request: {env_vars}")
             except json.JSONDecodeError:
                 print(f"Warning: Could not parse environment_variables: {environment_variables}")
         elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
@@ -370,6 +371,7 @@ async def generate_text(
                 if key in os.environ:
                     original_env[key] = os.environ[key]
                 os.environ[key] = str(value)
+                print(f"DEBUG: Set os.environ[{key}] = {value}")
 
             try:
                 # Create metadata from request parameters
@@ -382,6 +384,10 @@ async def generate_text(
                 metadata.word_limit = word_limit
                 metadata.source = source
                 metadata.model = model
+
+                # Debug: Show current environment
+                print(f"DEBUG: OLLAMA_BASE_URL in os.environ: {os.environ.get('OLLAMA_BASE_URL', 'NOT SET')}")
+                print(f"DEBUG: Using source={source}, model={model}")
 
                 generated_text = cb.new_paragraph(
                     text=user_text,

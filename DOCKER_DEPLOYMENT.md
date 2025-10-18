@@ -27,7 +27,7 @@ docker-compose up -d writing-assistant
 docker-compose logs -f writing-assistant
 
 # Create the first admin user (in another terminal)
-docker-compose exec writing-assistant python -m writing_assistant.create_superuser
+docker-compose exec -it writing-assistant writing-assistant-create-superuser
 ```
 
 Access the application at: `http://localhost:8001`
@@ -47,7 +47,7 @@ docker run -d \
   writing-assistant
 
 # Create admin user
-docker exec -it writing-assistant python create_superuser.py
+docker exec -it writing-assistant writing-assistant-create-superuser
 ```
 
 ## Configuration
@@ -133,28 +133,36 @@ docker-compose up -d
 ### Create First Admin User
 
 ```bash
-# Interactive method
-docker-compose exec -it writing-assistant python create_superuser.py
+# Using the console script (recommended)
+docker-compose exec -it writing-assistant writing-assistant-create-superuser
 
-# Or enter the container
-docker-compose exec -it writing-assistant bash
-python create_superuser.py
+# Or using Python module syntax
+docker-compose exec -it writing-assistant python -m writing_assistant.create_superuser
 ```
 
 ### Manage Users via Admin Tool
 
 ```bash
 # List all users
-docker-compose exec writing-assistant python admin_users.py list
+docker-compose exec writing-assistant writing-assistant-admin list
+
+# Show detailed user information
+docker-compose exec writing-assistant writing-assistant-admin info user@example.com
 
 # Delete a user
-docker-compose exec writing-assistant python admin_users.py delete user@example.com
+docker-compose exec -it writing-assistant writing-assistant-admin delete user@example.com
 
 # Reset password
-docker-compose exec writing-assistant python admin_users.py reset-password user@example.com
+docker-compose exec -it writing-assistant writing-assistant-admin reset-password user@example.com
 
-# Make superuser
-docker-compose exec writing-assistant python admin_users.py make-superuser user@example.com
+# Toggle user active/inactive status
+docker-compose exec writing-assistant writing-assistant-admin toggle-active user@example.com
+
+# Make user a superuser
+docker-compose exec writing-assistant writing-assistant-admin make-superuser user@example.com
+
+# Show help
+docker-compose exec writing-assistant writing-assistant-admin help
 ```
 
 ### Direct Database Access
@@ -287,6 +295,16 @@ docker-compose exec writing-assistant ls -la /app/data
 docker-compose exec writing-assistant python -m writing_assistant.app.server --init-db
 ```
 
+### Numba Caching Errors
+
+If you see errors like `RuntimeError: cannot cache function 'rdist': no locator available`, this is resolved in the current Dockerfile by setting `NUMBA_CACHE_DIR=/tmp/numba_cache`. If using an older version:
+
+```bash
+# Rebuild with latest Dockerfile
+docker-compose build --no-cache writing-assistant
+docker-compose up -d
+```
+
 ### Database Locked Errors
 
 SQLite doesn't handle concurrent writes well. If you see "database is locked":
@@ -341,7 +359,7 @@ If you have an existing single-user deployment:
 4. **Start and create admin:**
    ```bash
    docker-compose up -d
-   docker-compose exec writing-assistant python create_superuser.py
+   docker-compose exec -it writing-assistant writing-assistant-create-superuser
    ```
 
 Note: Old file-based documents are not automatically migrated. Users must re-create or import them.

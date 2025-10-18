@@ -12,6 +12,8 @@ services:
     volumes:
       # Database volume - persists user data, documents, and snapshots
       - writing_assistant_db:/app/data
+    env_file:
+      - .env
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001
@@ -41,6 +43,8 @@ services:
       - .:/app
       - writing_assistant_dev_cache:/home/builder/.cache
       - writing_assistant_dev_db:/app/data
+    env_file:
+      - .env
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001

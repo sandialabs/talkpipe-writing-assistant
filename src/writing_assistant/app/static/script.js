@@ -1107,24 +1107,65 @@ class WritingAssistant {
         this.showMessage('Form reset to saved defaults!', 'success');
     }
 
-    saveGenerationSettings() {
+    async saveGenerationSettings() {
         const source = document.getElementById('ai-source').value;
         const model = document.getElementById('ai-model').value;
 
-        localStorage.setItem('generationSource', source);
-        localStorage.setItem('generationModel', model);
-
-        // Update document metadata with current source and model
-        this.documentMetadata.source = source;
-        this.documentMetadata.model = model;
-
-        // Save environment variables
+        // Save environment variables first (updates this.environmentVariables)
         this.saveEnvironmentVariables();
 
         // Save hotkey settings
         this.saveHotkeySettings();
 
-        this.showMessage('AI settings, environment variables, and hotkeys saved successfully!', 'success');
+        // Get current metadata settings from localStorage
+        const writingStyle = localStorage.getItem('writingStyle') || 'formal';
+        const targetAudience = localStorage.getItem('targetAudience') || '';
+        const tone = localStorage.getItem('tone') || 'neutral';
+        const backgroundContext = localStorage.getItem('backgroundContext') || '';
+        const generationDirective = localStorage.getItem('generationDirective') || '';
+        const wordLimit = localStorage.getItem('wordLimit') || null;
+
+        const preferences = {
+            source: source,
+            model: model,
+            writing_style: writingStyle,
+            target_audience: targetAudience,
+            tone: tone,
+            background_context: backgroundContext,
+            generation_directive: generationDirective,
+            word_limit: wordLimit,
+            environment_variables: this.environmentVariables || {}
+        };
+
+        try {
+            // Save to server (per-user preferences)
+            const response = await this.authFetch('/user/preferences', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ preferences })
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Also update localStorage as cache
+                localStorage.setItem('generationSource', source);
+                localStorage.setItem('generationModel', model);
+
+                // Update document metadata with current source and model
+                this.documentMetadata.source = source;
+                this.documentMetadata.model = model;
+
+                this.showMessage('AI settings, environment variables, and hotkeys saved successfully!', 'success');
+            } else {
+                this.showMessage('Error saving settings: ' + result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving generation settings:', error);
+            this.showMessage('Error saving settings', 'error');
+        }
     }
 
     applySavedAISettings() {
