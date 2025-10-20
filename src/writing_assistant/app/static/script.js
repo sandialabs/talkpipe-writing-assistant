@@ -437,14 +437,17 @@ class WritingAssistant {
     }
 
     handleDocumentTextChange() {
+        console.log('handleDocumentTextChange called');
         const textarea = document.getElementById('document-text');
         this.documentText = textarea.value;
-        
+        console.log('Current document text:', this.documentText);
+
         // Save undo state if this wasn't an undo/redo operation
         if (!this.isUndoRedoOperation) {
             this.scheduleUndoStateSave();
         }
-        
+
+        console.log('About to call parseSections');
         this.parseSections();
         this.handleCursorChange();
     }
@@ -504,8 +507,11 @@ class WritingAssistant {
     }
 
     parseSections() {
+        console.log('parseSections called');
         const text = this.documentText;
         const oldSections = [...this.sections]; // Save previous sections
+        console.log('Old sections count:', oldSections.length);
+        console.log('Old sections:', oldSections);
         this.sections = [];
 
         if (!text.trim()) {
@@ -513,8 +519,12 @@ class WritingAssistant {
             return;
         }
 
+        // Track which old sections have been matched to prevent reusing suggestions
+        const matchedOldSectionIndices = new Set();
+
         // Split by double newlines (blank lines)
         const rawSections = text.split(/\n\s*\n/);
+        console.log('Raw sections count:', rawSections.length);
         let currentPos = 0;
 
         rawSections.forEach((sectionText, index) => {
@@ -536,21 +546,44 @@ class WritingAssistant {
 
                 // Try to preserve generated_text from previous sections
                 // Look for a section with the same or similar text content
-                const matchingOldSection = oldSections.find(oldSection => {
+                // Use findIndex to get the index so we can mark it as matched
+                const matchingOldSectionIndex = oldSections.findIndex((oldSection, oldIndex) => {
+                    // Skip sections that have already been matched to another new section
+                    if (matchedOldSectionIndices.has(oldIndex)) {
+                        return false;
+                    }
+
                     // Skip sections without generated text
                     if (!oldSection.generated_text) {
                         return false;
                     }
 
-                    // Calculate similarity between old and new section text
-                    const similarity = this.calculateTextSimilarity(oldSection.text, trimmed);
+                    // Calculate similarity between ORIGINAL text (when suggestion was generated) and new text
+                    // This prevents the "moving target" bug where each keystroke is compared to the previous keystroke
+                    const originalText = oldSection.original_text || oldSection.text;
+                    const similarity = this.calculateTextSimilarity(originalText, trimmed);
+
+                    // Debug logging
+                    console.log('Similarity check:');
+                    console.log('  Original text (when generated):', originalText);
+                    console.log('  New text:', trimmed);
+                    console.log('  Similarity:', similarity);
+                    console.log('  Keep suggestion?', similarity > 0.5);
 
                     // Keep suggestion if more than 50% of the text is the same
                     return similarity > 0.5;
                 });
 
-                if (matchingOldSection && matchingOldSection.generated_text) {
+                if (matchingOldSectionIndex !== -1) {
+                    console.log('Preserving suggestion for section');
+                    const matchingOldSection = oldSections[matchingOldSectionIndex];
                     newSection.generated_text = matchingOldSection.generated_text;
+                    // Also preserve the original text so we continue comparing against it
+                    newSection.original_text = matchingOldSection.original_text || matchingOldSection.text;
+                    // Mark this old section as matched so it won't be reused for other new sections
+                    matchedOldSectionIndices.add(matchingOldSectionIndex);
+                } else {
+                    console.log('Clearing suggestion for section');
                 }
 
                 this.sections.push(newSection);
@@ -683,6 +716,8 @@ class WritingAssistant {
 
             if (result.generated_text) {
                 currentSection.generated_text = result.generated_text;
+                // Store the original text that the suggestion was generated for
+                currentSection.original_text = currentSection.text;
                 this.updateSuggestionPanel();
                 this.showMessage('AI suggestion generated successfully!', 'success');
             } else {
