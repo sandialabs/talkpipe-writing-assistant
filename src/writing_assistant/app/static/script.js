@@ -455,6 +455,54 @@ class WritingAssistant {
         // All state managed in browser only
     }
 
+    // Calculate text similarity ratio between two strings (0.0 to 1.0)
+    // Uses a simple character-based approach for performance
+    calculateTextSimilarity(text1, text2) {
+        if (!text1 || !text2) return 0;
+        if (text1 === text2) return 1;
+
+        const str1 = text1.trim().toLowerCase();
+        const str2 = text2.trim().toLowerCase();
+
+        if (str1 === str2) return 1;
+        if (str1.length === 0 && str2.length === 0) return 1;
+        if (str1.length === 0 || str2.length === 0) return 0;
+
+        // Use Levenshtein distance for accurate similarity calculation
+        const maxLen = Math.max(str1.length, str2.length);
+        const distance = this.levenshteinDistance(str1, str2);
+        const similarity = 1 - (distance / maxLen);
+
+        return similarity;
+    }
+
+    // Calculate Levenshtein distance between two strings
+    levenshteinDistance(str1, str2) {
+        const len1 = str1.length;
+        const len2 = str2.length;
+
+        // Create a matrix to store distances
+        const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+        // Initialize first row and column
+        for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+        for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+        // Calculate distances
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,      // deletion
+                    matrix[i][j - 1] + 1,      // insertion
+                    matrix[i - 1][j - 1] + cost // substitution
+                );
+            }
+        }
+
+        return matrix[len1][len2];
+    }
+
     parseSections() {
         const text = this.documentText;
         const oldSections = [...this.sections]; // Save previous sections
@@ -489,13 +537,16 @@ class WritingAssistant {
                 // Try to preserve generated_text from previous sections
                 // Look for a section with the same or similar text content
                 const matchingOldSection = oldSections.find(oldSection => {
-                    // Exact match first
-                    if (oldSection.text === trimmed) {
-                        return true;
+                    // Skip sections without generated text
+                    if (!oldSection.generated_text) {
+                        return false;
                     }
-                    // If no exact match, check if the old section text is contained in the new text
-                    // This handles cases where the user edited the section slightly
-                    return trimmed.includes(oldSection.text) && oldSection.generated_text;
+
+                    // Calculate similarity between old and new section text
+                    const similarity = this.calculateTextSimilarity(oldSection.text, trimmed);
+
+                    // Keep suggestion if more than 50% of the text is the same
+                    return similarity > 0.5;
                 });
 
                 if (matchingOldSection && matchingOldSection.generated_text) {
@@ -1250,18 +1301,16 @@ class WritingAssistant {
 
             // If the section text matches (approximately), restore the generated_text
             if (savedSection && savedSection.generated_text) {
-                // Simple text matching - could be made more sophisticated if needed
-                const currentText = currentSection.text.trim();
-                const savedText = savedSection.text ? savedSection.text.trim() : '';
+                const currentText = currentSection.text;
+                const savedText = savedSection.text || '';
 
-                // If texts match exactly or are very similar, restore the generated text
-                if (currentText === savedText ||
-                    (currentText.length > 0 && savedText.length > 0 &&
-                     currentText.substring(0, Math.min(100, currentText.length)) ===
-                     savedText.substring(0, Math.min(100, savedText.length)))) {
+                // Calculate similarity between current and saved section text
+                const similarity = this.calculateTextSimilarity(currentText, savedText);
 
+                // Keep suggestion if more than 50% of the text is the same
+                if (similarity > 0.5) {
                     currentSection.generated_text = savedSection.generated_text;
-                    console.log(`Restored generated_text for section ${i}:`, savedSection.generated_text.substring(0, 50) + '...');
+                    console.log(`Restored generated_text for section ${i} (similarity: ${(similarity * 100).toFixed(1)}%):`, savedSection.generated_text.substring(0, 50) + '...');
                 }
             }
         }
