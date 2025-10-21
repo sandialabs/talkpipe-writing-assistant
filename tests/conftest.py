@@ -1,19 +1,103 @@
 """Pytest configuration and fixtures."""
 
+import asyncio
 import pytest
+import uuid
+from typing import AsyncGenerator
 from fastapi.testclient import TestClient
-
-# Set a known token for testing before importing the app
-import writing_assistant.app.main as main_module
-main_module.AUTH_TOKEN = "test-token"
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from writing_assistant.app.main import app
+from writing_assistant.app.models import Base, User
+from writing_assistant.app.database import get_async_session, get_user_db
+from writing_assistant.app.auth import get_user_manager
+
+
+# Create a test database engine (in-memory SQLite)
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestSessionLocal = async_sessionmaker(
+    test_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
+@pytest.fixture(scope="function")
+async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Create a fresh database for each test."""
+    # Create tables
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Create session
+    async with TestSessionLocal() as session:
+        yield session
+
+    # Drop tables after test
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(scope="function")
+def client(async_db_session: AsyncSession):
+    """Create a test client with overridden database dependency."""
+
+    async def override_get_async_session() -> AsyncGenerator[AsyncSession, None]:
+        yield async_db_session
+
+    app.dependency_overrides[get_async_session] = override_get_async_session
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client():
-    """Create a test client for the FastAPI application."""
-    return TestClient(app)
+async def test_user(async_db_session: AsyncSession) -> User:
+    """Create a test user in the database."""
+    from fastapi_users.password import PasswordHelper
+
+    password_helper = PasswordHelper()
+    hashed_password = password_helper.hash("testpassword123")
+
+    user = User(
+        id=uuid.uuid4(),
+        email="test@example.com",
+        hashed_password=hashed_password,
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+
+    async_db_session.add(user)
+    await async_db_session.commit()
+    await async_db_session.refresh(user)
+
+    return user
+
+
+@pytest.fixture
+def authenticated_client(client: TestClient, async_db_session: AsyncSession, test_user: User) -> TestClient:
+    """Create an authenticated test client with a valid JWT token."""
+    # Login to get JWT token
+    login_response = client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "testpassword123"},
+    )
+
+    assert login_response.status_code == 200
+    token_data = login_response.json()
+    token = token_data["access_token"]
+
+    # Set default authorization header
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    return client
 
 
 @pytest.fixture

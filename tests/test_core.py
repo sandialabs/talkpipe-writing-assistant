@@ -33,35 +33,35 @@ def test_get_system_prompt_ideas():
     """Test get_system_prompt for ideas mode."""
     prompt = get_system_prompt("ideas")
     assert "bulleted list" in prompt
-    assert "specific ideas" in prompt
+    assert "actionable improvement suggestions" in prompt
 
 
 def test_get_system_prompt_rewrite():
     """Test get_system_prompt for rewrite mode."""
     prompt = get_system_prompt("rewrite")
-    assert "rewrite the current paragraph" in prompt
-    assert "clearer and more engaging" in prompt
+    assert "Completely rewrite" in prompt
+    assert "clarity, engagement, and impact" in prompt
 
 
 def test_get_system_prompt_improve():
     """Test get_system_prompt for improve mode."""
     prompt = get_system_prompt("improve")
-    assert "Improve and enhance" in prompt
-    assert "clarity, flow, word choice" in prompt
+    assert "Enhance the provided" in prompt
+    assert "Strengthening word choices" in prompt
 
 
 def test_get_system_prompt_proofread():
     """Test get_system_prompt for proofread mode."""
     prompt = get_system_prompt("proofread")
-    assert "Proofread and correct" in prompt
-    assert "grammar and spelling" in prompt
+    assert "Proofread the current paragraph" in prompt
+    assert "Grammar errors" in prompt
 
 
 def test_get_system_prompt_default():
     """Test get_system_prompt for unknown mode (falls back to default)."""
     prompt = get_system_prompt("unknown_mode")
-    assert "Write or improve" in prompt
-    assert "current paragraph draft" in prompt
+    assert "Rewrite or improve" in prompt
+    assert "provided paragraph" in prompt
 
 
 @patch('writing_assistant.core.callbacks.fillTemplate')

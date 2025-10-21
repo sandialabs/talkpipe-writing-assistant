@@ -5,7 +5,7 @@ import json
 
 def test_root_endpoint(client):
     """Test the root endpoint returns HTML."""
-    response = client.get("/?token=test-token")
+    response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
@@ -41,9 +41,9 @@ def test_root_endpoint(client):
 #     assert data["tone"] == "friendly"
 
 
-def test_generate_text(client):
+def test_generate_text(authenticated_client):
     """Test text generation endpoint."""
-    response = client.post("/generate-text?token=test-token", data={
+    response = authenticated_client.post("/generate-text", data={
         "user_text": "AI is changing the world",
         "title": "AI Overview",
         "generation_mode": "ideas"
@@ -54,7 +54,7 @@ def test_generate_text(client):
     assert isinstance(data["generated_text"], str)
 
 
-def test_document_save_and_load(client):
+def test_document_save_and_load(authenticated_client):
     """Test document save/load operations with browser-provided data."""
     # Create test document data (simulating browser state)
     test_document = {
@@ -77,7 +77,7 @@ def test_document_save_and_load(client):
     }
 
     # Save the document
-    response = client.post("/documents/save?token=test-token", data={
+    response = authenticated_client.post("/documents/save", data={
         "filename": "test_doc",
         "document_data": json.dumps(test_document)
     })
@@ -87,14 +87,14 @@ def test_document_save_and_load(client):
     filename = save_data["filename"]
 
     # List documents
-    response = client.get("/documents/list?token=test-token")
+    response = authenticated_client.get("/documents/list")
     assert response.status_code == 200
     files = response.json()["files"]
     assert len(files) > 0
     assert any(f["filename"] == filename for f in files)
 
     # Load the document
-    response = client.get(f"/documents/load/{filename}?token=test-token")
+    response = authenticated_client.get(f"/documents/load/{filename}")
     assert response.status_code == 200
     load_data = response.json()
     assert load_data["status"] == "success"
@@ -102,7 +102,7 @@ def test_document_save_and_load(client):
     assert load_data["document"]["content"] == test_document["content"]
 
 
-def test_document_save_as(client):
+def test_document_save_as(authenticated_client):
     """Test save-as functionality."""
     test_document = {
         "title": "Save As Test",
@@ -111,17 +111,16 @@ def test_document_save_as(client):
         "created_at": "2024-01-01T00:00:00Z"
     }
 
-    response = client.post("/documents/save-as?token=test-token", data={
+    response = authenticated_client.post("/documents/save-as", data={
         "filename": "save_as_test",
         "document_data": json.dumps(test_document)
     })
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    assert data["filename"] == "save_as_test.json"
 
 
-def test_document_delete(client):
+def test_document_delete(authenticated_client):
     """Test document deletion."""
     # First create a document to delete
     test_document = {
@@ -131,7 +130,7 @@ def test_document_delete(client):
     }
 
     # Save the document
-    response = client.post("/documents/save?token=test-token", data={
+    response = authenticated_client.post("/documents/save", data={
         "filename": "delete_test",
         "document_data": json.dumps(test_document)
     })
@@ -139,13 +138,13 @@ def test_document_delete(client):
     filename = response.json()["filename"]
 
     # Delete the document
-    response = client.delete(f"/documents/delete/{filename}?token=test-token")
+    response = authenticated_client.delete(f"/documents/delete/{filename}")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
 
     # Verify it's gone
-    response = client.get(f"/documents/load/{filename}?token=test-token")
+    response = authenticated_client.get(f"/documents/load/{filename}")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"

@@ -38,15 +38,14 @@ def test_main_custom_arguments(mock_uvicorn_run):
 
 
 @patch('writing_assistant.app.server.uvicorn.run')
-@patch('sys.argv', ['server.py', '--auth-token', 'custom-token'])
-def test_main_custom_auth_token(mock_uvicorn_run):
-    """Test main function with custom authentication token."""
+@patch('sys.argv', ['server.py', '--disable-custom-env-vars'])
+def test_main_disable_custom_env_vars(mock_uvicorn_run):
+    """Test main function with custom env vars disabled."""
     from writing_assistant.app.server import main
 
-    # Just run main - it should execute the token setting logic
     main()
 
-    # Verify uvicorn.run was called (token setting happens internally)
+    # Verify uvicorn.run was called
     mock_uvicorn_run.assert_called_once()
 
 
@@ -120,35 +119,20 @@ def test_main_prints_server_info(mock_print, mock_uvicorn_run):
     assert any("Writing Assistant Server" in call for call in print_calls)
     # Should print access URL
     assert any("Access your writing assistant at:" in call for call in print_calls)
-    # Should print authentication token
-    assert any("Authentication token:" in call for call in print_calls)
+    # Should print registration URL
+    assert any("Register a new account at:" in call for call in print_calls)
 
 
-@patch('writing_assistant.app.server.uvicorn.run')
-@patch('sys.argv', ['server.py'])
-def test_main_uses_auto_generated_token_when_no_custom_token(mock_uvicorn_run):
-    """Test that main function uses auto-generated token when none provided."""
-    from writing_assistant.app.server import main
-
-    # This test ensures the import path for auto-generated token works
-    main()
-
-    # Just verify it runs without error - the token import should work
-    mock_uvicorn_run.assert_called_once()
-
-
-@patch('writing_assistant.app.server.uvicorn.run')
-@patch('sys.argv', ['server.py', '--auth-token', 'test-token-123'])
-@patch('builtins.print')
-def test_main_prints_custom_token(mock_print, mock_uvicorn_run):
-    """Test that custom authentication token is printed."""
+@patch('writing_assistant.app.server.asyncio.run')
+@patch('sys.argv', ['server.py', '--init-db'])
+def test_main_init_db_flag(mock_asyncio_run):
+    """Test main function with --init-db flag."""
     from writing_assistant.app.server import main
 
     main()
 
-    # Verify the custom token appears in print output
-    print_calls = [call[0][0] for call in mock_print.call_args_list]
-    assert any("test-token-123" in call for call in print_calls)
+    # Verify asyncio.run was called for database initialization
+    mock_asyncio_run.assert_called_once()
 
 
 def test_main_script_execution():
