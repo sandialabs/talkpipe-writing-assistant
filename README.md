@@ -41,13 +41,21 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - Python 3.11 or higher
 - An AI backend: either OpenAI API access or Ollama installed locally
 
-### Using pip
+### Install from pip (Recommended)
 
 ```bash
 pip install talkpipe-writing-assistant
 ```
 
-### From source
+After installation, you can start the application immediately:
+
+```bash
+writing-assistant
+```
+
+Then navigate to `http://localhost:8001` in your browser. See the [Quick Start](#quick-start) section below for next steps.
+
+### Install from source
 
 ```bash
 git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
@@ -72,6 +80,62 @@ docker-compose up talkpipe-writing-assistant
 # Development with live reload
 docker-compose --profile dev up talkpipe-writing-assistant-dev
 ```
+
+## Quick Start
+
+**TL;DR:** After `pip install talkpipe-writing-assistant`, just run `writing-assistant` and open `http://localhost:8001` in your browser!
+
+After installing with pip, follow these steps to get started:
+
+### 1. Start the Server
+
+```bash
+writing-assistant
+```
+
+The server will start on `http://localhost:8001` and display:
+
+```
+🔐 Writing Assistant Server - Multi-User Edition
+📝 Access your writing assistant at: http://localhost:8001/
+🔑 Register a new account at: http://localhost:8001/register
+🔐 Login at: http://localhost:8001/login
+📚 API documentation: http://localhost:8001/docs
+💾 Database: /home/user/.writing_assistant/writing_assistant.db
+```
+
+### 2. Create Your Account
+
+1. Open your browser and navigate to `http://localhost:8001/register`
+2. Enter your email address and password
+3. Click "Register" to create your account
+
+### 3. Configure AI Backend
+
+You need to configure either **OpenAI** (cloud-based, requires API key) or **Ollama** (local, free):
+
+**Option A: OpenAI (Cloud)**
+1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Set your API key:
+   ```bash
+   export OPENAI_API_KEY="sk-your-api-key-here"
+   ```
+3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to `gpt-4`
+
+**Option B: Ollama (Local)**
+1. Install Ollama from [ollama.com](https://ollama.com)
+2. Pull a model: `ollama pull llama3.1:8b`
+3. Start Ollama: `ollama serve`
+4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to `llama3.1:8b`
+
+### 4. Start Writing!
+
+1. Click "Create New Document"
+2. Add a title and sections
+3. Click "Generate" on any section to create AI-assisted content
+4. Save your work with the "Save Document" button
+
+That's it! You're ready to use the AI writing assistant.
 
 ## Configuration
 
@@ -154,19 +218,27 @@ The application uses [TalkPipe](https://github.com/sandialabs/talkpipe) for AI i
 writing-assistant
 
 # Custom port
-WRITING_ASSISTANT_PORT=8080 writing-assistant
+writing-assistant --port 8080
+
+# Custom host and port
+writing-assistant --host 0.0.0.0 --port 8080
 
 # Enable auto-reload for development
-WRITING_ASSISTANT_RELOAD=true writing-assistant
+writing-assistant --reload
 
 # Custom database location
 writing-assistant --db-path /path/to/database.db
 
-# Or use environment variable
-WRITING_ASSISTANT_DB_PATH=/path/to/database.db writing-assistant
+# Disable custom environment variables from UI (security)
+writing-assistant --disable-custom-env-vars
 
 # Initialize database without starting server
 writing-assistant --init-db
+
+# You can also use environment variables
+WRITING_ASSISTANT_PORT=8080 writing-assistant
+WRITING_ASSISTANT_RELOAD=true writing-assistant
+WRITING_ASSISTANT_DB_PATH=/path/to/database.db writing-assistant
 ```
 
 When the server starts, it will display:
@@ -389,7 +461,7 @@ Contributions are welcome! Please follow these steps:
 ### Application Issues
 
 **"Port already in use"**
-- Change the port: `WRITING_ASSISTANT_PORT=8080 writing-assistant`
+- Change the port: `writing-assistant --port 8080`
 - Or kill the process using the port
 
 **"Cannot save document"** or **"Database error"**
