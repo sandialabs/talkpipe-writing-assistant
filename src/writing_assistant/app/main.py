@@ -1,6 +1,7 @@
 """Main FastAPI application with multi-user support."""
 
 import json
+import logging
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,9 @@ from .schemas import UserCreate, UserRead, UserUpdate
 # Lock to prevent race conditions when setting environment variables
 _env_var_lock = threading.Lock()
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Writing Assistant - Multi-User")
 
 # Get the directory where this module is located
@@ -31,6 +35,7 @@ app_dir = Path(__file__).parent
 
 class NoCacheStaticFiles(StaticFiles):
     """Static files handler that disables caching."""
+
     def file_response(self, *args, **kwargs) -> Response:
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -39,7 +44,9 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 
-app.mount("/static", NoCacheStaticFiles(directory=str(app_dir / "static")), name="static")
+app.mount(
+    "/static", NoCacheStaticFiles(directory=str(app_dir / "static")), name="static"
+)
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
 # Flag to control whether custom environment variables from UI are allowed
@@ -83,8 +90,7 @@ async def read_root(request: Request):
     """Homepage - main app interface."""
     empty_document = {"title": "", "sections": []}
     return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "document": empty_document}
+        "index.html", {"request": request, "document": empty_document}
     )
 
 
@@ -142,7 +148,8 @@ async def get_user_preferences(
             # Return empty preferences if none saved
             return {"status": "success", "preferences": {}}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error retrieving user preferences: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to retrieve user preferences"}
 
 
 @app.post("/user/preferences")
@@ -164,7 +171,8 @@ async def save_user_preferences(
         return {"status": "success", "message": "Preferences saved"}
     except Exception as e:
         await db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error saving user preferences: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to save user preferences"}
 
 
 @app.post("/documents/save")
@@ -183,8 +191,7 @@ async def save_document(
         # Check if document already exists for this user
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         existing_doc = result.scalar_one_or_none()
@@ -198,29 +205,30 @@ async def save_document(
             return {
                 "status": "success",
                 "filename": filename,
-                "message": "Document updated"
+                "message": "Document updated",
             }
         else:
             # Create new document
             new_doc = Document(
-                user_id=user.id,
-                filename=filename,
-                title=title,
-                content=document_data
+                user_id=user.id, filename=filename, title=title, content=document_data
             )
             db.add(new_doc)
             await db.commit()
             return {
                 "status": "success",
                 "filename": filename,
-                "message": "Document created"
+                "message": "Document created",
             }
 
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+        logger.error(
+            f"Invalid JSON in save_document for {filename}: {e}", exc_info=True
+        )
+        raise HTTPException(status_code=400, detail="Invalid JSON in document data")
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error saving document {filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save document")
 
 
 @app.post("/documents/save-as")
@@ -245,8 +253,7 @@ async def download_document(
     try:
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         doc = result.scalar_one_or_none()
@@ -258,15 +265,14 @@ async def download_document(
         return Response(
             content=doc.content,
             media_type="application/json",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error downloading document {filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to download document")
 
 
 @app.get("/documents/load/{filename}")
@@ -279,8 +285,7 @@ async def load_document_by_filename(
     try:
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         doc = result.scalar_one_or_none()
@@ -294,9 +299,11 @@ async def load_document_by_filename(
         return {"status": "success", "document": document_data}
 
     except json.JSONDecodeError as e:
-        return {"status": "error", "message": f"Invalid JSON in document: {str(e)}"}
+        logger.error(f"Invalid JSON in document {filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Document contains invalid data"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error loading document {filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to load document"}
 
 
 @app.get("/documents/list")
@@ -327,7 +334,8 @@ async def list_documents(
         return {"files": files}
 
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Error listing documents: {e}", exc_info=True)
+        return {"error": "Failed to list documents"}
 
 
 @app.post("/generate-text")
@@ -359,7 +367,9 @@ async def generate_text(
                 env_vars = json.loads(environment_variables)
                 print(f"DEBUG: Parsed env vars from request: {env_vars}")
             except json.JSONDecodeError:
-                print(f"Warning: Could not parse environment_variables: {environment_variables}")
+                print(
+                    f"Warning: Could not parse environment_variables: {environment_variables}"
+                )
         elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
             print("Info: Custom environment variables disabled by server configuration")
 
@@ -386,7 +396,9 @@ async def generate_text(
                 metadata.model = model
 
                 # Debug: Show current environment
-                print(f"DEBUG: OLLAMA_BASE_URL in os.environ: {os.environ.get('OLLAMA_BASE_URL', 'NOT SET')}")
+                print(
+                    f"DEBUG: OLLAMA_BASE_URL in os.environ: {os.environ.get('OLLAMA_BASE_URL', 'NOT SET')}"
+                )
                 print(f"DEBUG: Using source={source}, model={model}")
 
                 generated_text = cb.new_paragraph(
@@ -395,7 +407,7 @@ async def generate_text(
                     title=title,
                     prev_paragraph=prev_paragraph,
                     next_paragraph=next_paragraph,
-                    generation_mode=generation_mode
+                    generation_mode=generation_mode,
                 )
 
                 return {"generated_text": generated_text}
@@ -408,8 +420,8 @@ async def generate_text(
                         os.environ.pop(key, None)
 
     except Exception as e:
-        print(f"Error generating text: {e}")
-        return {"error": str(e)}, 500
+        logger.error(f"Error generating text: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate text")
 
 
 @app.post("/documents/snapshot/{filename}")
@@ -423,8 +435,7 @@ async def create_snapshot(
         # Find the document
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         doc = result.scalar_one_or_none()
@@ -438,9 +449,7 @@ async def create_snapshot(
 
         # Create snapshot
         snapshot = DocumentSnapshot(
-            document_id=doc.id,
-            snapshot_name=snapshot_name,
-            content=doc.content
+            document_id=doc.id, snapshot_name=snapshot_name, content=doc.content
         )
         db.add(snapshot)
 
@@ -461,12 +470,13 @@ async def create_snapshot(
         return {
             "status": "success",
             "message": f"Snapshot created: {snapshot_name}",
-            "snapshot_filename": snapshot_name
+            "snapshot_filename": snapshot_name,
         }
 
     except Exception as e:
         await db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error creating snapshot for {filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to create snapshot"}
 
 
 @app.get("/documents/snapshots/{filename}")
@@ -480,8 +490,7 @@ async def list_snapshots(
         # Find the document
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         doc = result.scalar_one_or_none()
@@ -501,7 +510,7 @@ async def list_snapshots(
             {
                 "filename": snap.snapshot_name,
                 "size": len(snap.content),
-                "modified": snap.created_at.isoformat()
+                "modified": snap.created_at.isoformat(),
             }
             for snap in snapshots
         ]
@@ -509,7 +518,8 @@ async def list_snapshots(
         return {"status": "success", "snapshots": snapshot_list}
 
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error listing snapshots for {filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to list snapshots"}
 
 
 @app.get("/documents/snapshot/load/{snapshot_filename}")
@@ -526,7 +536,7 @@ async def load_snapshot(
             .join(Document)
             .where(
                 Document.user_id == user.id,
-                DocumentSnapshot.snapshot_name == snapshot_filename
+                DocumentSnapshot.snapshot_name == snapshot_filename,
             )
         )
         snapshot = result.scalar_one_or_none()
@@ -540,9 +550,13 @@ async def load_snapshot(
         return {"status": "success", "document": document_data}
 
     except json.JSONDecodeError as e:
-        return {"status": "error", "message": f"Invalid JSON in snapshot: {str(e)}"}
+        logger.error(
+            f"Invalid JSON in snapshot {snapshot_filename}: {e}", exc_info=True
+        )
+        return {"status": "error", "message": "Snapshot contains invalid data"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error loading snapshot {snapshot_filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to load snapshot"}
 
 
 @app.delete("/documents/delete/{filename}")
@@ -556,8 +570,7 @@ async def delete_document(
         # Find the document
         result = await db.execute(
             select(Document).where(
-                Document.user_id == user.id,
-                Document.filename == filename
+                Document.user_id == user.id, Document.filename == filename
             )
         )
         doc = result.scalar_one_or_none()
@@ -571,14 +584,16 @@ async def delete_document(
 
         return {
             "status": "success",
-            "message": f"Document {filename} deleted successfully"
+            "message": f"Document {filename} deleted successfully",
         }
 
     except Exception as e:
         await db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error deleting document {filename}: {e}", exc_info=True)
+        return {"status": "error", "message": "Failed to delete document"}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="localhost", port=8001, reload=True)
