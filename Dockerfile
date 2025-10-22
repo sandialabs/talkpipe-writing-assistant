@@ -1,6 +1,6 @@
 # Multi-stage build for Writing Assistant
 # Stage 1: Build stage with all development dependencies
-FROM python:3.14-slim AS builder
+FROM python:3.13-slim AS builder
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -41,7 +41,7 @@ RUN python -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during
 RUN python -m build --wheel
 
 # Stage 2: Runtime stage with minimal dependencies
-FROM python:3.14-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 # Install only runtime system dependencies
 RUN apt-get update && apt-get install -y \

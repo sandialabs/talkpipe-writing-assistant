@@ -28,6 +28,10 @@ updates:
     commit-message:
       prefix: "docker"
       include: "scope"
+    # Ignore Python 3.14+ until numba supports it
+    ignore:
+      - dependency-name: "python"
+        versions: [">=3.14"]
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
