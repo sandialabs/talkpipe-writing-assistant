@@ -1,6 +1,7 @@
 """Tests for the API endpoints."""
 
 import json
+from unittest.mock import patch
 
 
 def test_root_endpoint(client):
@@ -41,8 +42,12 @@ def test_root_endpoint(client):
 #     assert data["tone"] == "friendly"
 
 
-def test_generate_text(authenticated_client):
+@patch('writing_assistant.app.main.cb.new_paragraph')
+def test_generate_text(mock_new_paragraph, authenticated_client):
     """Test text generation endpoint."""
+    # Mock the text generation to return a test string
+    mock_new_paragraph.return_value = "This is generated text about AI changing the world."
+
     response = authenticated_client.post("/generate-text", data={
         "user_text": "AI is changing the world",
         "title": "AI Overview",
@@ -52,6 +57,10 @@ def test_generate_text(authenticated_client):
     data = response.json()
     assert "generated_text" in data
     assert isinstance(data["generated_text"], str)
+    assert data["generated_text"] == "This is generated text about AI changing the world."
+
+    # Verify the mock was called
+    mock_new_paragraph.assert_called_once()
 
 
 def test_document_save_and_load(authenticated_client):
