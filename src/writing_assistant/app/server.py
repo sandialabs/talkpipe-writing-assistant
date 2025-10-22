@@ -1,11 +1,13 @@
 """Entry point for the writing assistant web server."""
 
 import argparse
-import os
 import asyncio
+import os
+
 import uvicorn
-from .main import app
+
 from .database import create_db_and_tables
+from .main import app
 
 
 async def init_db():
@@ -77,8 +79,9 @@ def main():
         return
 
     # Get database path for display
-    from .database import get_database_url
     import sys
+
+    from .database import get_database_url
     db_path = get_database_url().replace("sqlite+aiosqlite:///", "")
 
     print(f"\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)

@@ -8,11 +8,13 @@ from getpass import getpass
 
 async def create_superuser():
     """Create a superuser account."""
-    from writing_assistant.app.database import get_async_session, create_db_and_tables
-    from writing_assistant.app.models import User
-    from sqlalchemy import select
-    from fastapi_users.password import PasswordHelper
     import uuid
+
+    from fastapi_users.password import PasswordHelper
+    from sqlalchemy import select
+
+    from writing_assistant.app.database import create_db_and_tables, get_async_session
+    from writing_assistant.app.models import User
 
     # Initialize database
     print("Initializing database...")

@@ -8,9 +8,10 @@ from getpass import getpass
 
 async def list_users():
     """List all users."""
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
 
     async for session in get_async_session():
         result = await session.execute(
@@ -41,9 +42,10 @@ async def list_users():
 
 async def delete_user(email: str):
     """Delete a user and all their documents."""
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
 
     async for session in get_async_session():
         result = await session.execute(
@@ -78,10 +80,11 @@ async def delete_user(email: str):
 
 async def reset_password(email: str):
     """Reset a user's password."""
+    from fastapi_users.password import PasswordHelper
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
-    from fastapi_users.password import PasswordHelper
 
     async for session in get_async_session():
         result = await session.execute(
@@ -116,9 +119,10 @@ async def reset_password(email: str):
 
 async def toggle_active(email: str):
     """Toggle user active status."""
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
 
     async for session in get_async_session():
         result = await session.execute(
@@ -139,9 +143,10 @@ async def toggle_active(email: str):
 
 async def make_superuser(email: str):
     """Make a user a superuser."""
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
 
     async for session in get_async_session():
         result = await session.execute(
@@ -162,9 +167,10 @@ async def make_superuser(email: str):
 
 async def show_user_info(email: str):
     """Show detailed user information."""
+    from sqlalchemy import select
+
     from writing_assistant.app.database import get_async_session
     from writing_assistant.app.models import User
-    from sqlalchemy import select
 
     async for session in get_async_session():
         result = await session.execute(

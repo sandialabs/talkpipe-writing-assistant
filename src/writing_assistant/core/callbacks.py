@@ -1,7 +1,9 @@
 import threading
+
+from talkpipe.llm.chat import LLMPrompt
 from talkpipe.pipe.basic import fillTemplate
 from talkpipe.pipe.io import Print
-from talkpipe.llm.chat import LLMPrompt
+
 from .definitions import Metadata
 
 _paragraph_lock = threading.Lock()

@@ -1,14 +1,15 @@
 """Main FastAPI application with multi-user support."""
 
-from fastapi import FastAPI, Request, Form, Response, HTTPException, Depends
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from typing import Optional
 import json
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,9 +17,8 @@ from ..core import callbacks as cb
 from ..core.definitions import Metadata
 from .auth import auth_backend, current_active_user, fastapi_users
 from .database import get_async_session
-from .models import User, Document, DocumentSnapshot
-from .schemas import UserRead, UserCreate, UserUpdate
-
+from .models import Document, DocumentSnapshot, User
+from .schemas import UserCreate, UserRead, UserUpdate
 
 # Lock to prevent race conditions when setting environment variables
 _env_var_lock = threading.Lock()

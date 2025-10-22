@@ -7,9 +7,9 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     reviewers:
-      - "tlbauer"
+      - "tlbauer2"
     assignees:
-      - "tlbauer"
+      - "tlbauer2"
     commit-message:
       prefix: "deps"
       prefix-development: "dev-deps"
@@ -22,9 +22,9 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     reviewers:
-      - "tlbauer"
+      - "tlbauer2"
     assignees:
-      - "tlbauer"
+      - "tlbauer2"
     commit-message:
       prefix: "docker"
       include: "scope"
@@ -36,9 +36,9 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     reviewers:
-      - "tlbauer"
+      - "tlbauer2"
     assignees:
-      - "tlbauer"
+      - "tlbauer2"
     commit-message:
       prefix: "ci"
       include: "scope"

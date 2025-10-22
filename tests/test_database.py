@@ -1,9 +1,10 @@
 """Tests for database.py configuration and functions."""
 
-import pytest
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 def test_get_database_url_default():
@@ -30,8 +31,9 @@ def test_get_database_url_custom_path():
 
 def test_get_database_url_creates_parent_directory():
     """Test that get_database_url creates parent directory if needed."""
-    from writing_assistant.app.database import get_database_url
     import tempfile
+
+    from writing_assistant.app.database import get_database_url
 
     with tempfile.TemporaryDirectory() as tmpdir:
         custom_path = f"{tmpdir}/subdir/test.db"
@@ -74,8 +76,8 @@ def test_get_session_maker():
 @pytest.mark.asyncio
 async def test_create_db_and_tables():
     """Test create_db_and_tables function."""
-    from writing_assistant.app.database import create_db_and_tables
     from writing_assistant.app import database
+    from writing_assistant.app.database import create_db_and_tables
 
     # Reset globals to force new engine creation
     database._engine = None
@@ -88,8 +90,8 @@ async def test_create_db_and_tables():
 @pytest.mark.asyncio
 async def test_get_async_session():
     """Test get_async_session generator."""
-    from writing_assistant.app.database import get_async_session
     from writing_assistant.app import database
+    from writing_assistant.app.database import get_async_session
 
     # Reset globals
     database._engine = None

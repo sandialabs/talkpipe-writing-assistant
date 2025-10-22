@@ -1,9 +1,9 @@
 """Database configuration and FastAPI Users setup."""
 
-from typing import AsyncGenerator
-import uuid
 import os
+import uuid
 from pathlib import Path
+from typing import AsyncGenerator
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyUserDatabase

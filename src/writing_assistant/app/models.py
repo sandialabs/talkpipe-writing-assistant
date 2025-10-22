@@ -1,14 +1,14 @@
 """Database models for multi-user support."""
 
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
 
 from fastapi_users.db import SQLAlchemyBaseUserTable
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import CHAR, TypeDecorator
 
 
 class GUID(TypeDecorator):

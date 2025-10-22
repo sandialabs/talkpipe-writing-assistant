@@ -1,9 +1,10 @@
 """Tests to improve coverage of main.py endpoints and error handling."""
 
 import json
-import pytest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 
 def test_root_endpoint(client):
@@ -44,8 +45,9 @@ def test_config_endpoint(client):
 
 def test_nocache_static_files():
     """Test that NoCacheStaticFiles adds proper cache headers."""
-    from writing_assistant.app.main import NoCacheStaticFiles
     from starlette.responses import Response
+
+    from writing_assistant.app.main import NoCacheStaticFiles
 
     # Create instance
     static_files = NoCacheStaticFiles(directory=".")
@@ -397,8 +399,8 @@ def test_create_snapshot_not_found(authenticated_client):
 
 def test_create_snapshot_cleanup_old(authenticated_client):
     """Test that old snapshots are cleaned up (keep only 10)."""
-    import json
     import asyncio
+    import json
 
     # Create document
     document_data = {"title": "Cleanup Test", "sections": []}

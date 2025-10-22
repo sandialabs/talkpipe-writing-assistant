@@ -13,9 +13,8 @@ from fastapi_users.authentication import (
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
 
-from .models import User
 from .database import get_user_db
-
+from .models import User
 
 # Secret key for JWT - should be set via environment variable in production
 SECRET = os.getenv("WRITING_ASSISTANT_SECRET", "CHANGE_THIS_IN_PRODUCTION_PLEASE")

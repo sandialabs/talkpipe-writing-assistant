@@ -1,9 +1,11 @@
 """Tests for core functionality."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from writing_assistant.core.definitions import Metadata
+
 from writing_assistant.core.callbacks import get_system_prompt, new_paragraph
+from writing_assistant.core.definitions import Metadata
 
 
 def test_metadata_creation():
