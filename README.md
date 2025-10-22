@@ -12,7 +12,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Maintain consistency**: AI understands your document's context, style, and tone across all sections
 - **Iterate quickly**: Multiple generation modes (rewrite, improve, proofread, ideas) let you refine content efficiently
 - **Stay organized**: Structure documents into sections with main points and supporting text
-- **Work offline**: Use local LLMs via Ollama or cloud-based models via OpenAI
+- **Work offline**: Use local LLMs via Ollama or cloud-based models via OpenAI, Anthropic, and more
 
 <center><img src="docs/screenshot.png" width=80%></center>
 
@@ -30,7 +30,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Document Management**: Save, load, and manage multiple documents with automatic snapshots
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
-- **Flexible AI Backend**: Support for OpenAI (GPT-4, GPT-5) and Ollama (llama3, mistral, etc.)
+- **Flexible AI Backend**: Support for OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
@@ -39,7 +39,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 ### Prerequisites
 
 - Python 3.11 or higher
-- An AI backend: either OpenAI API access or Ollama installed locally
+- An AI backend: OpenAI, Anthropic, or Ollama (local)
 
 ### Install from pip (Recommended)
 
@@ -112,7 +112,7 @@ The server will start on `http://localhost:8001` and display:
 
 ### 3. Configure AI Backend
 
-You need to configure either **OpenAI** (cloud-based, requires API key) or **Ollama** (local, free):
+You need to configure one of the supported AI backends:
 
 **Option A: OpenAI (Cloud)**
 1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
@@ -120,94 +120,30 @@ You need to configure either **OpenAI** (cloud-based, requires API key) or **Oll
    ```bash
    export OPENAI_API_KEY="sk-your-api-key-here"
    ```
-3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to `gpt-4`
+3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to your model of choice.
 
-**Option B: Ollama (Local)**
+**Option B: Anthropic (Cloud)**
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
+2. Set your API key:
+   ```bash
+   export ANTHROPIC_API_KEY="sk-ant-your-api-key-here"
+   ```
+3. In the web interface: Settings → AI Settings → Set Source to `anthropic` and Model to your model of choice.
+
+**Option C: Ollama (Local, Free)**
 1. Install Ollama from [ollama.com](https://ollama.com)
-2. Pull a model: `ollama pull llama3.1:8b`
+2. Pull a model: `ollama pull [model name]`
 3. Start Ollama: `ollama serve`
-4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to `llama3.1:8b`
+4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name]
 
 ### 4. Start Writing!
 
 1. Click "Create New Document"
-2. Add a title and sections
+2. Add a title and sections, leaving a blank line between sections.
 3. Click "Generate" on any section to create AI-assisted content
 4. Save your work with the "Save Document" button
 
 That's it! You're ready to use the AI writing assistant.
-
-## Configuration
-
-### Configuring OpenAI
-
-To use OpenAI models (GPT-4, GPT-5, etc.):
-
-#### Option 1: Server-Level Configuration (Recommended for single-user)
-
-1. Obtain an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Set your API key as an environment variable:
-```bash
-export OPENAI_API_KEY="sk-your-api-key-here"
-```
-
-3. Configure in the application:
-   - In the web interface, click **Settings** → **AI Settings** tab
-   - Set the **AI Source** to `openai`
-   - Set the **Model** to your desired model (e.g., `gpt-4`, `gpt-4-turbo`, `gpt-5`)
-
-#### Option 2: Browser-Based Configuration (Multi-user or temporary credentials)
-
-1. Obtain an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. In the web interface:
-   - Click **Settings** → **AI Settings** tab
-   - Under **Environment Variables**, click **+ Add Environment Variable**
-   - Set `OPENAI_API_KEY` as the variable name
-   - Paste your API key as the value
-   - Click **Save AI Settings**
-
-3. Configure AI settings:
-   - Set the **AI Source** to `openai`
-   - Set the **Model** to your desired model
-
-**Environment Variables in Browser:**
-- Stored securely in your browser's localStorage (never in document files)
-- Apply to all documents automatically
-- Can be disabled server-side with `--disable-custom-env-vars` flag for security
-
-**Security Note:**
-- For shared/multi-user deployments, use server-level configuration only
-- Disable browser-based env vars with: `writing-assistant --disable-custom-env-vars`
-- This prevents users from injecting arbitrary credentials
-
-**Cost Considerations:**
-- OpenAI charges per token (input + output)
-- Check current pricing at [OpenAI Pricing](https://openai.com/api/pricing/)
-- Typical paragraph generation uses 200-1000 tokens
-
-### Configuring Ollama
-
-To use local LLMs via Ollama (free, runs on your computer):
-
-1. Install Ollama from [ollama.com](https://ollama.com)
-2. Pull a model (first time only):
-   ```bash
-   ollama pull llama3.1:8b
-   ```
-3. Start Ollama (if not already running):
-   ```bash
-   ollama serve
-   ```
-4. **Configure in the application**:
-   - In the web interface, click **Settings** → **AI Settings** tab
-   - Set the **AI Source** to `ollama`
-   - Set the **Model** to your chosen model (e.g., `llama3.1:8b`, `mistral:7b`)
-
-**No API keys required** - Ollama runs entirely on your local machine!
-
-### TalkPipe Configuration
-
-The application uses [TalkPipe](https://github.com/sandialabs/talkpipe) for AI integration. TalkPipe automatically detects your configuration from environment variables:
 
 ## Usage
 
@@ -260,31 +196,8 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
-| `OPENAI_API_KEY` | OpenAI API key for OpenAI models | (none) |
-| `OLLAMA_BASE_URL` | Ollama server URL for local models | `http://localhost:11434` |
+| `TALKPIPE_OLLAMA_BASE_URL` | Ollama server URL for local models | `http://localhost:11434` |
 
-### Command-Line Options
-
-```bash
-writing-assistant [OPTIONS]
-
-Options:
-  --host HOST                    Host to bind to (default: localhost)
-  --port PORT                    Port to bind to (default: 8001)
-  --reload                       Enable auto-reload for development
-  --db-path PATH                 Path to database file (overrides WRITING_ASSISTANT_DB_PATH)
-  --init-db                      Initialize database and exit (useful for setup)
-  --disable-custom-env-vars      Disable custom environment variables from UI (security feature)
-```
-
-**Database Options:**
-- `--db-path PATH`: Specify custom database location
-  - Useful for testing, backups, or deployment scenarios
-  - Takes precedence over `WRITING_ASSISTANT_DB_PATH` environment variable
-  - Example: `writing-assistant --db-path /var/lib/writing-assistant/db.sqlite`
-- `--init-db`: Initialize the database schema without starting the server
-  - Useful for container initialization or database setup scripts
-  - Exits after database creation
 
 **Security Options:**
 - `--disable-custom-env-vars`: Prevents users from configuring environment variables through the browser interface
@@ -292,60 +205,14 @@ Options:
   - Environment variables must be set at the server level (via shell environment)
   - The Environment Variables section will be hidden in the UI
 
-### Using the Web Interface
 
-1. **Start the server**:
-   ```bash
-   writing-assistant
-   ```
-   The server will display:
-   ```
-   🔐 Writing Assistant Server - Multi-User Edition
-   📝 Access your writing assistant at: http://localhost:8001/
-   🔑 Register a new account at: http://localhost:8001/auth/register
-   🔐 Login at: http://localhost:8001/auth/jwt/login
-   📚 API documentation: http://localhost:8001/docs
-   💾 Database: /home/user/.writing_assistant/writing_assistant.db
-   ```
-
-2. **Create an account** (first time):
-   - Navigate to the registration page
-   - Enter your email and password
-   - Submit to create your account
-
-3. **Log in** (returning users):
-   - Navigate to the login page
-   - Enter your email and password
-   - You'll receive a JWT token for authentication
-
-4. **Configure document metadata**:
-   - AI Source: `openai` or `ollama`
-   - Model: e.g., `gpt-4-turbo` or `llama3.1:8b`
+**Configure document metadata**:
+   - AI Source: `openai`, `anthropic`, or `ollama`
+   - Model: e.g., `gpt-4`, `claude-3-5-sonnet-20241022`, or `llama3.1:8b`
    - Writing style: formal, casual, technical, etc.
    - Target audience: general public, experts, students, etc.
    - Tone: neutral, persuasive, informative, etc.
    - Word limit: approximate words per paragraph
-
-5. **Create your document**:
-   - Set the document title
-   - Add sections with "Add Section"
-   - For each section:
-     - Enter the main point
-     - Add your draft text (optional)
-     - Click "Generate" to create AI-generated content
-     - Use different generation modes as needed
-
-6. **Generation modes**:
-   - **Rewrite**: Complete rewrite with new ideas
-   - **Improve**: Polish existing text
-   - **Proofread**: Fix errors only
-   - **Ideas**: Get suggestions for improvement
-
-7. **Save your work**:
-   - Click "Save Document" to persist to database
-   - Load previous documents from the dropdown
-   - Create snapshots to save versions
-   - Revert to previous snapshots as needed
 
 ### Document Storage
 
@@ -354,11 +221,6 @@ Documents are stored in an SQLite database with multi-user isolation:
 **Default Location:** `~/.writing_assistant/writing_assistant.db`
 
 **Custom Location:** Use `--db-path` or `WRITING_ASSISTANT_DB_PATH` to specify an alternative location
-
-**Database Schema:**
-- **Users table**: Email, hashed passwords, and user preferences
-- **Documents table**: User-scoped documents with metadata and content
-- **Snapshots table**: Version history for each document (up to 10 per document)
 
 **Features:**
 - Per-user document isolation (users only see their own documents)
@@ -395,68 +257,8 @@ src/writing_assistant/
 - **Document**: Complete document with sections, metadata, and snapshot management
 - **Callbacks**: AI text generation using TalkPipe with context-aware prompting
 
-### AI Integration
-
-The application uses TalkPipe to abstract AI provider details:
-- Supports multiple LLM sources (OpenAI, Ollama, etc.)
-- Context-aware prompting includes previous/next paragraphs for coherence
-- Thread-safe generation with request queuing
-- Multiple generation modes with specialized system prompts
-
-## Development
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html
-
-# Run specific test file
-pytest tests/test_api.py -v
-```
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository at [github.com/sandialabs/talkpipe-writing-assistant](https://github.com/sandialabs/talkpipe-writing-assistant)
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite: `pytest`
-6. Run code quality checks: `black src/ tests/ && flake8 src/ tests/`
-7. Commit your changes (`git commit -m 'Add amazing feature'`)
-8. Push to the branch (`git push origin feature/amazing-feature`)
-9. Open a Pull Request
 
 ## Troubleshooting
-
-### OpenAI Issues
-
-**"Authentication error"**
-- Verify your API key is set: `echo $OPENAI_API_KEY`
-- Check the key is valid at [OpenAI Platform](https://platform.openai.com/api-keys)
-
-**"Rate limit exceeded"**
-- You've exceeded your OpenAI usage quota
-- Check your usage at [OpenAI Usage](https://platform.openai.com/usage)
-
-### Ollama Issues
-
-**"Connection refused"**
-- Check Ollama is running: `ollama list`
-- Start Ollama if needed: `ollama serve`
-
-**"Model not found"**
-- Pull the model: `ollama pull llama3.1:8b`
-- Verify available models: `ollama list`
-
-**"Out of memory"**
-- Use a smaller model (e.g., `mistral:7b` instead of `llama3.1:70b`)
-- Close other applications to free RAM
 
 ### Application Issues
 
@@ -480,20 +282,10 @@ Contributions are welcome! Please follow these steps:
 - Check file permissions on the database file
 - Try initializing a new database: `writing-assistant --db-path /tmp/new.db --init-db`
 
-## Project Links
-
-- **Homepage**: [github.com/sandialabs/talkpipe-writing-assistant](https://github.com/sandialabs/talkpipe-writing-assistant)
-- **Repository**: [github.com/sandialabs/talkpipe-writing-assistant](https://github.com/sandialabs/talkpipe-writing-assistant)
-- **Documentation**: [github.com/sandialabs/talkpipe-writing-assistant#readme](https://github.com/sandialabs/talkpipe-writing-assistant#readme)
-- **Bug Tracker**: [github.com/sandialabs/talkpipe-writing-assistant/issues](https://github.com/sandialabs/talkpipe-writing-assistant/issues)
 
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/sandialabs/talkpipe-writing-assistant/blob/master/LICENSE) file for details.
-
-## Security
-
-For security issues, please see our [Security Policy](https://github.com/sandialabs/talkpipe-writing-assistant/blob/master/.github/SECURITY.md).
 
 ## Acknowledgments
 
