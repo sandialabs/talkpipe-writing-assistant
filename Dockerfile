@@ -1,20 +1,23 @@
 # Multi-stage build for Writing Assistant
 # Stage 1: Build stage with all development dependencies
-FROM python:3.13-slim AS builder
+FROM fedora:latest AS builder
 
 # Install system dependencies for building
-RUN apt-get update && apt-get install -y \
-    git \
-    gcc \
-    g++ \
-    make \
-    cmake \
-    pkg-config \
-    libxml2-dev \
-    libxslt-dev \
-    libssl-dev \
-    && apt-get remove -y openssh-client perl perl-base perl-modules-5.* \
-    && rm -rf /var/lib/apt/lists/*
+RUN dnf update -y && \
+    dnf install -y \
+        python3 \
+        python3-pip \
+        python3-devel \
+        git \
+        gcc \
+        gcc-c++ \
+        make \
+        cmake \
+        pkg-config \
+        libxml2-devel \
+        libxslt-devel \
+        openssl-devel \
+        && dnf clean all
 
 # Create build user
 RUN groupadd -r builder && useradd -r -g builder -m builder
@@ -35,21 +38,23 @@ COPY --chown=builder:builder src/ src/
 COPY --chown=builder:builder tests/ tests/
 
 # Install Python dependencies and build the package
-RUN python -m pip install --user --upgrade pip setuptools wheel build
+RUN python3 -m pip install --user --upgrade pip setuptools wheel build
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TALKPIPE_WRITING_ASSISTANT=0.1.0
-RUN python -m pip install --user -e .[dev]
-RUN python -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during build
-RUN python -m build --wheel
+RUN python3 -m pip install --user -e .[dev]
+RUN python3 -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during build
+RUN python3 -m build --wheel
 
 # Stage 2: Runtime stage with minimal dependencies
-FROM python:3.13-slim AS runtime
+FROM fedora:latest AS runtime
 
 # Install only runtime system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    && apt-get remove -y openssh-client perl perl-base perl-modules-5.* \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+RUN dnf update -y && \
+    dnf install -y \
+        python3 \
+        python3-pip \
+        git \
+        && dnf clean all && \
+        rm -rf /var/cache/dnf
 
 # Create application user with specific UID/GID for better security
 RUN groupadd -r -g 1001 app && \
@@ -66,8 +71,8 @@ RUN mkdir -p /app/data /tmp/numba_cache && \
 COPY --from=builder --chown=app:app /build/dist/*.whl /tmp/
 
 # Install runtime Python dependencies and the application
-RUN python -m pip install --no-cache-dir --upgrade pip && \
-    python -m pip install --no-cache-dir /tmp/*.whl && \
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir /tmp/*.whl && \
     rm -f /tmp/*.whl
 
 # Copy only necessary runtime files
@@ -85,7 +90,7 @@ EXPOSE 8001
 # Health check to ensure the application starts correctly
 # Checks that Python imports work and database is accessible
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import writing_assistant; import os; db_path=os.getenv('WRITING_ASSISTANT_DB_PATH', '/app/data/writing_assistant.db'); print(f'Health check passed, DB: {db_path}')" || exit 1
+    CMD python3 -c "import writing_assistant; import os; db_path=os.getenv('WRITING_ASSISTANT_DB_PATH', '/app/data/writing_assistant.db'); print(f'Health check passed, DB: {db_path}')" || exit 1
 
 # Set environment variables for better container behavior
 ENV PYTHONUNBUFFERED=1 \
@@ -99,4 +104,4 @@ ENV PYTHONUNBUFFERED=1 \
     WRITING_ASSISTANT_SECRET=CHANGE_THIS_IN_PRODUCTION_PLEASE
 
 # Default command to run the application
-CMD ["python", "-m", "writing_assistant.app.server"]
+CMD ["python3", "-m", "writing_assistant.app.server"]
