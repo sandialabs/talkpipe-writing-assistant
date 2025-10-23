@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt-dev \
     libssl-dev \
+    && apt-get remove -y openssh-client perl perl-base perl-modules-5.* \
     && rm -rf /var/lib/apt/lists/*
 
 # Create build user
@@ -46,6 +47,7 @@ FROM python:3.13-slim AS runtime
 # Install only runtime system dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    && apt-get remove -y openssh-client perl perl-base perl-modules-5.* \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

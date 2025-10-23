@@ -12,7 +12,7 @@ maintainers = [
 ]
 description = "AI-powered writing assistant for structured document generation"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.4"
 keywords = ["ai", "writing", "assistant", "document", "generation"]
 license = "Apache-2.0"
 classifiers = [
