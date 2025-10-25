@@ -1,6 +1,8 @@
 # Changelog
 
-## In Progress
+## In Development
+
+## 0.1.1
 - Addressed "information exposure through exception" issue
 - Specified python 3.11.4 or higher to mitigate CVE-2025-8869 (pip symbolic link path traversal)
   - Python >=3.11.4 implements PEP 706 which provides safe tar extraction
