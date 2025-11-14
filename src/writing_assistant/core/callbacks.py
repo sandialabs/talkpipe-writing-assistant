@@ -122,11 +122,26 @@ Special Instructions: {metadata.generation_directive}
 Word Limit: {metadata.word_limit} words (approximate)
 
 SURROUNDING CONTEXT:
-Previous paragraph: {prev_paragraph}
 
-Current paragraph: {text}
+================================
 
-Next paragraph: {next_paragraph}
+Previous paragraph: 
+
+{prev_paragraph}
+
+================================
+
+Current paragraph to assist with:
+
+{text}
+
+================================
+
+Next paragraph: 
+
+{next_paragraph}
+
+=================================
 
 TASK: {generation_mode} the current paragraph using the context and requirements above.
 """

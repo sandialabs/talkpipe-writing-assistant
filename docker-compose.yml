@@ -13,7 +13,7 @@ services:
       # Database volume - persists user data, documents, and snapshots
       - writing_assistant_db:/app/data
     env_file:
-      - .env
+      - .env.podman.NOCOMMIT
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001
@@ -27,6 +27,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    extra_hosts:  # <--- ADD THIS
+      - "host.containers.internal:host-gateway"
     networks:
       - writing-assistant-network
 
@@ -44,7 +46,7 @@ services:
       - writing_assistant_dev_cache:/home/builder/.cache
       - writing_assistant_dev_db:/app/data
     env_file:
-      - .env
+      - .env.podman.NOCOMMIT
     environment:
       - WRITING_ASSISTANT_HOST=0.0.0.0
       - WRITING_ASSISTANT_PORT=8001
@@ -53,6 +55,8 @@ services:
       - PYTHONUNBUFFERED=1
     working_dir: /app
     command: ["python", "-m", "uvicorn", "src.writing_assistant.app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    extra_hosts:  # <--- ADD THIS
+      - "host.containers.internal:host-gateway"
     networks:
       - writing-assistant-network
     profiles:
