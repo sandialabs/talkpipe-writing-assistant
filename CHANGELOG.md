@@ -1,6 +1,6 @@
 # Changelog
 
-## In Development
+## 0.1.2
 - Enhanced AI context generation to include multiple paragraphs (up to 2000 characters) instead of just adjacent paragraphs
   - Frontend now collects context from multiple preceding and following sections
   - Backend truncates context to 2000 characters (last 2000 for previous context, first 2000 for next context)
@@ -20,6 +20,7 @@
   - Improved text contrast and border visibility in dark mode
   - Fixed light mode background to use proper light gradient (was incorrectly using dark colors)
   - Background now properly changes when toggling between light and dark modes
+- Adjusted prompt generation to make it clear what text was context and what was the target paragraph 
 
 ## 0.1.1
 - Addressed "information exposure through exception" issue
