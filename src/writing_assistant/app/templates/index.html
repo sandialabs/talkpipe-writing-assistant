@@ -78,27 +78,26 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                         </div>
                         <div class="suggestion-content">
                             <div class="generation-mode-selection">
-                                <div class="generation-mode-options">
-                                    <label class="radio-option">
-                                        <input type="radio" name="generation-mode" value="ideas" checked>
-                                        <span>Ideas</span>
-                                    </label>
-                                    <label class="radio-option">
-                                        <input type="radio" name="generation-mode" value="rewrite">
-                                        <span>Rewrite</span>
-                                    </label>
-                                    <label class="radio-option">
-                                        <input type="radio" name="generation-mode" value="improve">
-                                        <span>Improve</span>
-                                    </label>
-                                    <label class="radio-option">
-                                        <input type="radio" name="generation-mode" value="proofread">
-                                        <span>Proofread</span>
-                                    </label>
+                                <div class="generation-mode-buttons">
+                                    <button class="mode-btn" data-mode="ideas" title="Get creative ideas and suggestions to expand or improve your content. The AI will provide actionable recommendations for enhancing structure, style, clarity, flow, and impact." disabled>
+                                        <span class="mode-icon">💡</span>
+                                        <span class="mode-label">Ideas</span>
+                                    </button>
+                                    <button class="mode-btn" data-mode="rewrite" title="Completely rewrite the paragraph for maximum clarity, engagement, and impact while preserving the core message. Great for transforming rough drafts into polished content." disabled>
+                                        <span class="mode-icon">✏️</span>
+                                        <span class="mode-label">Rewrite</span>
+                                    </button>
+                                    <button class="mode-btn" data-mode="improve" title="Enhance the paragraph while preserving its structure. Improves word choices, sentence flow, precision, and engagement without fundamental restructuring." disabled>
+                                        <span class="mode-icon">✨</span>
+                                        <span class="mode-label">Improve</span>
+                                    </button>
+                                    <button class="mode-btn" data-mode="proofread" title="Correct grammar, spelling, punctuation, and basic clarity issues while preserving your voice and intent. Minimal changes for correctness only." disabled>
+                                        <span class="mode-icon">🔍</span>
+                                        <span class="mode-label">Proofread</span>
+                                    </button>
                                 </div>
                             </div>
                             <div class="suggestion-controls">
-                                <button id="generate-btn" class="btn btn-primary btn-small" disabled>⚡ Generate (Ctrl+G)</button>
                                 <button id="use-suggestion-btn" class="btn btn-success btn-small" disabled>← Use This Text (Ctrl+U)</button>
                             </div>
                             <div id="suggestion-text" class="suggestion-text">Position your cursor in a section above to see AI suggestions for that section.</div>

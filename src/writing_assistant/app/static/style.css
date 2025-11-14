@@ -39,7 +39,7 @@
     --info-color: #3b82f6;
 
     /* Light mode colors */
-    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    --bg-gradient: linear-gradient(135deg, #e0e7ff 0%, #e0f2fe 50%, #dbeafe 100%);
     --surface-primary: rgba(255, 255, 255, 0.95);
     --surface-secondary: rgba(255, 255, 255, 0.9);
     --surface-tertiary: rgba(248, 250, 252, 0.6);
@@ -101,13 +101,13 @@ body.dark-mode {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: var(--gray-600);
+    color: var(--text-secondary);
     font-size: 14px;
     font-weight: 500;
     margin: 12px 0;
     padding: 16px;
-    background: linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
-    border: 1px solid var(--gray-200);
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     animation: pulse 2s ease-in-out infinite;
@@ -263,9 +263,9 @@ header h1 {
     position: absolute;
     top: calc(100% + 12px);
     right: 0;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--surface-primary);
     backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
     min-width: 320px;
@@ -412,11 +412,11 @@ header h1 {
 .filename-text {
     font-size: 0.9rem;
     font-weight: 500;
-    color: var(--gray-600);
-    background: rgba(255, 255, 255, 0.8);
+    color: var(--text-secondary);
+    background: var(--surface-tertiary);
     padding: 8px 12px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -440,12 +440,12 @@ header h1 {
 }
 
 .sections-container {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--surface-primary);
     backdrop-filter: blur(10px);
     padding: 32px;
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-subtle);
     position: relative;
     overflow: hidden;
 }
@@ -610,10 +610,10 @@ header h1 {
 }
 
 .section {
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-xl);
     transition: var(--transition-normal);
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-secondary);
     backdrop-filter: blur(5px);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
@@ -626,9 +626,9 @@ header h1 {
 }
 
 .section-header {
-    background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.8) 100%);
+    background: var(--surface-secondary);
     padding: 20px 24px;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--border-subtle);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -778,27 +778,27 @@ header h1 {
 .main-point {
     width: 100%;
     padding: 16px 20px;
-    border: 2px solid var(--gray-200);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     font-size: 1rem;
     font-weight: 500;
     transition: var(--transition-normal);
-    background: rgba(255, 255, 255, 0.8);
-    color: var(--gray-800);
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
 }
 
 .user-text {
     width: 100%;
     padding: 16px 20px;
-    border: 2px solid var(--gray-200);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     font-size: 1rem;
     resize: vertical;
     min-height: 120px;
     transition: var(--transition-normal);
     font-family: inherit;
-    background: rgba(255, 255, 255, 0.8);
-    color: var(--gray-800);
+    background: var(--surface-tertiary);
+    color: var(--text-primary);
     line-height: 1.6;
 }
 
@@ -808,7 +808,7 @@ header h1 {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--surface-secondary);
 }
 
 .generated-text-container {
@@ -816,14 +816,14 @@ header h1 {
 }
 
 .generated-text {
-    background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.9) 100%);
-    border: 2px solid var(--gray-200);
+    background: var(--surface-tertiary);
+    border: 2px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     padding: 20px;
     min-height: 80px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 1rem;
-    color: var(--gray-800);
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-wrap: break-word;
     line-height: 1.6;
@@ -969,11 +969,11 @@ header h1 {
 }
 
 .tab-container {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--surface-primary);
     backdrop-filter: blur(10px);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--border-subtle);
     overflow: hidden;
     position: relative;
 }
@@ -991,8 +991,8 @@ header h1 {
 
 .tab-navigation {
     display: flex;
-    background: linear-gradient(135deg, var(--gray-50) 0%, rgba(255, 255, 255, 0.8) 100%);
-    border-bottom: 1px solid var(--gray-200);
+    background: var(--surface-secondary);
+    border-bottom: 1px solid var(--border-subtle);
     padding: 8px;
     gap: 4px;
 }
@@ -1669,43 +1669,80 @@ input[type="file"]:focus {
     flex-shrink: 0;
 }
 
-.generation-mode-options {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 16px;
+.generation-mode-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 12px;
     background: var(--surface-tertiary);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
 }
 
-.radio-option {
+.mode-btn {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    padding: 16px 12px;
+    background: var(--surface-primary);
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    padding: 6px 12px;
-    border-radius: var(--radius-sm);
-    transition: var(--transition-fast);
+    transition: all var(--transition-fast);
     font-weight: 500;
-    font-size: 0.9rem;
     color: var(--text-primary);
+    position: relative;
 }
 
-.radio-option:hover {
+.mode-btn:not(:disabled):hover {
     background: var(--surface-secondary);
-    color: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.radio-option input[type="radio"] {
-    margin: 0;
-    accent-color: var(--primary-color);
+.mode-btn:not(:disabled):active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.radio-option input[type="radio"]:checked + span {
-    color: var(--primary-color);
+.mode-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.mode-btn.generating {
+    border-color: var(--primary-color);
+    background: var(--surface-secondary);
+}
+
+.mode-btn.generating::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.mode-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.mode-label {
+    font-size: 0.9rem;
     font-weight: 600;
+    text-align: center;
 }
 
 .suggestion-text {
@@ -1761,7 +1798,7 @@ input[type="file"]:focus {
     display: flex;
     gap: 4px;
     margin-bottom: 24px;
-    background: var(--gray-100);
+    background: var(--surface-secondary);
     padding: 4px;
     border-radius: var(--radius-lg);
 }

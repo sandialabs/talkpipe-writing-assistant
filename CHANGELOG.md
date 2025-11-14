@@ -6,6 +6,20 @@
   - Backend truncates context to 2000 characters (last 2000 for previous context, first 2000 for next context)
   - Provides richer context for AI text generation while managing token usage
   - Added comprehensive tests: truncation with long paragraphs and multi-paragraph collection with short paragraphs
+- Redesigned AI generation UI for improved usability
+  - Removed separate "Generate" button
+  - Replaced radio buttons with large, descriptive icon buttons (Ideas 💡, Rewrite ✏️, Improve ✨, Proofread 🔍)
+  - Each button includes hover tooltips explaining its purpose
+  - Direct click triggers generation immediately
+  - Visual feedback with pulsing indicator during generation
+  - Streamlined workflow reduces clicks and improves discoverability
+- Fixed dark mode styling issues
+  - Replaced hard-coded light backgrounds with CSS variables that adapt to dark mode
+  - Fixed loading indicators, dropdowns, form inputs, sections, and containers
+  - Dark mode now has consistent dark theming throughout the application
+  - Improved text contrast and border visibility in dark mode
+  - Fixed light mode background to use proper light gradient (was incorrectly using dark colors)
+  - Background now properly changes when toggling between light and dark modes
 
 ## 0.1.1
 - Addressed "information exposure through exception" issue

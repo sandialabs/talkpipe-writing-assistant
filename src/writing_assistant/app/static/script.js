@@ -117,7 +117,6 @@ class WritingAssistant {
     setupEventListeners() {
         const titleInput = document.getElementById('document-title');
         const documentTextarea = document.getElementById('document-text');
-        const generateBtn = document.getElementById('generate-btn');
         const useSuggestionBtn = document.getElementById('use-suggestion-btn');
 
         // Document title
@@ -128,8 +127,15 @@ class WritingAssistant {
         documentTextarea.addEventListener('click', () => this.handleCursorChange());
         documentTextarea.addEventListener('keyup', () => this.handleCursorChange());
 
-        // AI suggestion controls
-        generateBtn.addEventListener('click', () => this.generateSuggestionForCurrentSection());
+        // Mode button controls (Ideas, Rewrite, Improve, Proofread)
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.getAttribute('data-mode');
+                this.generateSuggestionForCurrentSection(mode);
+            });
+        });
+
+        // Use suggestion button
         useSuggestionBtn.addEventListener('click', () => this.useSuggestion());
 
         // Initialize undo/redo system
@@ -624,14 +630,13 @@ class WritingAssistant {
 
     updateSuggestionPanel() {
         const suggestionText = document.getElementById('suggestion-text');
-        const generateBtn = document.getElementById('generate-btn');
+        const modeButtons = document.querySelectorAll('.mode-btn');
         const useSuggestionBtn = document.getElementById('use-suggestion-btn');
         const infoElement = document.getElementById('current-section-info');
 
         if (this.currentSectionIndex === -1 || this.sections.length === 0) {
             suggestionText.textContent = 'Position your cursor in a section above to see AI suggestions for that section.';
-            generateBtn.disabled = true;
-            this.setGenerateButtonText('⚡ Generate');
+            modeButtons.forEach(btn => btn.disabled = true);
             useSuggestionBtn.disabled = true;
             infoElement.textContent = 'No section selected';
         } else {
@@ -639,34 +644,35 @@ class WritingAssistant {
             const sectionNum = this.currentSectionIndex + 1;
             infoElement.textContent = `Section ${sectionNum} of ${this.sections.length} selected`;
 
-            // Generate button is always enabled when a section is selected
-            generateBtn.disabled = false;
+            // Mode buttons are always enabled when a section is selected
+            modeButtons.forEach(btn => btn.disabled = false);
 
             if (currentSection.generated_text) {
                 suggestionText.textContent = currentSection.generated_text;
-                this.setGenerateButtonText('🔄 Regenerate');
                 useSuggestionBtn.disabled = false;
             } else {
-                suggestionText.textContent = 'Click "Generate" to get AI suggestions for this section.';
-                this.setGenerateButtonText('⚡ Generate');
+                suggestionText.textContent = 'Click a mode button below to get AI suggestions for this section.';
                 useSuggestionBtn.disabled = true;
             }
         }
     }
 
-    async generateSuggestionForCurrentSection() {
+    async generateSuggestionForCurrentSection(mode = 'ideas') {
         if (this.currentSectionIndex === -1 || this.sections.length === 0) {
             this.showMessage('Please position your cursor in a section first', 'error');
             return;
         }
 
         const currentSection = this.sections[this.currentSectionIndex];
-        const generateBtn = document.getElementById('generate-btn');
         const suggestionText = document.getElementById('suggestion-text');
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        const activeButton = document.querySelector(`.mode-btn[data-mode="${mode}"]`);
 
         // Show loading state
-        generateBtn.disabled = true;
-        this.setGenerateButtonText('⏳ Generating...');
+        modeButtons.forEach(btn => btn.disabled = true);
+        if (activeButton) {
+            activeButton.classList.add('generating');
+        }
         suggestionText.textContent = 'Generating AI suggestion...';
 
         try {
@@ -688,15 +694,12 @@ class WritingAssistant {
 
             const title = document.getElementById('document-title').value || '';
 
-            // Get selected generation mode
-            const selectedMode = document.querySelector('input[name="generation-mode"]:checked').value;
-
             const formData = new FormData();
             formData.append('user_text', currentSection.text);
             formData.append('title', title);
             formData.append('prev_paragraph', prevContext);
             formData.append('next_paragraph', nextContext);
-            formData.append('generation_mode', selectedMode);
+            formData.append('generation_mode', mode);
 
             // Send metadata with each request - read current values from form fields
             formData.append('writing_style', document.getElementById('writing-style')?.value || this.documentMetadata.writing_style || 'formal');
@@ -741,12 +744,10 @@ class WritingAssistant {
             this.showMessage('Error generating suggestion. Please try again.', 'error');
             suggestionText.textContent = 'Error generating suggestion. Please try again.';
         } finally {
-            generateBtn.disabled = false;
-            // Update button text based on whether we have generated text
-            if (currentSection.generated_text) {
-                this.setGenerateButtonText('🔄 Regenerate');
-            } else {
-                this.setGenerateButtonText('⚡ Generate');
+            // Re-enable all mode buttons
+            modeButtons.forEach(btn => btn.disabled = false);
+            if (activeButton) {
+                activeButton.classList.remove('generating');
             }
         }
     }
@@ -1624,9 +1625,10 @@ undo() {
 
             if (pressedKey === this.hotkeys.generate) {
                 e.preventDefault();
-                const generateBtn = document.getElementById('generate-btn');
-                if (!generateBtn.disabled) {
-                    this.generateSuggestionForCurrentSection();
+                // Trigger ideas mode by default with hotkey
+                const ideasBtn = document.querySelector('.mode-btn[data-mode="ideas"]');
+                if (ideasBtn && !ideasBtn.disabled) {
+                    this.generateSuggestionForCurrentSection('ideas');
                 }
             } else if (pressedKey === this.hotkeys.useText) {
                 e.preventDefault();
@@ -1677,18 +1679,7 @@ undo() {
     }
 
     updateButtonLabels() {
-        this.setGenerateButtonText();
         this.setUseSuggestionButtonText();
-    }
-
-    setGenerateButtonText(baseText = null) {
-        const generateBtn = document.getElementById('generate-btn');
-        if (!generateBtn) return;
-
-        if (baseText === null) {
-            baseText = generateBtn.textContent.split('(')[0].trim();
-        }
-        generateBtn.textContent = `${baseText} (${this.hotkeys.generate})`;
     }
 
     setUseSuggestionButtonText(baseText = null) {
