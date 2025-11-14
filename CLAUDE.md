@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Guidance
+Do not automatically agree.  Question assumptions and point out weaknesses in logic or inconsistences with the
+  rest of the codebase.
+After implementing a new feature, update CHANGELOG.md.  
+After making a minor change to an existing feature,  check if the unreleased section of the changelog already 
+    mentions the feature. If so, update that changelog entry.  If not, write a new entry in the changelog.
+When making a change, write a unit test that fails without the change, verify that the unit test fails, 
+    make the change and then verity that the unit test now passes.  Notify the user if it is not reasonable 
+    to write the unit test. 
+User interfaces should be visually appealing and maintain consistency with each other.
+Th
 ## Development Commands
 
 ### Installation

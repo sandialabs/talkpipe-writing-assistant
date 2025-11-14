@@ -670,9 +670,21 @@ class WritingAssistant {
         suggestionText.textContent = 'Generating AI suggestion...';
 
         try {
-            // Get context (previous and next sections)
-            const prevSection = this.currentSectionIndex > 0 ? this.sections[this.currentSectionIndex - 1] : null;
-            const nextSection = this.currentSectionIndex < this.sections.length - 1 ? this.sections[this.currentSectionIndex + 1] : null;
+            // Get context (collect from multiple sections to reach 2000 characters)
+            let prevContext = '';
+            let nextContext = '';
+
+            // Collect previous context (going backwards from current section)
+            for (let i = this.currentSectionIndex - 1; i >= 0 && prevContext.length < 2000; i--) {
+                const sectionText = this.sections[i].text;
+                prevContext = sectionText + (prevContext ? '\n\n' + prevContext : '');
+            }
+
+            // Collect next context (going forwards from current section)
+            for (let i = this.currentSectionIndex + 1; i < this.sections.length && nextContext.length < 2000; i++) {
+                const sectionText = this.sections[i].text;
+                nextContext = nextContext + (nextContext ? '\n\n' : '') + sectionText;
+            }
 
             const title = document.getElementById('document-title').value || '';
 
@@ -682,8 +694,8 @@ class WritingAssistant {
             const formData = new FormData();
             formData.append('user_text', currentSection.text);
             formData.append('title', title);
-            formData.append('prev_paragraph', prevSection ? prevSection.text : '');
-            formData.append('next_paragraph', nextSection ? nextSection.text : '');
+            formData.append('prev_paragraph', prevContext);
+            formData.append('next_paragraph', nextContext);
             formData.append('generation_mode', selectedMode);
 
             // Send metadata with each request - read current values from form fields

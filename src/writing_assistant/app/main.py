@@ -401,6 +401,15 @@ async def generate_text(
                 )
                 print(f"DEBUG: Using source={source}, model={model}")
 
+                # Truncate context to 2000 characters
+                # prev_paragraph: keep LAST 2000 characters (most recent context)
+                if prev_paragraph and len(prev_paragraph) > 2000:
+                    prev_paragraph = prev_paragraph[-2000:]
+
+                # next_paragraph: keep FIRST 2000 characters (upcoming context)
+                if next_paragraph and len(next_paragraph) > 2000:
+                    next_paragraph = next_paragraph[:2000]
+
                 generated_text = cb.new_paragraph(
                     text=user_text,
                     metadata=metadata,

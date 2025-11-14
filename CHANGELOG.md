@@ -1,6 +1,11 @@
 # Changelog
 
 ## In Development
+- Enhanced AI context generation to include multiple paragraphs (up to 2000 characters) instead of just adjacent paragraphs
+  - Frontend now collects context from multiple preceding and following sections
+  - Backend truncates context to 2000 characters (last 2000 for previous context, first 2000 for next context)
+  - Provides richer context for AI text generation while managing token usage
+  - Added comprehensive tests: truncation with long paragraphs and multi-paragraph collection with short paragraphs
 
 ## 0.1.1
 - Addressed "information exposure through exception" issue
