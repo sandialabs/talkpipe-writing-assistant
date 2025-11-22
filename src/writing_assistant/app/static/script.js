@@ -33,6 +33,10 @@ class WritingAssistant {
         this.undoDelay = 1000; // 1 second delay before saving undo state
         this.isUndoRedoOperation = false;
 
+        // Debounce timer for parseSections (performance optimization)
+        this.parseSectionsTimer = null;
+        this.parseSectionsDelay = 150; // 150ms debounce delay
+
         this.init();
     }
 
@@ -125,17 +129,27 @@ class WritingAssistant {
         // Document text editing and cursor tracking
         documentTextarea.addEventListener('input', () => this.handleDocumentTextChange());
         documentTextarea.addEventListener('click', () => this.handleCursorChange());
-        documentTextarea.addEventListener('keyup', () => this.handleCursorChange());
+        // Only handle cursor change for navigation keys (not regular typing)
+        documentTextarea.addEventListener('keyup', (e) => {
+            const navigationKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                                    'Home', 'End', 'PageUp', 'PageDown'];
+            if (navigationKeys.includes(e.key)) {
+                this.handleCursorChange();
+            }
+        });
 
         // Mode button controls (Ideas, Rewrite, Improve, Proofread)
+        // Prevent buttons from stealing focus from the editor
         document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('mousedown', (e) => e.preventDefault());
             btn.addEventListener('click', () => {
                 const mode = btn.getAttribute('data-mode');
                 this.generateSuggestionForCurrentSection(mode);
             });
         });
 
-        // Use suggestion button
+        // Use suggestion button - also prevent focus steal
+        useSuggestionBtn.addEventListener('mousedown', (e) => e.preventDefault());
         useSuggestionBtn.addEventListener('click', () => this.useSuggestion());
 
         // Initialize undo/redo system
@@ -443,19 +457,30 @@ class WritingAssistant {
     }
 
     handleDocumentTextChange() {
-        console.log('handleDocumentTextChange called');
         const textarea = document.getElementById('document-text');
         this.documentText = textarea.value;
-        console.log('Current document text:', this.documentText);
 
         // Save undo state if this wasn't an undo/redo operation
         if (!this.isUndoRedoOperation) {
             this.scheduleUndoStateSave();
         }
 
-        console.log('About to call parseSections');
-        this.parseSections();
-        this.handleCursorChange();
+        // Debounce parseSections to avoid expensive operations on every keystroke
+        // Note: handleCursorChange is called after parseSections completes, not here,
+        // to avoid UI flickering due to stale section positions
+        this.scheduleParseSections();
+    }
+
+    scheduleParseSections() {
+        // Clear existing timer
+        if (this.parseSectionsTimer) {
+            clearTimeout(this.parseSectionsTimer);
+        }
+
+        // Schedule parseSections after delay
+        this.parseSectionsTimer = setTimeout(() => {
+            this.parseSections();
+        }, this.parseSectionsDelay);
     }
 
     handleTitleChange() {
@@ -477,8 +502,15 @@ class WritingAssistant {
         if (str1.length === 0 && str2.length === 0) return 1;
         if (str1.length === 0 || str2.length === 0) return 0;
 
-        // Use Levenshtein distance for accurate similarity calculation
+        // Cheap length pre-filter: if one string is more than 2x the length of
+        // the other, similarity can't exceed 0.5 (our threshold), so skip Levenshtein
+        const minLen = Math.min(str1.length, str2.length);
         const maxLen = Math.max(str1.length, str2.length);
+        if (maxLen > 2 * minLen) {
+            return minLen / maxLen; // Return upper bound (actual similarity is lower)
+        }
+
+        // Use Levenshtein distance for accurate similarity calculation
         const distance = this.levenshteinDistance(str1, str2);
         const similarity = 1 - (distance / maxLen);
 
@@ -513,11 +545,8 @@ class WritingAssistant {
     }
 
     parseSections() {
-        console.log('parseSections called');
         const text = this.documentText;
         const oldSections = [...this.sections]; // Save previous sections
-        console.log('Old sections count:', oldSections.length);
-        console.log('Old sections:', oldSections);
         this.sections = [];
 
         if (!text.trim()) {
@@ -530,7 +559,6 @@ class WritingAssistant {
 
         // Split by double newlines (blank lines)
         const rawSections = text.split(/\n\s*\n/);
-        console.log('Raw sections count:', rawSections.length);
         let currentPos = 0;
 
         rawSections.forEach((sectionText, index) => {
@@ -551,45 +579,50 @@ class WritingAssistant {
                 };
 
                 // Try to preserve generated_text from previous sections
-                // Look for a section with the same or similar text content
-                // Use findIndex to get the index so we can mark it as matched
-                const matchingOldSectionIndex = oldSections.findIndex((oldSection, oldIndex) => {
-                    // Skip sections that have already been matched to another new section
-                    if (matchedOldSectionIndices.has(oldIndex)) {
-                        return false;
-                    }
+                // Optimization: Try index-based matching first (most common case during typing)
+                let matchingOldSectionIndex = -1;
 
-                    // Skip sections without generated text
-                    if (!oldSection.generated_text) {
-                        return false;
-                    }
-
-                    // Calculate similarity between ORIGINAL text (when suggestion was generated) and new text
-                    // This prevents the "moving target" bug where each keystroke is compared to the previous keystroke
+                // Step 1: Try matching at the same index first (fast path for normal editing)
+                if (index < oldSections.length &&
+                    !matchedOldSectionIndices.has(index) &&
+                    oldSections[index].generated_text) {
+                    const oldSection = oldSections[index];
                     const originalText = oldSection.original_text || oldSection.text;
                     const similarity = this.calculateTextSimilarity(originalText, trimmed);
+                    if (similarity > 0.5) {
+                        matchingOldSectionIndex = index;
+                    }
+                }
 
-                    // Debug logging
-                    console.log('Similarity check:');
-                    console.log('  Original text (when generated):', originalText);
-                    console.log('  New text:', trimmed);
-                    console.log('  Similarity:', similarity);
-                    console.log('  Keep suggestion?', similarity > 0.5);
-
-                    // Keep suggestion if more than 50% of the text is the same
-                    return similarity > 0.5;
-                });
+                // Step 2: Fall back to searching all old sections only if index-based match failed
+                if (matchingOldSectionIndex === -1) {
+                    matchingOldSectionIndex = oldSections.findIndex((oldSection, oldIndex) => {
+                        // Skip the index we already checked
+                        if (oldIndex === index) {
+                            return false;
+                        }
+                        // Skip sections that have already been matched to another new section
+                        if (matchedOldSectionIndices.has(oldIndex)) {
+                            return false;
+                        }
+                        // Skip sections without generated text
+                        if (!oldSection.generated_text) {
+                            return false;
+                        }
+                        // Calculate similarity between ORIGINAL text and new text
+                        const originalText = oldSection.original_text || oldSection.text;
+                        const similarity = this.calculateTextSimilarity(originalText, trimmed);
+                        return similarity > 0.5;
+                    });
+                }
 
                 if (matchingOldSectionIndex !== -1) {
-                    console.log('Preserving suggestion for section');
                     const matchingOldSection = oldSections[matchingOldSectionIndex];
                     newSection.generated_text = matchingOldSection.generated_text;
                     // Also preserve the original text so we continue comparing against it
                     newSection.original_text = matchingOldSection.original_text || matchingOldSection.text;
                     // Mark this old section as matched so it won't be reused for other new sections
                     matchedOldSectionIndices.add(matchingOldSectionIndex);
-                } else {
-                    console.log('Clearing suggestion for section');
                 }
 
                 this.sections.push(newSection);
@@ -597,6 +630,8 @@ class WritingAssistant {
         });
 
         this.updateSectionInfo();
+        // Update cursor/suggestion panel after sections are rebuilt
+        this.handleCursorChange();
     }
 
     handleCursorChange() {
@@ -769,18 +804,8 @@ class WritingAssistant {
         // Save undo state before making changes
         this.saveUndoState();
 
-        // Debug section boundaries
-        console.log('Section replacement debug:');
-        console.log('Current section text:', JSON.stringify(currentSection.text));
-        console.log('Section start pos:', currentSection.startPos);
-        console.log('Section end pos:', currentSection.endPos);
-        console.log('Generated text:', JSON.stringify(currentSection.generated_text));
-
         const beforeSection = this.documentText.substring(0, currentSection.startPos);
         const afterSection = this.documentText.substring(currentSection.endPos);
-
-        console.log('Before section:', JSON.stringify(beforeSection.slice(-10))); // Last 10 chars
-        console.log('After section:', JSON.stringify(afterSection.slice(0, 10))); // First 10 chars
 
         // Clean the generated text to prevent extra blank lines
         const cleanGeneratedText = currentSection.generated_text.trim();
@@ -1270,7 +1295,6 @@ class WritingAssistant {
     applySavedAISettings() {
         // No server call needed - metadata is sent with each generation request
         // This method kept for compatibility but does nothing
-        console.log('applySavedAISettings: No action needed - using stateless approach');
     }
 
     loadCurrentDocumentToSettingsForm() {
@@ -1325,8 +1349,6 @@ class WritingAssistant {
                 model: documentData.metadata.model || ''
             };
 
-            console.log('restoreDocumentMetadata: Setting documentMetadata to:', this.documentMetadata);
-
             // Update the UI form fields AND the settings modal if it's open
             // Use setTimeout to ensure DOM updates are processed
             setTimeout(() => {
@@ -1358,7 +1380,6 @@ class WritingAssistant {
                 // Keep suggestion if more than 50% of the text is the same
                 if (similarity > 0.5) {
                     currentSection.generated_text = savedSection.generated_text;
-                    console.log(`Restored generated_text for section ${i} (similarity: ${(similarity * 100).toFixed(1)}%):`, savedSection.generated_text.substring(0, 50) + '...');
                 }
             }
         }
@@ -1426,10 +1447,8 @@ class WritingAssistant {
         
         // Clear redo stack when new state is saved
         this.redoStack = [];
-        
+
         this.lastUndoState = currentState;
-        
-        console.log(`Undo state saved. Stack size: ${this.undoStack.length}`);
     }
     
 undo() {
@@ -1523,7 +1542,6 @@ undo() {
         }
 
         this.showMessage('Undo applied', 'success');
-        console.log(`Undo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
     }
         
     redo() {
@@ -1579,15 +1597,13 @@ undo() {
         }
 
         this.showMessage('Redo applied', 'success');
-        console.log(`Redo applied. Undo stack: ${this.undoStack.length}, Redo stack: ${this.redoStack.length}`);
     }
-    
+
     clearUndoHistory() {
         this.undoStack = [];
         this.redoStack = [];
         this.lastUndoState = null;
         this.saveUndoState(); // Save current state as first undo point
-        console.log('Undo history cleared');
     }
 
     // Hotkey Management System
@@ -1717,8 +1733,6 @@ undo() {
         // Update the system
         this.updateButtonLabels();
         this.setupHotkeyListener();
-
-        console.log('Hotkeys updated:', this.hotkeys);
     }
 
     async createNewDocument() {
@@ -2345,7 +2359,6 @@ undo() {
     }
 
     async loadDocumentFromServer(filename) {
-        console.log('loadDocumentFromServer: called with filename:', filename);
         try {
             // Get document data directly from the load endpoint
             const response = await this.authFetch(`/documents/load/${filename}`);
@@ -2591,17 +2604,14 @@ undo() {
     async performAutoSave() {
         // Only auto-save if document has been saved at least once
         if (!this.currentFilename) {
-            console.log('Auto-save skipped: Document has not been saved yet');
             this.startAutoSaveTimer(); // Restart timer
             return;
         }
 
         try {
-            console.log('Performing auto-save...');
             await this.saveWithFilename(this.currentFilename, false, true);
             this.lastSaveTime = new Date();
             this.showMessage('Document auto-saved', 'success');
-            console.log('Auto-save completed successfully');
         } catch (error) {
             console.error('Auto-save failed:', error);
             this.showMessage('Auto-save failed', 'error');
@@ -2664,8 +2674,6 @@ undo() {
                 body: formData,
                 keepalive: true
             }));
-
-            console.log('Sync save performed on page exit');
         } catch (error) {
             console.error('Sync save failed:', error);
         } finally {

@@ -1,5 +1,19 @@
 # Changelog
 
+## In Development
+- Made AI generation mode buttons smaller and arranged in a single row for better visibility on small screens
+- Fixed potential performance issue causing progressive slowdown during extended editing sessions
+  - Removed 34 debug console.log statements that fired on every keystroke
+  - Eliminated logging of full document text and section arrays during typing
+  - Retained one-time initialization logs for startup troubleshooting
+- Optimized section parsing performance for smoother typing experience
+  - Added 150ms debounce to parseSections to avoid expensive operations on every keystroke
+  - Added length pre-filter to skip Levenshtein distance calculation when strings differ by >2x in length
+  - Implemented index-based matching to check same-position sections first before searching all sections
+  - Fixed suggestion panel stability: suggestions no longer flicker during typing
+  - Keyup handler now only triggers cursor updates for navigation keys (arrows, Home, End, etc.)
+  - Mode buttons and "Use suggestion" button no longer steal focus from the editor
+
 ## 0.1.2
 - Enhanced AI context generation to include multiple paragraphs (up to 2000 characters) instead of just adjacent paragraphs
   - Frontend now collects context from multiple preceding and following sections

@@ -1670,10 +1670,10 @@ input[type="file"]:focus {
 }
 
 .generation-mode-buttons {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    padding: 12px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 8px;
     background: var(--surface-tertiary);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -1681,18 +1681,21 @@ input[type="file"]:focus {
 
 .mode-btn {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 8px;
-    padding: 16px 12px;
+    gap: 4px;
+    padding: 6px 10px;
     background: var(--surface-primary);
-    border: 2px solid var(--border-subtle);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all var(--transition-fast);
     font-weight: 500;
     color: var(--text-primary);
     position: relative;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
 }
 
 .mode-btn:not(:disabled):hover {
@@ -1735,14 +1738,15 @@ input[type="file"]:focus {
 }
 
 .mode-icon {
-    font-size: 2rem;
+    font-size: 1rem;
     line-height: 1;
 }
 
 .mode-label {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-align: center;
+    white-space: nowrap;
 }
 
 .suggestion-text {
