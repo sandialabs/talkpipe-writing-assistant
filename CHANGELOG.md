@@ -1,6 +1,6 @@
 # Changelog
 
-## In Development
+## 0.1.3
 - Made AI generation mode buttons smaller and arranged in a single row for better visibility on small screens
 - Fixed potential performance issue causing progressive slowdown during extended editing sessions
   - Removed 34 debug console.log statements that fired on every keystroke
@@ -13,6 +13,7 @@
   - Fixed suggestion panel stability: suggestions no longer flicker during typing
   - Keyup handler now only triggers cursor updates for navigation keys (arrows, Home, End, etc.)
   - Mode buttons and "Use suggestion" button no longer steal focus from the editor
+- Updated async issues causing unit tests and the admin command to hang.
 
 ## 0.1.2
 - Enhanced AI context generation to include multiple paragraphs (up to 2000 characters) instead of just adjacent paragraphs
