@@ -26,6 +26,30 @@ TestSessionLocal = async_sessionmaker(
 )
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up async engine after all tests complete."""
+    import asyncio
+    # Dispose of the async engine to close all connections and threads
+    try:
+        # Try to dispose using the current event loop if available
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed() and not loop.is_running():
+                loop.run_until_complete(test_engine.dispose())
+            else:
+                # Create a new event loop for cleanup
+                asyncio.run(test_engine.dispose())
+        except RuntimeError:
+            # No event loop exists, create one
+            asyncio.run(test_engine.dispose())
+    except Exception:
+        # Fallback: try to close the underlying sync engine
+        try:
+            test_engine.sync_engine.dispose(close=True)
+        except Exception:
+            pass
+
+
 @pytest.fixture(scope="function")
 async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Create a fresh database for each test."""
