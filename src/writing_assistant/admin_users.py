@@ -9,13 +9,17 @@ from getpass import getpass
 async def list_users():
     """List all users."""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
-            select(User).order_by(User.created_at.desc())
+            select(User)
+            .options(selectinload(User.documents))
+            .order_by(User.created_at.desc())
         )
         users = result.scalars().all()
 
@@ -43,13 +47,17 @@ async def list_users():
 async def delete_user(email: str):
     """Delete a user and all their documents."""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
-            select(User).where(User.email == email)
+            select(User)
+            .options(selectinload(User.documents))
+            .where(User.email == email)
         )
         user = result.scalar_one_or_none()
 
@@ -83,10 +91,11 @@ async def reset_password(email: str):
     from fastapi_users.password import PasswordHelper
     from sqlalchemy import select
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
             select(User).where(User.email == email)
         )
@@ -121,10 +130,11 @@ async def toggle_active(email: str):
     """Toggle user active status."""
     from sqlalchemy import select
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
             select(User).where(User.email == email)
         )
@@ -145,10 +155,11 @@ async def make_superuser(email: str):
     """Make a user a superuser."""
     from sqlalchemy import select
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
             select(User).where(User.email == email)
         )
@@ -168,13 +179,17 @@ async def make_superuser(email: str):
 async def show_user_info(email: str):
     """Show detailed user information."""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
-    from writing_assistant.app.database import get_async_session
+    from writing_assistant.app.database import get_session_maker
     from writing_assistant.app.models import User
 
-    async for session in get_async_session():
+    session_maker = get_session_maker()
+    async with session_maker() as session:
         result = await session.execute(
-            select(User).where(User.email == email)
+            select(User)
+            .options(selectinload(User.documents))
+            .where(User.email == email)
         )
         user = result.scalar_one_or_none()
 
@@ -230,7 +245,7 @@ Note: This tool requires direct access to the database.
 
 async def async_main():
     """Async main entry point."""
-    from writing_assistant.app.database import create_db_and_tables
+    from writing_assistant.app.database import create_db_and_tables, get_engine
 
     # Initialize database
     await create_db_and_tables()
@@ -293,6 +308,10 @@ async def async_main():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+    finally:
+        # Dispose of the engine to close all connections
+        engine = get_engine()
+        await engine.dispose()
 
 
 def main():
