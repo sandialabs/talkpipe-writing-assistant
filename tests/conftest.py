@@ -6,7 +6,11 @@ from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import StaticPool
 
 from writing_assistant.app.auth import get_user_manager
@@ -29,6 +33,7 @@ TestSessionLocal = async_sessionmaker(
 def pytest_sessionfinish(session, exitstatus):
     """Clean up async engine after all tests complete."""
     import asyncio
+
     # Dispose of the async engine to close all connections and threads
     try:
         # Try to dispose using the current event loop if available
