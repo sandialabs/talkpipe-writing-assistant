@@ -6,7 +6,11 @@ from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import StaticPool
 
 from writing_assistant.app.auth import get_user_manager
@@ -24,6 +28,31 @@ test_engine = create_async_engine(
 TestSessionLocal = async_sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up async engine after all tests complete."""
+    import asyncio
+
+    # Dispose of the async engine to close all connections and threads
+    try:
+        # Try to dispose using the current event loop if available
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed() and not loop.is_running():
+                loop.run_until_complete(test_engine.dispose())
+            else:
+                # Create a new event loop for cleanup
+                asyncio.run(test_engine.dispose())
+        except RuntimeError:
+            # No event loop exists, create one
+            asyncio.run(test_engine.dispose())
+    except Exception:
+        # Fallback: try to close the underlying sync engine
+        try:
+            test_engine.sync_engine.dispose(close=True)
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="function")

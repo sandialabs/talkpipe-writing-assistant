@@ -116,7 +116,7 @@ def test_get_user_preferences_empty(authenticated_client):
     assert data["preferences"] == {}
 
 
-def test_get_user_preferences_with_data(authenticated_client, async_db_session, test_user):
+async def test_get_user_preferences_with_data(authenticated_client, async_db_session, test_user):
     """Test getting user preferences with saved data."""
     import json
 
@@ -124,9 +124,8 @@ def test_get_user_preferences_with_data(authenticated_client, async_db_session, 
     test_user.preferences = json.dumps({"theme": "dark", "fontSize": 14})
     async_db_session.add(test_user)
 
-    # Use sync over async to commit
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(async_db_session.commit())
+    # Commit the changes
+    await async_db_session.commit()
 
     response = authenticated_client.get("/user/preferences")
     assert response.status_code == 200
@@ -413,9 +412,10 @@ def test_create_snapshot_cleanup_old(authenticated_client):
     )
 
     # Create 12 snapshots
+    import time
     for i in range(12):
         authenticated_client.post("/documents/snapshot/cleanup.json")
-        asyncio.sleep(0.01)  # Small delay to ensure different timestamps
+        time.sleep(0.01)  # Small delay to ensure different timestamps
 
     # List snapshots
     response = authenticated_client.get("/documents/snapshots/cleanup.json")

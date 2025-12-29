@@ -52,6 +52,7 @@ dev = [
     "mypy>=1.0.0",
     "bandit>=1.7.0",
     "safety>=2.3.0",
+    "isort"
 ]
 test = [
     "pytest>=7.0.0",
