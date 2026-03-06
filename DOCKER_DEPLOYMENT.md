@@ -295,16 +295,6 @@ docker-compose exec writing-assistant ls -la /app/data
 docker-compose exec writing-assistant python -m writing_assistant.app.server --init-db
 ```
 
-### Numba Caching Errors
-
-If you see errors like `RuntimeError: cannot cache function 'rdist': no locator available`, this is resolved in the current Dockerfile by setting `NUMBA_CACHE_DIR=/tmp/numba_cache`. If using an older version:
-
-```bash
-# Rebuild with latest Dockerfile
-docker-compose build --no-cache writing-assistant
-docker-compose up -d
-```
-
 ### Database Locked Errors
 
 SQLite doesn't handle concurrent writes well. If you see "database is locked":

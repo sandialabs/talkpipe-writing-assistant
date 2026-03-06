@@ -24,13 +24,8 @@ RUN groupadd -r builder && useradd -r -g builder -m builder
 
 # Set up build environment
 WORKDIR /build
-RUN chown builder:builder /build && \
-    mkdir -p /tmp/numba_cache && \
-    chmod 777 /tmp/numba_cache
+RUN chown builder:builder /build
 USER builder
-
-# Set numba cache directory for build stage
-ENV NUMBA_CACHE_DIR=/tmp/numba_cache
 
 # Copy source files
 COPY --chown=builder:builder pyproject.toml README.md LICENSE ./
@@ -63,9 +58,8 @@ RUN groupadd -r -g 1001 app && \
 
 # Set up application directory
 WORKDIR /app
-RUN mkdir -p /app/data /tmp/numba_cache && \
-    chown -R app:app /app && \
-    chmod 777 /tmp/numba_cache
+RUN mkdir -p /app/data && \
+    chown -R app:app /app
 
 # Copy the built wheel from builder stage
 COPY --from=builder --chown=app:app /build/dist/*.whl /tmp/
@@ -97,7 +91,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    NUMBA_CACHE_DIR=/tmp/numba_cache \
     WRITING_ASSISTANT_HOST=0.0.0.0 \
     WRITING_ASSISTANT_PORT=8001 \
     WRITING_ASSISTANT_DB_PATH=/app/data/writing_assistant.db \
