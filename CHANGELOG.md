@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Documentation: Renamed `OLLAMA_BASE_URL` to `OLLAMA_SERVER_URL` in README, DOCKER_DEPLOYMENT.md, and .env.example
+
 ## 0.1.3
 - Made AI generation mode buttons smaller and arranged in a single row for better visibility on small screens
 - Fixed potential performance issue causing progressive slowdown during extended editing sessions

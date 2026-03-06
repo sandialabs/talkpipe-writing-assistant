@@ -196,7 +196,7 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
-| `TALKPIPE_OLLAMA_BASE_URL` | Ollama server URL for local models | `http://localhost:11434` |
+| `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
 
 
 **Security Options:**

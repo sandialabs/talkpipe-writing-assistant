@@ -395,12 +395,6 @@ async def generate_text(
                 metadata.source = source
                 metadata.model = model
 
-                # Debug: Show current environment
-                print(
-                    f"DEBUG: OLLAMA_BASE_URL in os.environ: {os.environ.get('OLLAMA_BASE_URL', 'NOT SET')}"
-                )
-                print(f"DEBUG: Using source={source}, model={model}")
-
                 # Truncate context to 2000 characters
                 # prev_paragraph: keep LAST 2000 characters (most recent context)
                 if prev_paragraph and len(prev_paragraph) > 2000:

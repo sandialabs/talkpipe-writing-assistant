@@ -68,7 +68,7 @@ cp .env.example .env
 - `WRITING_ASSISTANT_PORT`: Server port (default: `8001`)
 - `WRITING_ASSISTANT_DB_PATH`: Database file path (default: `/app/data/writing_assistant.db`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT models
-- `OLLAMA_BASE_URL`: Ollama server URL (default: `http://localhost:11434`)
+- `OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
 
 ### Docker Compose Services
 
