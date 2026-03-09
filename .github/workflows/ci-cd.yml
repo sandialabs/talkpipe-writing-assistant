@@ -143,7 +143,7 @@ jobs:
           type=raw,value=experimental,enable=${{ github.event_name == 'release' && (contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b')) }}
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: .
         push: true
