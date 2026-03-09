@@ -2,6 +2,7 @@
 
 ## Unreleased
 - CI/CD: Build Docker containers for multiple architectures (linux/amd64, linux/arm64) using QEMU emulation
+- CI/CD: Use single-arch (linux/amd64) for branch/PR builds; multi-arch only on release for faster feedback
 - Documentation: Renamed `OLLAMA_BASE_URL` to `OLLAMA_SERVER_URL` in README, DOCKER_DEPLOYMENT.md, and .env.example
 
 ## 0.1.3
