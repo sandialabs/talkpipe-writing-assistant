@@ -17,8 +17,14 @@ User interfaces should be visually appealing and maintain consistency with each 
 
 ### Installation
 ```bash
-# Development installation
+# Development installation (pip)
 pip install -e .[dev]
+
+# Development installation (uv — uses committed uv.lock for reproducible deps)
+uv sync --frozen --extra dev
+# Then: uv run pytest  …  or activate .venv and use pytest / writing-assistant as usual
+
+# After editing pyproject.toml dependencies: uv lock  (then commit uv.lock)
 
 # Production installation
 pip install writing-assistant

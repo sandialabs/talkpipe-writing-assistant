@@ -11,6 +11,20 @@ def test_root_endpoint(client):
     assert "text/html" in response.headers["content-type"]
 
 
+def test_login_page_returns_html(client):
+    """Login page must render; wrong TemplateResponse args break Jinja2 cache."""
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_register_page_returns_html(client):
+    """Register page must render; wrong TemplateResponse args break Jinja2 cache."""
+    response = client.get("/register")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
 # NOTE: Metadata endpoints don't exist in the current implementation
 # Metadata is passed with each request rather than stored server-side
 

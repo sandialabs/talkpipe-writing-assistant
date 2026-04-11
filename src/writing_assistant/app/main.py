@@ -90,20 +90,22 @@ async def read_root(request: Request):
     """Homepage - main app interface."""
     empty_document = {"title": "", "sections": []}
     return templates.TemplateResponse(
-        "index.html", {"request": request, "document": empty_document}
+        request,
+        "index.html",
+        {"document": empty_document},
     )
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Login page."""
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     """Registration page."""
-    return templates.TemplateResponse("register.html", {"request": request})
+    return templates.TemplateResponse(request, "register.html")
 
 
 @app.get("/favicon.ico")

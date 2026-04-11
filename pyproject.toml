@@ -27,7 +27,8 @@ classifiers = [
 ]
 dependencies = [
     "talkpipe[all]>=0.11.1a1",
-    "fastapi[standard]>=0.104.1",
+    "fastapi[standard]>=0.133.0",  # >=0.133 drops starlette<1 so Starlette 1.x can be required below
+    "starlette>=1.0.0",
     "uvicorn>=0.24.0",
     "jinja2>=3.1.2",
     "python-multipart>=0.0.6",
@@ -52,7 +53,6 @@ dev = [
     "mypy>=1.0.0",
     "bandit>=1.7.0",
     "safety>=2.3.0",
-    "isort"
 ]
 test = [
     "pytest>=7.0.0",
@@ -83,6 +83,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["*.html", "*.css", "*.js", "*.json"]
 "writing_assistant.app" = ["templates/**/*", "static/**/*"]
+
+[tool.uv]
+# Commit uv.lock for reproducible dev/CI installs; use `uv lock` / `uv lock --upgrade`.
 
 [tool.setuptools_scm]
 # Use defaults

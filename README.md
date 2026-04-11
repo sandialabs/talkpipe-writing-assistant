@@ -71,6 +71,20 @@ cd talkpipe-writing-assistant
 pip install -e .[dev]
 ```
 
+### Development with uv (reproducible dependency lock)
+
+The repo includes [`uv.lock`](uv.lock) so CI and local installs can use the same resolved versions. Install [uv](https://github.com/astral-sh/uv), then:
+
+```bash
+git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
+cd talkpipe-writing-assistant
+uv sync --frozen --extra dev
+```
+
+Run tests and tools via the project environment, for example `uv run pytest`, or activate the virtualenv (`.venv` on Unix: `source .venv/bin/activate`).
+
+After changing dependencies in `pyproject.toml`, refresh the lockfile with `uv lock` and commit `uv.lock`. To bump versions, use `uv lock --upgrade` or `uv lock --upgrade-package <name>`.
+
 ### Using Docker
 
 ```bash

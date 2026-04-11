@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, master ]
+    branches: [ main, develop, master, 'bugfix/**', 'feature/**', "chore/**" ]
   pull_request:
-    branches: [ main, develop, master ]
+    branches: [ main, develop, master, 'bugfix/**', 'feature/**', "chore/**"  ]
   release:
     types: [ published ]
 
@@ -29,18 +29,16 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v5
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        enable-cache: true
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
+      run: uv sync --frozen --extra dev
+
+    - name: Use project virtualenv
+      run: echo "${{ github.workspace }}/.venv/bin" >> "$GITHUB_PATH"
 
     - name: Lint with flake8
       run: |
@@ -82,10 +80,16 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+
     - name: Install dependencies for security scan
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev,security]
+      run: uv sync --frozen --extra dev --extra security
+
+    - name: Use project virtualenv
+      run: echo "${{ github.workspace }}/.venv/bin" >> "$GITHUB_PATH"
 
     - name: Run Bandit security scan
       run: |
