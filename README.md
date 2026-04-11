@@ -47,13 +47,9 @@ CI publishes images to [**GitHub Container Registry**](https://github.com/sandia
 
 **Registry login:** This package is **public**, so you can **`pull` and `run` without logging in** to GHCR. You only need `docker login ghcr.io` / `podman login ghcr.io` if the image is **private**, your organization requires it, or `pull` fails with an authentication error (use a GitHub [Personal Access Token](https://github.com/settings/tokens) with **`read:packages`** as the password).
 
-1. **Pull** (pick a tag from the package page, e.g. `latest`):
+1. **`pull` is optional.** **`docker run` / `podman run` pulls the image automatically** if it is not already local (same on Windows). Use an explicit `docker pull` / `podman pull` only if you want to download separately.
 
-   ```bash
-   docker pull ghcr.io/sandialabs/talkpipe-writing-assistant:latest
-   ```
-
-   With Podman, replace `docker` with `podman` (same image reference).
+   **Typo:** the subcommand appears only once — use `podman pull ghcr.io/...` or `podman run ...`, never `podman pull pull ...` (the second `pull` is treated as an image name and triggers errors about `docker.io/library/pull`).
 
 2. **Run** — persist the database under `/app/data` (the image supplies defaults, including a JWT secret):
 
@@ -63,7 +59,55 @@ CI publishes images to [**GitHub Container Registry**](https://github.com/sandia
      ghcr.io/sandialabs/talkpipe-writing-assistant:latest
    ```
 
-   Open **http://localhost:8001**. Use `podman run` with the same flags if you use Podman.
+   Open **http://localhost:8001** or **http://127.0.0.1:8001** (use **`http`**, not `https`). Use `podman run` with the same flags if you use Podman.
+
+   **Volume syntax:** `-v` is `host:container`. The path after the second `:` must be an **absolute path inside the container** — use **`/app/data`**, not `.` or a relative path.
+
+### Windows (Command Prompt or PowerShell)
+
+You do **not** have to **`pull` first** — **`run` is enough** (it will fetch the image if needed). Examples on one line:
+
+```bat
+docker run --rm -p 8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+```
+
+```bat
+podman run --rm -p 8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+```
+
+Optional: download the image ahead of time with `docker pull …` or `podman pull …` — **only one** `pull` in the command (see typo note above).
+
+Start **Docker Desktop** or your **Podman** machine before running. Stop the container with **Ctrl+C** in that terminal.
+
+### If the browser cannot connect
+
+1. **Confirm the app is reachable from the host** (while the container is running):
+
+   ```bat
+   curl http://127.0.0.1:8001/
+   ```
+
+   If this fails, fix networking before blaming the browser. Check `docker ps` or `podman ps` and ensure the **PORTS** column shows something like `8001->8001` (or `0.0.0.0:8001->8001/tcp`).
+
+2. **Bind the host port explicitly** (helps some Windows / Podman setups):
+
+   ```bat
+   docker run --rm -p 127.0.0.1:8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+   ```
+
+   Use `podman run` with the same `-p` and `-v` flags if you use Podman.
+
+3. **Port already in use** — map a different host port (here **8080**):
+
+   ```bat
+   docker run --rm -p 127.0.0.1:8080:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+   ```
+
+   Then open **http://127.0.0.1:8080**.
+
+4. **Podman on Windows** — if `curl` to `127.0.0.1` still fails, restart the VM (`podman machine stop` then `podman machine start`) or update **Podman / Podman Desktop**; older builds sometimes break `localhost` port forwarding from the host into the machine.
+
+5. **Firewall or VPN** — allow the container engine through **Windows Defender Firewall** (private networks) or briefly disconnect VPN to test.
 
 To build and run from a **local clone** with Compose (including dev reload), see [Using Docker](#using-docker) below.
 
