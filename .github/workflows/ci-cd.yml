@@ -147,8 +147,8 @@ jobs:
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=sha
-          type=raw,value=latest,enable=${{ github.event_name == 'release' && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'a') && !contains(github.ref_name, 'b') }}
-          type=raw,value=experimental,enable=${{ github.event_name == 'release' && (contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b')) }}
+          type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
+          type=raw,value=experimental,enable=${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'release' && github.event.release.prerelease) }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v7

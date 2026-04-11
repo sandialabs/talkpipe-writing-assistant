@@ -34,6 +34,39 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
+## Pre-built container (Docker or Podman)
+
+CI publishes images to [**GitHub Container Registry**](https://github.com/sandialabs/talkpipe-writing-assistant/pkgs/container/talkpipe-writing-assistant):
+
+| | |
+|--|--|
+| **Image** | `ghcr.io/sandialabs/talkpipe-writing-assistant` |
+| **Platforms** | Linux **amd64** and **arm64** (release builds). The app runs in a **Linux** container; on Windows and macOS use [Docker Desktop](https://docs.docker.com/desktop/) or [Podman](https://podman.io/) (they run Linux containers under the hood). |
+
+**Tags (typical):** `latest` — stable GitHub Release (not marked pre-release); `experimental` — pushes to the `develop` branch or a pre-release GitHub Release; branch names (e.g. `main`) and commit SHAs are also published. Check the package page for the exact tag after a workflow run.
+
+**Registry login:** This package is **public**, so you can **`pull` and `run` without logging in** to GHCR. You only need `docker login ghcr.io` / `podman login ghcr.io` if the image is **private**, your organization requires it, or `pull` fails with an authentication error (use a GitHub [Personal Access Token](https://github.com/settings/tokens) with **`read:packages`** as the password).
+
+1. **Pull** (pick a tag from the package page, e.g. `latest`):
+
+   ```bash
+   docker pull ghcr.io/sandialabs/talkpipe-writing-assistant:latest
+   ```
+
+   With Podman, replace `docker` with `podman` (same image reference).
+
+2. **Run** — persist the database under `/app/data` (the image supplies defaults, including a JWT secret):
+
+   ```bash
+   docker run --rm -p 8001:8001 \
+     -v wa_data:/app/data \
+     ghcr.io/sandialabs/talkpipe-writing-assistant:latest
+   ```
+
+   Open **http://localhost:8001**. Use `podman run` with the same flags if you use Podman.
+
+To build and run from a **local clone** with Compose (including dev reload), see [Using Docker](#using-docker) below.
+
 ## Installation
 
 ### Prerequisites
@@ -86,6 +119,8 @@ Run tests and tools via the project environment, for example `uv run pytest`, or
 After changing dependencies in `pyproject.toml`, refresh the lockfile with `uv lock` and commit `uv.lock`. To bump versions, use `uv lock --upgrade` or `uv lock --upgrade-package <name>`.
 
 ### Using Docker
+
+Build and run from the repository (as opposed to the [pre-built GHCR image](#pre-built-container-docker-or-podman) above):
 
 ```bash
 # Production deployment

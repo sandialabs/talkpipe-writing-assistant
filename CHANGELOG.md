@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
+- README: Pre-built container run example omits optional `WRITING_ASSISTANT_SECRET` (defaults apply).
+- README: Prominent section on pulling and running the pre-built GHCR container with Docker or Podman; note that public packages do not require registry login.
+- CI/CD: Docker tags — `latest` only for stable (non-prerelease) GitHub releases; `experimental` for pushes to `develop` and for prerelease GitHub releases (replaces tag-name substring checks).
 - Declared `starlette>=1.0.0` and raised `fastapi[standard]` minimum to `>=0.133.0` so installs match the `Jinja2Templates.TemplateResponse(request, name, …)` API (Starlette 1.0 removed the legacy `(name, context)` signature).
 - Added `uv.lock` and documented `uv sync` / `uv lock` for reproducible dev installs; CI installs with `uv sync --frozen` and [astral-sh/setup-uv](https://github.com/astral-sh/setup-uv).
 - Fixed HTML page routes (`/`, `/login`, `/register`) to use Starlette’s `TemplateResponse(request, name, …)` argument order, restoring Jinja2 template loading (avoids `TypeError: unhashable type: 'dict'`).
