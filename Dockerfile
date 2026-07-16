@@ -1,4 +1,11 @@
 # Multi-stage build for Writing Assistant
+#
+# The build context excludes .git (see .dockerignore), so setuptools_scm
+# cannot derive the package version. Pass the real version as a build arg:
+#   podman build --build-arg APP_VERSION="$(python3 -m setuptools_scm)" .
+# When unset, the image reports the fallback version 0.1.0.
+ARG APP_VERSION=0.1.0
+
 # Stage 1: Build stage with all development dependencies
 FROM fedora:latest AS builder
 
@@ -34,7 +41,8 @@ COPY --chown=builder:builder tests/ tests/
 
 # Install Python dependencies and build the package
 RUN python3 -m pip install --user --upgrade pip setuptools wheel build
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TALKPIPE_WRITING_ASSISTANT=0.1.0
+ARG APP_VERSION
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TALKPIPE_WRITING_ASSISTANT=${APP_VERSION}
 RUN python3 -m pip install --user -e .[dev]
 RUN python3 -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during build
 RUN python3 -m build --wheel

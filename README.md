@@ -34,82 +34,23 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
-## Pre-built container (Docker or Podman)
+## Pre-built container (Podman or Docker)
 
-CI publishes images to [**GitHub Container Registry**](https://github.com/sandialabs/talkpipe-writing-assistant/pkgs/container/talkpipe-writing-assistant):
+CI publishes a public image to [GitHub Container Registry](https://github.com/sandialabs/talkpipe-writing-assistant/pkgs/container/talkpipe-writing-assistant) (`ghcr.io/sandialabs/talkpipe-writing-assistant`; Linux amd64/arm64; no registry login needed). Run it with the database persisted under `/app/data`:
 
-| | |
-|--|--|
-| **Image** | `ghcr.io/sandialabs/talkpipe-writing-assistant` |
-| **Platforms** | Linux **amd64** and **arm64** (release builds). The app runs in a **Linux** container; on Windows and macOS use [Docker Desktop](https://docs.docker.com/desktop/) or [Podman](https://podman.io/) (they run Linux containers under the hood). |
-
-**Tags (typical):** `latest` — stable GitHub Release (not marked pre-release); `experimental` — pushes to the `develop` branch or a pre-release GitHub Release; branch names (e.g. `main`) and commit SHAs are also published. Check the package page for the exact tag after a workflow run.
-
-**Registry login:** This package is **public**, so you can **`pull` and `run` without logging in** to GHCR. You only need `docker login ghcr.io` / `podman login ghcr.io` if the image is **private**, your organization requires it, or `pull` fails with an authentication error (use a GitHub [Personal Access Token](https://github.com/settings/tokens) with **`read:packages`** as the password).
-
-1. **`pull` is optional.** **`docker run` / `podman run` pulls the image automatically** if it is not already local (same on Windows). Use an explicit `docker pull` / `podman pull` only if you want to download separately.
-
-   **Typo:** the subcommand appears only once — use `podman pull ghcr.io/...` or `podman run ...`, never `podman pull pull ...` (the second `pull` is treated as an image name and triggers errors about `docker.io/library/pull`).
-
-2. **Run** — persist the database under `/app/data` (the image supplies defaults, including a JWT secret):
-
-   ```bash
-   docker run --rm -p 8001:8001 \
-     -v wa_data:/app/data \
-     ghcr.io/sandialabs/talkpipe-writing-assistant:latest
-   ```
-
-   Open **http://localhost:8001** or **http://127.0.0.1:8001** (use **`http`**, not `https`). Use `podman run` with the same flags if you use Podman.
-
-   **Volume syntax:** `-v` is `host:container`. The path after the second `:` must be an **absolute path inside the container** — use **`/app/data`**, not `.` or a relative path.
-
-### Windows (Command Prompt or PowerShell)
-
-You do **not** have to **`pull` first** — **`run` is enough** (it will fetch the image if needed). Examples on one line:
-
-```bat
-docker run --rm -p 8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+```bash
+podman run --rm -p 8001:8001 \
+  -v wa_data:/app/data \
+  ghcr.io/sandialabs/talkpipe-writing-assistant:latest
 ```
 
-```bat
-podman run --rm -p 8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
-```
+Then open **http://localhost:8001** (use `http`, not `https`). `docker run` works with the same flags. `run` pulls the image automatically — no separate `pull` step is needed.
 
-Optional: download the image ahead of time with `docker pull …` or `podman pull …` — **only one** `pull` in the command (see typo note above).
+**Tags:** `latest` — stable release; `experimental` — `develop` branch or pre-releases; branch names and commit SHAs are also published.
 
-Start **Docker Desktop** or your **Podman** machine before running. Stop the container with **Ctrl+C** in that terminal.
-
-### If the browser cannot connect
-
-1. **Confirm the app is reachable from the host** (while the container is running):
-
-   ```bat
-   curl http://127.0.0.1:8001/
-   ```
-
-   If this fails, fix networking before blaming the browser. Check `docker ps` or `podman ps` and ensure the **PORTS** column shows something like `8001->8001` (or `0.0.0.0:8001->8001/tcp`).
-
-2. **Bind the host port explicitly** (helps some Windows / Podman setups):
-
-   ```bat
-   docker run --rm -p 127.0.0.1:8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
-   ```
-
-   Use `podman run` with the same `-p` and `-v` flags if you use Podman.
-
-3. **Port already in use** — map a different host port (here **8080**):
-
-   ```bat
-   docker run --rm -p 127.0.0.1:8080:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
-   ```
-
-   Then open **http://127.0.0.1:8080**.
-
-4. **Podman on Windows** — if `curl` to `127.0.0.1` still fails, restart the VM (`podman machine stop` then `podman machine start`) or update **Podman / Podman Desktop**; older builds sometimes break `localhost` port forwarding from the host into the machine.
-
-5. **Firewall or VPN** — allow the container engine through **Windows Defender Firewall** (private networks) or briefly disconnect VPN to test.
-
-To build and run from a **local clone** with Compose (including dev reload), see [Using Docker](#using-docker) below.
+For Windows notes, connectivity troubleshooting, building from a local clone,
+and production deployment, see the
+[Container Deployment Guide](CONTAINER_DEPLOYMENT.md).
 
 ## Installation
 
@@ -162,23 +103,26 @@ Run tests and tools via the project environment, for example `uv run pytest`, or
 
 After changing dependencies in `pyproject.toml`, refresh the lockfile with `uv lock` and commit `uv.lock`. To bump versions, use `uv lock --upgrade` or `uv lock --upgrade-package <name>`.
 
-### Using Docker
+### Using a container (Podman or Docker)
 
-Build and run from the repository (as opposed to the [pre-built GHCR image](#pre-built-container-docker-or-podman) above):
+Build and run from the repository (as opposed to the [pre-built GHCR image](#pre-built-container-podman-or-docker) above):
 
 ```bash
 # Optional: create a local configuration file first
 cp .env.example .env
 
 # Production deployment
-docker-compose up writing-assistant
+podman-compose up writing-assistant
 
 # Development with live reload
-docker-compose --profile dev up writing-assistant-dev
+podman-compose --profile dev up writing-assistant-dev
 ```
 
-See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for the full deployment guide
-(configuration, backups, user management, and production hardening).
+`docker-compose` (or `docker compose`) works with the same arguments.
+
+See the [Container Deployment Guide](CONTAINER_DEPLOYMENT.md) for the full
+deployment guide (configuration, backups, user management, and production
+hardening).
 
 ## Quick Start
 
@@ -354,7 +298,7 @@ writing-assistant-admin help
 ```
 
 See the [Admin Guide](ADMIN_GUIDE.md) for the full user-administration
-reference and [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for running these
+reference and the [Container Deployment Guide](CONTAINER_DEPLOYMENT.md) for running these
 commands inside a container.
 
 ## Architecture

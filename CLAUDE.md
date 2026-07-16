@@ -80,17 +80,18 @@ bandit -r src/
 safety check
 ```
 
-### Docker Commands
+### Container Commands (Podman primary; Docker compatible)
 ```bash
 # Build and run production container
-docker-compose up writing-assistant
+podman-compose up writing-assistant
 
 # Run development container with live reload
-docker-compose --profile dev up writing-assistant-dev
+podman-compose --profile dev up writing-assistant-dev
 
-# Build container manually
-docker build -t writing-assistant .
+# Build container manually (pass the real version; see CONTAINER_DEPLOYMENT.md)
+podman build --build-arg APP_VERSION="$(python3 -m setuptools_scm)" -t writing-assistant .
 ```
+`docker` / `docker-compose` accept the same arguments.
 
 ## Architecture Overview
 

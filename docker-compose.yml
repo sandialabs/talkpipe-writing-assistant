@@ -6,6 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
+      args:
+        # Real package version for the image (setuptools_scm cannot see .git
+        # inside the build context). Example:
+        #   APP_VERSION="$(python3 -m setuptools_scm)" podman-compose build
+        APP_VERSION: ${APP_VERSION:-0.1.0}
     container_name: writing-assistant
     ports:
       - "8001:8001"
@@ -40,6 +45,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: builder
+      args:
+        APP_VERSION: ${APP_VERSION:-0.1.0}
     container_name: writing-assistant-dev
     ports:
       - "8001:8001"
