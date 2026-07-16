@@ -204,7 +204,9 @@ open Settings → AI Settings → Environment Variables and add
 browser and applied per generation request (unless the server was started
 with `--disable-custom-env-vars`).
 
-> **Note:** The Source value is one of `openai`, `anthropic`, or `ollama`.
+> **Note:** AI Source is a dropdown offering `openai`, `anthropic`, and
+> `ollama`, plus "Server default", which defers to the source configured on
+> the server (TalkPipe configuration).
 
 ### 4. Start Writing!
 

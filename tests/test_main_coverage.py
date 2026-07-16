@@ -549,6 +549,53 @@ def test_generate_text_other_value_error_not_suffixed(authenticated_client):
     assert "Valid sources" not in response.json()["detail"]
 
 
+def test_generate_text_surfaces_missing_api_key_error(authenticated_client):
+    """A missing provider API key must produce an actionable error, not a
+    generic 500 - TalkPipe wraps client-init failures (e.g. no OPENAI_API_KEY)
+    in RuntimeError with a curated message."""
+    message = (
+        "Could not initialize the OpenAI client: Missing credentials. "
+        "Set the OPENAI_API_KEY environment variable to your API key."
+    )
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=RuntimeError(message),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "openai",
+                "model": "gpt-4o",
+            },
+        )
+    assert response.status_code == 502
+    assert "OPENAI_API_KEY" in response.json()["detail"]
+
+
+def test_generate_text_surfaces_missing_anthropic_key_error(authenticated_client):
+    """The Anthropic adapter raises a differently-worded curated RuntimeError
+    ("Could not authenticate with ..."); it must be surfaced too."""
+    message = (
+        "Could not authenticate with Anthropic. Set the ANTHROPIC_API_KEY "
+        "environment variable to your API key."
+    )
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=RuntimeError(message),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "anthropic",
+                "model": "claude-sonnet-4-5",
+            },
+        )
+    assert response.status_code == 502
+    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+
+
 def test_generate_text_surfaces_connection_error(authenticated_client):
     """An unreachable backend must produce an actionable 502."""
     message = (

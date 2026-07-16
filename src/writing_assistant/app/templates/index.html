@@ -181,8 +181,13 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                             <div class="settings-section">
                                 <div class="form-group">
                                     <label for="ai-source">AI Source:</label>
-                                    <input type="text" id="ai-source" name="source" placeholder="openai, anthropic, or ollama">
-                                    <small class="form-help">Valid values: <code>openai</code>, <code>anthropic</code>, <code>ollama</code></small>
+                                    <select id="ai-source" name="source">
+                                        <option value="">Server default</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                        <option value="ollama">Ollama</option>
+                                    </select>
+                                    <small class="form-help">"Server default" uses the source configured on the server (TalkPipe configuration). OpenAI and Anthropic require an API key; Ollama uses a local or remote Ollama server.</small>
                                 </div>
 
                                 <div class="form-group">

@@ -1026,7 +1026,7 @@ class WritingAssistant {
                     document.getElementById('background-context').value = doc.metadata.background_context || '';
                     document.getElementById('generation-directive').value = doc.metadata.generation_directive || '';
                     document.getElementById('word-limit').value = doc.metadata.word_limit || '';
-                    document.getElementById('ai-source').value = doc.metadata.source || '';
+                    document.getElementById('ai-source').value = this.normalizeAISource(doc.metadata.source);
                     document.getElementById('ai-model').value = doc.metadata.model || '';
                 }
 
@@ -1057,6 +1057,13 @@ class WritingAssistant {
         document.getElementById(`${tabName}-settings`).classList.add('active');
     }
 
+    // The AI Source select only offers the valid sources; map anything else
+    // (old free-text values, typos) to '' = "Server default".
+    normalizeAISource(value) {
+        const source = (value || '').trim().toLowerCase();
+        return ['openai', 'anthropic', 'ollama'].includes(source) ? source : '';
+    }
+
     async loadMetadata() {
         try {
             // Load AI settings from localStorage
@@ -1065,7 +1072,7 @@ class WritingAssistant {
 
             const sourceElement = document.getElementById('ai-source');
             const modelElement = document.getElementById('ai-model');
-            if (sourceElement) sourceElement.value = savedSource;
+            if (sourceElement) sourceElement.value = this.normalizeAISource(savedSource);
             if (modelElement) modelElement.value = savedModel;
 
             // Load writing settings from localStorage or use defaults
@@ -1237,7 +1244,7 @@ class WritingAssistant {
         const savedGenerationDirective = localStorage.getItem('generationDirective') || '';
         const savedWordLimit = localStorage.getItem('wordLimit') || '';
 
-        document.getElementById('ai-source').value = savedSource;
+        document.getElementById('ai-source').value = this.normalizeAISource(savedSource);
         document.getElementById('ai-model').value = savedModel;
         document.getElementById('writing-style').value = savedWritingStyle;
         document.getElementById('target-audience').value = savedTargetAudience;
@@ -1335,7 +1342,7 @@ class WritingAssistant {
             { id: 'background-context', value: (this.documentMetadata?.background_context || savedBackgroundContext) },
             { id: 'generation-directive', value: (this.documentMetadata?.generation_directive || savedGenerationDirective) },
             { id: 'word-limit', value: (this.documentMetadata?.word_limit || savedWordLimit) },
-            { id: 'ai-source', value: (this.documentMetadata?.source || savedSource) },
+            { id: 'ai-source', value: this.normalizeAISource(this.documentMetadata?.source || savedSource) },
             { id: 'ai-model', value: (this.documentMetadata?.model || savedModel) }
         ];
 

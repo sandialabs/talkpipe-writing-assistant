@@ -471,6 +471,15 @@ async def generate_text(
             raise HTTPException(status_code=400, detail=detail)
         if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
             raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
+        if isinstance(e, RuntimeError) and str(e).startswith(
+            ("Could not initialize the", "Could not authenticate with")
+        ):
+            # TalkPipe wraps LLM credential/client-setup failures (e.g. a
+            # missing OPENAI_API_KEY or ANTHROPIC_API_KEY) in RuntimeError
+            # with these curated, actionable messages - surface them like the
+            # other configuration errors. Other RuntimeErrors stay generic
+            # below to avoid leaking internals.
+            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate text")
 
 

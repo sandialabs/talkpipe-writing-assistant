@@ -1456,6 +1456,7 @@ input[type="file"]:focus {
 }
 
 .modal-body input,
+.modal-body select,
 .modal-body textarea {
     width: 100%;
     padding: 12px;
@@ -1469,6 +1470,7 @@ input[type="file"]:focus {
 }
 
 .modal-body input:focus,
+.modal-body select:focus,
 .modal-body textarea:focus {
     outline: none;
     border-color: var(--primary-color);

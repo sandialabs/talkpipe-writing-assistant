@@ -11,6 +11,22 @@ def test_root_endpoint(client):
     assert "text/html" in response.headers["content-type"]
 
 
+def test_ai_source_is_a_dropdown_of_valid_values(client):
+    """The AI Source field must be a select listing exactly the valid sources.
+
+    A free-text input invited typos ("olama") that only failed at generation
+    time; the dropdown makes invalid sources unrepresentable in the UI.
+    """
+    html = client.get("/").text
+    assert '<select id="ai-source"' in html
+    assert '<input type="text" id="ai-source"' not in html
+    for value in ("openai", "anthropic", "ollama"):
+        assert f'<option value="{value}"' in html
+    # The empty value defers to the server's TalkPipe configuration, matching
+    # the server-side default (Metadata.source == "").
+    assert '<option value=""' in html
+
+
 def test_login_page_returns_html(client):
     """Login page must render; wrong TemplateResponse args break Jinja2 cache."""
     response = client.get("/login")
