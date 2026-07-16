@@ -526,6 +526,27 @@ def test_generate_text_surfaces_value_error(authenticated_client):
         )
     assert response.status_code == 400
     assert "Unknown source: bogus" in response.json()["detail"]
+    # The error must also tell the user which values are accepted.
+    assert "Valid sources: openai, anthropic, ollama" in response.json()["detail"]
+
+
+def test_generate_text_other_value_error_not_suffixed(authenticated_client):
+    """ValueErrors unrelated to the source must not get the valid-sources hint."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=ValueError("some other configuration problem"),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "ollama",
+                "model": "some-model",
+            },
+        )
+    assert response.status_code == 400
+    assert "some other configuration problem" in response.json()["detail"]
+    assert "Valid sources" not in response.json()["detail"]
 
 
 def test_generate_text_surfaces_connection_error(authenticated_client):

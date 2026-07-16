@@ -56,8 +56,18 @@ and production deployment, see the
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.11.4 or higher
 - An AI backend: OpenAI, Anthropic, or Ollama (local)
+
+> **Note:** On most modern systems (Debian/Ubuntu, Fedora, macOS with Homebrew),
+> installing into the system Python is blocked or `pip` is not installed at all.
+> Create a virtual environment first — the `pip` commands below assume one is
+> active:
+>
+> ```bash
+> python3 -m venv .venv
+> source .venv/bin/activate   # Windows: .venv\Scripts\activate
+> ```
 
 ### Install from pip (Recommended)
 
@@ -151,7 +161,7 @@ The server will start on `http://localhost:8001` and display:
 
 1. Open your browser and navigate to `http://localhost:8001/register`
 2. Enter your email address and password
-3. Click "Register" to create your account
+3. Click "Create Account", then log in on the login page
 
 ### 3. Configure AI Backend
 
@@ -180,21 +190,33 @@ You need to configure one of the supported AI backends:
 4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name]
 
 If Ollama runs on a different machine (or a non-default port), set
-`TALKPIPE_OLLAMA_SERVER_URL` before starting the server:
+`TALKPIPE_OLLAMA_SERVER_URL` before starting the server (if the server is
+already running, stop it and start it again with the variable set):
 
 ```bash
 export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"
 writing-assistant
 ```
 
+Alternatively, set it without restarting the server: in the web interface,
+open Settings → AI Settings → Environment Variables and add
+`TALKPIPE_OLLAMA_SERVER_URL` there. Values set this way are stored in your
+browser and applied per generation request (unless the server was started
+with `--disable-custom-env-vars`).
+
 > **Note:** The Source value is one of `openai`, `anthropic`, or `ollama`.
 
 ### 4. Start Writing!
 
-1. Click "Create New Document"
-2. Add a title and sections, leaving a blank line between sections.
-3. Click "Generate" on any section to create AI-assisted content
-4. Save your work with the "Save Document" button
+1. After logging in, the editor opens directly — add a title and start typing.
+   Leave a blank line between sections (paragraphs).
+2. Place your cursor in a section, then click one of the generation buttons
+   below the editor — **Ideas**, **Rewrite**, **Improve**, or **Proofread** —
+   to create AI-assisted content for that section.
+3. When you like a suggestion, click **"← Use This Text"** to replace the
+   section with it.
+4. Save your work via the **File ▾** menu (**File → Save**); the File menu also
+   offers Save As, Open, snapshots, and import/export.
 
 That's it! You're ready to use the AI writing assistant.
 

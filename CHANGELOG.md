@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- The editor now restores the last-open document when the page is reloaded or reopened (tracked per browser via localStorage; cleared on New, Import, or when the document is deleted). Previously a reload always presented an empty editor and the previous document had to be re-opened via File → Open.
+- The "Unknown source" generation error now lists the accepted values (`openai`, `anthropic`, `ollama`) instead of only naming the rejected one.
+- Dockerfile: the builder stage no longer runs the test suite during image builds — it added minutes to every `podman-compose up`/`podman build` and its result was ignored (`|| true`). Tests run in CI.
+- Documentation fixes from an onboarding review:
+  - README Installation now says Python 3.11.4+ (matching `requires-python`) and explains creating a virtual environment first, since `pip install` fails or is blocked on the system Python of most modern distros.
+  - README Quick Start step 4 was rewritten to match the actual UI (the editor opens directly after login; generation via the Ideas/Rewrite/Improve/Proofread buttons and "← Use This Text"; saving via File → Save) — the previous text referenced "Create New Document", "Generate", and "Save Document" buttons that no longer exist. Step 2 now says "Create Account" (the register button's real label).
+  - README remote-Ollama instructions note that an already-running server must be restarted for `TALKPIPE_OLLAMA_SERVER_URL` to take effect, and document the alternative of setting it per-user under Settings → AI Settings → Environment Variables (no restart needed).
+  - CONTAINER_DEPLOYMENT.md: removed `-it` from all `podman-compose exec` examples — podman-compose rejects the flag (`error: unrecognized arguments: -it`), so every documented interactive admin command failed verbatim; `exec` is interactive by default.
+  - CONTAINER_DEPLOYMENT.md: backup, restore, and volume-removal examples now use the real compose-created volume name (`talkpipe-writing-assistant_writing_assistant_db`) and tell readers to confirm it with `podman volume ls`. The previous examples used the unprefixed name, which silently creates a new empty volume — the documented backup backed up nothing.
+  - CONTAINER_DEPLOYMENT.md: the `.env` heredoc example no longer puts a comment on the same line as a value (inline `#` becomes part of the value in .env files) and no longer sets a bogus placeholder `OPENAI_API_KEY`.
+  - `ANTHROPIC_API_KEY` is now listed alongside `OPENAI_API_KEY` in `.env.example` and the container guide's optional variables (Anthropic is a fully supported backend but had no documented variable).
 - Fixed the startup banner to print the web page URLs (`/register`, `/login`) instead of the JSON API endpoints (`/auth/register`, `/auth/jwt/login`), which return 405 in a browser.
 - Generation failures now return actionable error messages to the UI for configuration problems (unknown source, unreachable Ollama server, missing model) instead of a generic "Failed to generate text"; unexpected errors remain generic to avoid leaking internals. The web UI displays the returned message in the suggestion panel.
 - Custom environment variables sent with a generation request (e.g. `TALKPIPE_OLLAMA_SERVER_URL`) now take effect: TalkPipe's cached configuration is reloaded around each request that supplies them, and restored afterwards.

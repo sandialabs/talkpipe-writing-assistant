@@ -465,7 +465,10 @@ async def generate_text(
         # instead of a generic failure. Anything else stays generic to avoid
         # leaking internals.
         if isinstance(e, ValueError):
-            raise HTTPException(status_code=400, detail=f"Failed to generate text: {e}")
+            detail = f"Failed to generate text: {e}"
+            if "Unknown source" in str(e):
+                detail += ". Valid sources: openai, anthropic, ollama"
+            raise HTTPException(status_code=400, detail=detail)
         if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
             raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate text")

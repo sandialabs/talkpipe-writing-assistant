@@ -851,6 +851,17 @@ class WritingAssistant {
 
     async loadExistingDocument() {
         try {
+            // Restore the document that was open in the previous session, if any
+            const lastFilename = localStorage.getItem('lastDocumentFilename');
+            if (lastFilename) {
+                await this.loadDocumentFromServer(lastFilename, { showErrors: false });
+                if (this.currentFilename === lastFilename) {
+                    return;
+                }
+                // The document no longer exists (or failed to load) - forget it
+                localStorage.removeItem('lastDocumentFilename');
+            }
+
             // Initialize with empty document since all state is in browser
             const titleInput = document.getElementById('document-title');
             const textarea = document.getElementById('document-text');
@@ -1782,6 +1793,7 @@ undo() {
 
             // Clear current filename since this is a new document
             this.currentFilename = null;
+            localStorage.removeItem('lastDocumentFilename');
             this.updateFilenameDisplay();
 
             // Update the settings form to reflect the new document's metadata
@@ -2272,6 +2284,7 @@ undo() {
 
             if (result.status === 'success') {
                 this.currentFilename = result.filename;
+                localStorage.setItem('lastDocumentFilename', result.filename);
                 this.updateFilenameDisplay();
                 this.lastSaveTime = new Date();
                 if (!isAutoSave) {
@@ -2365,7 +2378,7 @@ undo() {
         });
     }
 
-    async loadDocumentFromServer(filename) {
+    async loadDocumentFromServer(filename, { showErrors = true } = {}) {
         try {
             // Get document data directly from the load endpoint
             const response = await this.authFetch(`/documents/load/${filename}`);
@@ -2408,8 +2421,9 @@ undo() {
             // Always restore document metadata settings, regardless of content
             this.restoreDocumentMetadata(documentData);
 
-            // Set current filename
+            // Set current filename and remember it for the next session
             this.currentFilename = filename;
+            localStorage.setItem('lastDocumentFilename', filename);
             this.updateFilenameDisplay();
 
             this.hideLoadDocumentModal();
@@ -2420,7 +2434,9 @@ undo() {
             this.showMessage(`Document "${filename}" loaded successfully!`, 'success');
         } catch (error) {
             console.error('Error loading document:', error);
-            this.showMessage('Error loading document', 'error');
+            if (showErrors) {
+                this.showMessage('Error loading document', 'error');
+            }
         }
     }
 
@@ -2441,6 +2457,9 @@ undo() {
             const result = await response.json();
 
             if (result.status === 'success') {
+                if (localStorage.getItem('lastDocumentFilename') === filename) {
+                    localStorage.removeItem('lastDocumentFilename');
+                }
                 this.showMessage(`Document "${filename}" deleted successfully`, 'success');
                 this.loadDocumentsList(); // Refresh the list
             } else {
@@ -2501,6 +2520,7 @@ undo() {
 
             // Clear current filename since this was imported from local file
             this.currentFilename = null;
+            localStorage.removeItem('lastDocumentFilename');
             this.updateFilenameDisplay();
 
             // Clear the file input so the same file can be loaded again

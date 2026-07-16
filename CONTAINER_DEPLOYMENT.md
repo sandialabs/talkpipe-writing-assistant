@@ -121,9 +121,11 @@ cd talkpipe-writing-assistant
 python -c "import secrets; print(secrets.token_urlsafe(32))" > .secret
 
 # Create environment file
+# (add OPENAI_API_KEY=... or ANTHROPIC_API_KEY=... lines if you use a cloud
+# backend — but don't put comments on the same line as a value: in .env
+# files an inline `# comment` becomes part of the value)
 cat > .env << EOF
 WRITING_ASSISTANT_SECRET=$(cat .secret)
-OPENAI_API_KEY=your-key-here  # Optional
 EOF
 
 # Start the production service
@@ -133,8 +135,12 @@ podman-compose up -d writing-assistant
 podman-compose logs -f writing-assistant
 
 # Create the first admin user (in another terminal)
-podman-compose exec -it writing-assistant writing-assistant-create-superuser
+podman-compose exec writing-assistant writing-assistant-create-superuser
 ```
+
+> **Note:** do not add `-it` to `podman-compose exec` — podman-compose
+> rejects the flag (`error: unrecognized arguments: -it`). `exec` is
+> interactive by default; the same is true of `docker compose exec`.
 
 Access the application at: `http://localhost:8001`
 
@@ -197,6 +203,7 @@ The compose file loads `.env` automatically if it exists (it is optional).
 - `WRITING_ASSISTANT_PORT`: Server port (default: `8001`)
 - `WRITING_ASSISTANT_DB_PATH`: Database file path (default: `/app/data/writing_assistant.db`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT models
+- `ANTHROPIC_API_KEY`: Anthropic API key for Claude models
 - `TALKPIPE_OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
 - `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring environment variables through the UI
 
@@ -231,6 +238,13 @@ The SQLite database is stored in a named volume:
 - Production: `writing_assistant_db` → `/app/data/writing_assistant.db`
 - Development: `writing_assistant_dev_db` → `/app/data/writing_assistant.db`
 
+> **Volume name prefix:** compose prefixes volume names with the project name
+> (by default the repository directory name), so the volume is actually
+> created as `talkpipe-writing-assistant_writing_assistant_db`. Check the
+> real name with `podman volume ls` before running the commands below —
+> using the unprefixed name silently creates a **new empty volume** instead
+> of touching your data.
+
 ### Backup and Restore
 
 **Backup:**
@@ -241,9 +255,9 @@ mkdir -p backups
 # Backup database from running container
 podman-compose exec writing-assistant cat /app/data/writing_assistant.db > backups/db-$(date +%Y%m%d).db
 
-# Or copy from volume
+# Or copy from volume (confirm the volume name with `podman volume ls`)
 podman run --rm \
-  -v writing_assistant_db:/data \
+  -v talkpipe-writing-assistant_writing_assistant_db:/data \
   -v $(pwd)/backups:/backup \
   alpine cp /data/writing_assistant.db /backup/db-$(date +%Y%m%d).db
 ```
@@ -253,9 +267,9 @@ podman run --rm \
 # Stop the container
 podman-compose down
 
-# Restore from backup
+# Restore from backup (confirm the volume name with `podman volume ls`)
 podman run --rm \
-  -v writing_assistant_db:/data \
+  -v talkpipe-writing-assistant_writing_assistant_db:/data \
   -v $(pwd)/backups:/backup \
   alpine cp /backup/db-20251012.db /data/writing_assistant.db
 
@@ -269,10 +283,10 @@ podman-compose up -d
 
 ```bash
 # Using the console script (recommended)
-podman-compose exec -it writing-assistant writing-assistant-create-superuser
+podman-compose exec writing-assistant writing-assistant-create-superuser
 
 # Or using Python module syntax
-podman-compose exec -it writing-assistant python -m writing_assistant.create_superuser
+podman-compose exec writing-assistant python -m writing_assistant.create_superuser
 ```
 
 ### Manage Users via Admin Tool
@@ -285,10 +299,10 @@ podman-compose exec writing-assistant writing-assistant-admin list
 podman-compose exec writing-assistant writing-assistant-admin info user@example.com
 
 # Delete a user
-podman-compose exec -it writing-assistant writing-assistant-admin delete user@example.com
+podman-compose exec writing-assistant writing-assistant-admin delete user@example.com
 
 # Reset password
-podman-compose exec -it writing-assistant writing-assistant-admin reset-password user@example.com
+podman-compose exec writing-assistant writing-assistant-admin reset-password user@example.com
 
 # Toggle user active/inactive status
 podman-compose exec writing-assistant writing-assistant-admin toggle-active user@example.com
@@ -462,9 +476,10 @@ ports:
 ### Permission Denied
 
 ```bash
-# Fix volume permissions
+# Fix volume permissions (confirm the volume name with `podman volume ls`;
+# WARNING: removing the volume deletes all user data)
 podman-compose down
-podman volume rm writing_assistant_db
+podman volume rm talkpipe-writing-assistant_writing_assistant_db
 podman-compose up -d
 ```
 
@@ -493,7 +508,7 @@ If you have an existing single-user deployment:
 4. **Start and create admin:**
    ```bash
    podman-compose up -d
-   podman-compose exec -it writing-assistant writing-assistant-create-superuser
+   podman-compose exec writing-assistant writing-assistant-create-superuser
    ```
 
 Note: Old file-based documents are not automatically migrated. Users must re-create or import them.

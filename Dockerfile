@@ -43,8 +43,9 @@ COPY --chown=builder:builder tests/ tests/
 RUN python3 -m pip install --user --upgrade pip setuptools wheel build
 ARG APP_VERSION
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_TALKPIPE_WRITING_ASSISTANT=${APP_VERSION}
+# Tests run in CI, not during image builds: running them here added minutes
+# to every build and their result was ignored anyway (|| true).
 RUN python3 -m pip install --user -e .[dev]
-RUN python3 -m pytest --log-cli-level=DEBUG || true  # Allow tests to fail during build
 RUN python3 -m build --wheel
 
 # Stage 2: Runtime stage with minimal dependencies
