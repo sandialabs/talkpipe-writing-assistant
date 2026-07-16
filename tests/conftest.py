@@ -1,6 +1,7 @@
 """Pytest configuration and fixtures."""
 
 import asyncio
+import os
 import uuid
 from typing import AsyncGenerator
 
@@ -28,6 +29,24 @@ test_engine = create_async_engine(
 TestSessionLocal = async_sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_app_database(tmp_path_factory):
+    """Keep the app's startup database init away from ~/.writing_assistant.
+
+    The application lifespan creates its tables on startup (which TestClient
+    triggers); point it at a throwaway location so running the test suite
+    never touches the developer's real database.
+    """
+    original = os.environ.get("WRITING_ASSISTANT_DB_PATH")
+    db_path = tmp_path_factory.mktemp("app_db") / "writing_assistant.db"
+    os.environ["WRITING_ASSISTANT_DB_PATH"] = str(db_path)
+    yield
+    if original is None:
+        os.environ.pop("WRITING_ASSISTANT_DB_PATH", None)
+    else:
+        os.environ["WRITING_ASSISTANT_DB_PATH"] = original
 
 
 def pytest_sessionfinish(session, exitstatus):

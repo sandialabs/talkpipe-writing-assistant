@@ -770,14 +770,21 @@ class WritingAssistant {
                 currentSection.original_text = currentSection.text;
                 this.updateSuggestionPanel();
                 this.showMessage('AI suggestion generated successfully!', 'success');
+            } else if (result.detail) {
+                // Surface the server's error message (e.g. unknown source,
+                // unreachable Ollama server, missing model) to the user.
+                throw new Error(result.detail);
             } else {
                 throw new Error('No generated text received');
             }
 
         } catch (error) {
             console.error('Error generating suggestion:', error);
-            this.showMessage('Error generating suggestion. Please try again.', 'error');
-            suggestionText.textContent = 'Error generating suggestion. Please try again.';
+            const message = error && error.message
+                ? error.message
+                : 'Error generating suggestion. Please try again.';
+            this.showMessage(message, 'error');
+            suggestionText.textContent = message;
         } finally {
             // Re-enable all mode buttons
             modeButtons.forEach(btn => btn.disabled = false);

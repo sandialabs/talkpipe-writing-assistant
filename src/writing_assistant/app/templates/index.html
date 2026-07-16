@@ -181,12 +181,13 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                             <div class="settings-section">
                                 <div class="form-group">
                                     <label for="ai-source">AI Source:</label>
-                                    <input type="text" id="ai-source" name="source" placeholder="e.g., OpenAI, Anthropic, local model...">
+                                    <input type="text" id="ai-source" name="source" placeholder="openai, anthropic, or ollama">
+                                    <small class="form-help">Valid values: <code>openai</code>, <code>anthropic</code>, <code>ollama</code></small>
                                 </div>
 
                                 <div class="form-group">
                                     <label for="ai-model">Model:</label>
-                                    <input type="text" id="ai-model" name="model" placeholder="e.g., gpt-4, claude-3, llama-2...">
+                                    <input type="text" id="ai-model" name="model" placeholder="e.g., gpt-4o, claude-sonnet-4-5, llama3.1:8b">
                                 </div>
 
                                 <div class="settings-section">

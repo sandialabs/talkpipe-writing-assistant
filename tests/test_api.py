@@ -273,3 +273,24 @@ def test_generate_text_includes_multiple_short_paragraphs(mock_new_paragraph, au
     # Verify the exact content matches what we sent
     assert prev_para == prev_context
     assert next_para == next_context
+
+def test_register_rejects_short_password(client):
+    """Registration must enforce the 8-character minimum server-side."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "shortpass@example.com", "password": "abc12"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "REGISTER_INVALID_PASSWORD"
+    assert "at least 8 characters" in detail["reason"]
+
+
+def test_register_accepts_valid_password(client):
+    """Registration with an 8+ character password must still work."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "longpass@example.com", "password": "goodpassword123"},
+    )
+    assert response.status_code == 201
+    assert response.json()["email"] == "longpass@example.com"

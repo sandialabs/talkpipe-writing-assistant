@@ -529,3 +529,111 @@ def test_save_document_exception_handling(authenticated_client):
         }
     )
     assert response.status_code == 400
+
+def test_allow_custom_env_vars_env_variable():
+    """ALLOW_CUSTOM_ENV_VARS=false must disable custom env vars."""
+    import os
+
+    from writing_assistant.app.main import _allow_custom_env_vars_default
+
+    with patch.dict(os.environ, {"ALLOW_CUSTOM_ENV_VARS": "false"}):
+        assert _allow_custom_env_vars_default() is False
+    with patch.dict(os.environ, {"ALLOW_CUSTOM_ENV_VARS": "0"}):
+        assert _allow_custom_env_vars_default() is False
+    with patch.dict(os.environ, {"ALLOW_CUSTOM_ENV_VARS": "true"}):
+        assert _allow_custom_env_vars_default() is True
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("ALLOW_CUSTOM_ENV_VARS", None)
+        assert _allow_custom_env_vars_default() is True
+
+
+def test_generate_text_surfaces_value_error(authenticated_client):
+    """An unknown source must produce an actionable 400, not a generic 500."""
+    with patch(
+        'writing_assistant.app.main.cb.new_paragraph',
+        side_effect=ValueError("Unknown source: bogus"),
+    ):
+        response = authenticated_client.post("/generate-text", data={
+            "user_text": "Test",
+            "source": "bogus",
+            "model": "some-model",
+        })
+    assert response.status_code == 400
+    assert "Unknown source: bogus" in response.json()["detail"]
+
+
+def test_generate_text_surfaces_connection_error(authenticated_client):
+    """An unreachable backend must produce an actionable 502."""
+    message = (
+        "Failed to connect to Ollama at 'http://localhost:11434'. "
+        "If your Ollama server is remote, set the TALKPIPE_OLLAMA_SERVER_URL "
+        "environment variable."
+    )
+    with patch(
+        'writing_assistant.app.main.cb.new_paragraph',
+        side_effect=ConnectionError(message),
+    ):
+        response = authenticated_client.post("/generate-text", data={
+            "user_text": "Test",
+            "source": "ollama",
+            "model": "llama3.2",
+        })
+    assert response.status_code == 502
+    assert "TALKPIPE_OLLAMA_SERVER_URL" in response.json()["detail"]
+
+
+def test_generate_text_generic_error_stays_generic(authenticated_client):
+    """Unexpected errors must not leak internals to the client."""
+    with patch(
+        'writing_assistant.app.main.cb.new_paragraph',
+        side_effect=RuntimeError("secret internal state"),
+    ):
+        response = authenticated_client.post("/generate-text", data={
+            "user_text": "Test",
+        })
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to generate text"
+
+
+def test_generate_text_normalizes_source_case(authenticated_client):
+    """Source values like "Ollama" from the UI must be lowercased."""
+    captured = {}
+
+    def fake_new_paragraph(**kwargs):
+        captured["metadata"] = kwargs["metadata"]
+        return "Generated text"
+
+    with patch(
+        'writing_assistant.app.main.cb.new_paragraph',
+        side_effect=fake_new_paragraph,
+    ):
+        response = authenticated_client.post("/generate-text", data={
+            "user_text": "Test",
+            "source": " Ollama ",
+            "model": " llama3.2 ",
+        })
+    assert response.status_code == 200
+    assert captured["metadata"].source == "ollama"
+    assert captured["metadata"].model == "llama3.2"
+
+
+def test_generate_text_reloads_talkpipe_config_for_env_vars(authenticated_client):
+    """Per-request env vars must trigger a TalkPipe config reload to take effect."""
+    with patch('writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS', True):
+        with patch(
+            'writing_assistant.app.main.cb.new_paragraph',
+            return_value="Generated text",
+        ):
+            with patch(
+                'writing_assistant.app.main.reset_talkpipe_config'
+            ) as mock_reset:
+                env_vars = {
+                    "TALKPIPE_OLLAMA_SERVER_URL": "http://ollama.example:11434"
+                }
+                response = authenticated_client.post("/generate-text", data={
+                    "user_text": "Test",
+                    "environment_variables": json.dumps(env_vars),
+                })
+    assert response.status_code == 200
+    # Reloaded once to pick up the request's env vars and once to restore.
+    assert mock_reset.call_count == 2

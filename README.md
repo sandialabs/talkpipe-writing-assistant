@@ -167,12 +167,18 @@ After changing dependencies in `pyproject.toml`, refresh the lockfile with `uv l
 Build and run from the repository (as opposed to the [pre-built GHCR image](#pre-built-container-docker-or-podman) above):
 
 ```bash
+# Optional: create a local configuration file first
+cp .env.example .env
+
 # Production deployment
-docker-compose up talkpipe-writing-assistant
+docker-compose up writing-assistant
 
 # Development with live reload
-docker-compose --profile dev up talkpipe-writing-assistant-dev
+docker-compose --profile dev up writing-assistant-dev
 ```
+
+See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for the full deployment guide
+(configuration, backups, user management, and production hardening).
 
 ## Quick Start
 
@@ -228,6 +234,16 @@ You need to configure one of the supported AI backends:
 2. Pull a model: `ollama pull [model name]`
 3. Start Ollama: `ollama serve`
 4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name]
+
+If Ollama runs on a different machine (or a non-default port), set
+`TALKPIPE_OLLAMA_SERVER_URL` before starting the server:
+
+```bash
+export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"
+writing-assistant
+```
+
+> **Note:** The Source value is one of `openai`, `anthropic`, or `ollama`.
 
 ### 4. Start Writing!
 
@@ -290,10 +306,11 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
 | `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
+| `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
 
 
 **Security Options:**
-- `--disable-custom-env-vars`: Prevents users from configuring environment variables through the browser interface
+- `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`): Prevents users from configuring environment variables through the browser interface
   - Use this for shared deployments or when you want centralized credential management
   - Environment variables must be set at the server level (via shell environment)
   - The Environment Variables section will be hidden in the UI
@@ -322,6 +339,23 @@ Documents are stored in an SQLite database with multi-user isolation:
 - Cascade deletion (removing a user deletes all their documents)
 
 **Backup:** Simply copy the database file to create a backup. The database can be moved to a different location using the `--db-path` option.
+
+## Administration
+
+Two console commands are installed alongside the application for user management:
+
+```bash
+# Create the first admin (superuser) account
+writing-assistant-create-superuser
+
+# Manage users (list, info, delete, reset-password, toggle-active, make-superuser)
+writing-assistant-admin list
+writing-assistant-admin help
+```
+
+See the [Admin Guide](ADMIN_GUIDE.md) for the full user-administration
+reference and [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for running these
+commands inside a container.
 
 ## Architecture
 

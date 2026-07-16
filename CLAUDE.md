@@ -27,7 +27,7 @@ uv sync --frozen --extra dev
 # After editing pyproject.toml dependencies: uv lock  (then commit uv.lock)
 
 # Production installation
-pip install writing-assistant
+pip install talkpipe-writing-assistant
 ```
 
 ### Running the Application
@@ -202,7 +202,7 @@ src/writing_assistant/
 **src/writing_assistant/core/callbacks.py**: AI text generation functionality:
 - Uses TalkPipe framework for LLM integration
 - `new_paragraph()` function generates text based on context and metadata
-- Currently hardcoded to use OpenAI GPT-5 model
+- Source and model are user-configurable (openai, anthropic, or ollama)
 - Thread-safe generation with locking mechanism
 
 **src/writing_assistant/core/definitions.py**: Data models:

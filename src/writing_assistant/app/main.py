@@ -2,7 +2,9 @@
 
 import json
 import logging
+import os
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,11 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from talkpipe.util.config import reset_config as reset_talkpipe_config
 
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
 from .auth import auth_backend, current_active_user, fastapi_users
-from .database import get_async_session
+from .database import create_db_and_tables, get_async_session
 from .models import Document, DocumentSnapshot, User
 from .schemas import UserCreate, UserRead, UserUpdate
 
@@ -27,7 +30,15 @@ _env_var_lock = threading.Lock()
 # Configure logging
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Writing Assistant - Multi-User")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize the database on application startup."""
+    await create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="Writing Assistant - Multi-User", lifespan=lifespan)
 
 # Get the directory where this module is located
 app_dir = Path(__file__).parent
@@ -49,8 +60,19 @@ app.mount(
 )
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
-# Flag to control whether custom environment variables from UI are allowed
-ALLOW_CUSTOM_ENV_VARS = True
+def _allow_custom_env_vars_default() -> bool:
+    """Read the ALLOW_CUSTOM_ENV_VARS environment variable (default: allowed)."""
+    return os.getenv("ALLOW_CUSTOM_ENV_VARS", "true").strip().lower() not in (
+        "false",
+        "0",
+        "no",
+    )
+
+
+# Flag to control whether custom environment variables from UI are allowed.
+# Configurable via the ALLOW_CUSTOM_ENV_VARS environment variable or the
+# --disable-custom-env-vars CLI flag (the flag wins when passed).
+ALLOW_CUSTOM_ENV_VARS = _allow_custom_env_vars_default()
 
 
 # Include FastAPI Users authentication routers
@@ -359,21 +381,23 @@ async def generate_text(
     user: User = Depends(current_active_user),
 ):
     """Generate text for a section - requires authentication."""
-    import os
-
     try:
         # Parse environment variables from request
         env_vars = {}
         if environment_variables and ALLOW_CUSTOM_ENV_VARS:
             try:
                 env_vars = json.loads(environment_variables)
-                print(f"DEBUG: Parsed env vars from request: {env_vars}")
-            except json.JSONDecodeError:
-                print(
-                    f"Warning: Could not parse environment_variables: {environment_variables}"
+                # Log the names only - values may contain API keys.
+                logger.debug(
+                    "Applying custom environment variables: %s",
+                    sorted(env_vars.keys()),
                 )
+            except json.JSONDecodeError:
+                logger.warning("Could not parse environment_variables as JSON")
         elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
-            print("Info: Custom environment variables disabled by server configuration")
+            logger.info(
+                "Custom environment variables disabled by server configuration"
+            )
 
         # Use a lock to prevent race conditions
         with _env_var_lock:
@@ -383,7 +407,12 @@ async def generate_text(
                 if key in os.environ:
                     original_env[key] = os.environ[key]
                 os.environ[key] = str(value)
-                print(f"DEBUG: Set os.environ[{key}] = {value}")
+
+            # TalkPipe caches its configuration on first load, so environment
+            # variables set for this request (e.g. TALKPIPE_OLLAMA_SERVER_URL)
+            # would otherwise be ignored. Force a reload so they take effect.
+            if env_vars:
+                reset_talkpipe_config()
 
             try:
                 # Create metadata from request parameters
@@ -394,8 +423,10 @@ async def generate_text(
                 metadata.background_context = background_context
                 metadata.generation_directive = generation_directive
                 metadata.word_limit = word_limit
-                metadata.source = source
-                metadata.model = model
+                # Source names are lowercase (openai, anthropic, ollama);
+                # normalize so "Ollama" etc. from the UI still works.
+                metadata.source = source.strip().lower()
+                metadata.model = model.strip()
 
                 # Truncate context to 2000 characters
                 # prev_paragraph: keep LAST 2000 characters (most recent context)
@@ -423,9 +454,25 @@ async def generate_text(
                         os.environ[key] = original_env[key]
                     else:
                         os.environ.pop(key, None)
+                # Drop the per-request values from TalkPipe's config cache
+                # so later requests see the server-level configuration again.
+                if env_vars:
+                    reset_talkpipe_config()
 
     except Exception as e:
         logger.error(f"Error generating text: {e}", exc_info=True)
+        # Configuration errors (unknown source, unreachable or missing model)
+        # carry curated, actionable messages - surface those to the user
+        # instead of a generic failure. Anything else stays generic to avoid
+        # leaking internals.
+        if isinstance(e, ValueError):
+            raise HTTPException(
+                status_code=400, detail=f"Failed to generate text: {e}"
+            )
+        if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
+            raise HTTPException(
+                status_code=502, detail=f"Failed to generate text: {e}"
+            )
         raise HTTPException(status_code=500, detail="Failed to generate text")
 
 

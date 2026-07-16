@@ -8,8 +8,8 @@ This guide explains how to deploy the Writing Assistant using Docker and Docker 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/writing-assistant.git
-cd writing-assistant
+git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
+cd talkpipe-writing-assistant
 
 # Generate a secure secret
 python -c "import secrets; print(secrets.token_urlsafe(32))" > .secret
@@ -68,7 +68,8 @@ cp .env.example .env
 - `WRITING_ASSISTANT_PORT`: Server port (default: `8001`)
 - `WRITING_ASSISTANT_DB_PATH`: Database file path (default: `/app/data/writing_assistant.db`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT models
-- `OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
+- `TALKPIPE_OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
+- `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring environment variables through the UI
 
 ### Docker Compose Services
 
@@ -223,11 +224,10 @@ server {
 
 ### 4. Disable Custom Environment Variables
 
-For multi-user deployments, disable browser-based env vars:
+For multi-user deployments, disable browser-based env vars by adding to `.env`:
 
-```bash
-docker-compose exec writing-assistant \
-  python -m writing_assistant.app.server --disable-custom-env-vars
+```
+ALLOW_CUSTOM_ENV_VARS=false
 ```
 
 Or add to docker-compose.yml:

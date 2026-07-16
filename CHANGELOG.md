@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+- Fixed the startup banner to print the web page URLs (`/register`, `/login`) instead of the JSON API endpoints (`/auth/register`, `/auth/jwt/login`), which return 405 in a browser.
+- Generation failures now return actionable error messages to the UI for configuration problems (unknown source, unreachable Ollama server, missing model) instead of a generic "Failed to generate text"; unexpected errors remain generic to avoid leaking internals. The web UI displays the returned message in the suggestion panel.
+- Custom environment variables sent with a generation request (e.g. `TALKPIPE_OLLAMA_SERVER_URL`) now take effect: TalkPipe's cached configuration is reloaded around each request that supplies them, and restored afterwards.
+- `ALLOW_CUSTOM_ENV_VARS=false` (documented in `.env.example`) is now honored as an alternative to the `--disable-custom-env-vars` CLI flag.
+- The AI Source value is normalized (trimmed and lowercased), so `Ollama` works the same as `ollama`; AI Settings placeholders now show the valid values (`openai`, `anthropic`, `ollama`) instead of misleading examples.
+- Registration now enforces the 8-character password minimum server-side (previously only the registration page checked it).
+- Replaced the stale `admin_users.py` and `create_superuser.py` scripts in the repository root — which crashed on `list`/`info` with an async lazy-loading error — with thin wrappers that delegate to the maintained `writing_assistant.admin_users` / `writing_assistant.create_superuser` modules.
+- docker-compose.yml: replaced the hardcoded personal `env_file` (`.env.podman.NOCOMMIT`, not shipped, which made `docker-compose up` fail after the image build) with an optional `.env`, and removed leftover editing comments.
+- Migrated startup database initialization from the deprecated `@app.on_event("startup")` hook to a FastAPI lifespan handler, removing the DeprecationWarning printed on every start.
+- Documentation fixes: README compose commands now use the real service names (`writing-assistant`, `writing-assistant-dev`); README Quick Start explains `TALKPIPE_OLLAMA_SERVER_URL` for remote Ollama servers and lists valid Source values; new README "Administration" section links ADMIN_GUIDE.md and DOCKER_DEPLOYMENT.md and introduces the `writing-assistant-admin` / `writing-assistant-create-superuser` console commands; ADMIN_GUIDE.md now documents the console commands (the previously documented `python admin_users.py` invocations crashed); DOCKER_DEPLOYMENT.md uses the real repository URL and the working `TALKPIPE_OLLAMA_SERVER_URL` variable name (plain `OLLAMA_SERVER_URL` has no effect as an environment variable); `.env.example` likewise.
+- Generation requests no longer print custom environment variable values (which may contain API keys) to the server console; only variable names are logged at debug level.
+
 ## 0.1.4
 - README: Pre-built container section — optional `pull` (`run` fetches the image); avoid `pull pull` typo; Windows `docker`/`podman` one-liners; correct `-v` syntax (`/app/data`); browser connectivity troubleshooting (curl, `127.0.0.1` bind, alternate port, Podman on Windows, firewall).
 - README: Pre-built container run example omits optional `WRITING_ASSISTANT_SECRET` (defaults apply).

@@ -17,12 +17,6 @@ async def init_db():
     print("Database initialized successfully.")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Run on application startup."""
-    await init_db()
-
-
 def main():
     """Main entry point for the writing assistant server."""
     parser = argparse.ArgumentParser(description="Writing Assistant Web Server - Multi-User")
@@ -67,7 +61,8 @@ def main():
     if args.db_path:
         os.environ["WRITING_ASSISTANT_DB_PATH"] = args.db_path
 
-    # Set custom environment variables flag
+    # Set custom environment variables flag (the CLI flag forces it off;
+    # otherwise the ALLOW_CUSTOM_ENV_VARS environment variable applies)
     if args.disable_custom_env_vars:
         import writing_assistant.app.main as main_module
         main_module.ALLOW_CUSTOM_ENV_VARS = False
@@ -86,8 +81,8 @@ def main():
 
     print(f"\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
     print(f"📝 Access your writing assistant at: http://{args.host}:{args.port}/", flush=True)
-    print(f"🔑 Register a new account at: http://{args.host}:{args.port}/auth/register", flush=True)
-    print(f"🔐 Login at: http://{args.host}:{args.port}/auth/jwt/login", flush=True)
+    print(f"🔑 Register a new account at: http://{args.host}:{args.port}/register", flush=True)
+    print(f"🔐 Login at: http://{args.host}:{args.port}/login", flush=True)
     print(f"📚 API documentation: http://{args.host}:{args.port}/docs", flush=True)
     print(f"💾 Database: {db_path}", flush=True)
     print("=" * 80, flush=True)

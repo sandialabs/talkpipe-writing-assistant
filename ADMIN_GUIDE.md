@@ -4,10 +4,16 @@ This guide explains how to administer users in the Writing Assistant application
 
 ## Quick Start
 
+Installing the package (`pip install talkpipe-writing-assistant` or
+`pip install -e .` from a checkout) provides two console commands:
+`writing-assistant-create-superuser` and `writing-assistant-admin`.
+From a source checkout you can equivalently run `python create_superuser.py`
+and `python admin_users.py` in the repository root.
+
 ### 1. Create a Superuser (First Time Setup)
 
 ```bash
-python create_superuser.py
+writing-assistant-create-superuser
 ```
 
 This creates an admin account that can manage other users via the API.
@@ -16,36 +22,36 @@ This creates an admin account that can manage other users via the API.
 
 ```bash
 # List all users
-python admin_users.py list
+writing-assistant-admin list
 
 # Show detailed user info
-python admin_users.py info user@example.com
+writing-assistant-admin info user@example.com
 
 # Delete a user (and all their documents)
-python admin_users.py delete user@example.com
+writing-assistant-admin delete user@example.com
 
 # Reset a user's password
-python admin_users.py reset-password user@example.com
+writing-assistant-admin reset-password user@example.com
 
 # Deactivate/activate a user
-python admin_users.py toggle-active user@example.com
+writing-assistant-admin toggle-active user@example.com
 
 # Make a user a superuser
-python admin_users.py make-superuser user@example.com
+writing-assistant-admin make-superuser user@example.com
 
 # Show help
-python admin_users.py help
+writing-assistant-admin help
 ```
 
 ## Administration Methods
 
 ### Method 1: Command-Line Admin Tool (Recommended)
 
-The `admin_users.py` script provides a simple interface for common tasks:
+The `writing-assistant-admin` command provides a simple interface for common tasks:
 
 **List all users:**
 ```bash
-$ python admin_users.py list
+$ writing-assistant-admin list
 
 ID                                     Email                          Active   Super    Documents  Created
 -------------------------------------------------------------------------------------------------------------------------
@@ -55,7 +61,7 @@ b2c3d4e5-f6a7-8901-bcde-f12345678901  user@example.com               Yes      No
 
 **Delete a user:**
 ```bash
-$ python admin_users.py delete user@example.com
+$ writing-assistant-admin delete user@example.com
 
 User: user@example.com
 ID: b2c3d4e5-f6a7-8901-bcde-f12345678901
@@ -68,7 +74,7 @@ Are you sure you want to delete this user? (yes/no): yes
 
 **Reset password:**
 ```bash
-$ python admin_users.py reset-password user@example.com
+$ writing-assistant-admin reset-password user@example.com
 
 Resetting password for: user@example.com
 New password: ********
@@ -180,7 +186,7 @@ document_snapshots (
 ### Creating the First Admin User
 
 ```bash
-python create_superuser.py
+writing-assistant-create-superuser
 ```
 
 Follow the prompts to enter email and password.
@@ -188,23 +194,23 @@ Follow the prompts to enter email and password.
 ### Resetting a Forgotten Password
 
 ```bash
-python admin_users.py reset-password user@example.com
+writing-assistant-admin reset-password user@example.com
 ```
 
 ### Deactivating a User (Soft Delete)
 
 ```bash
 # Deactivate (user can't login but data is preserved)
-python admin_users.py toggle-active user@example.com
+writing-assistant-admin toggle-active user@example.com
 
 # Reactivate later
-python admin_users.py toggle-active user@example.com
+writing-assistant-admin toggle-active user@example.com
 ```
 
 ### Permanently Deleting a User and All Their Data
 
 ```bash
-python admin_users.py delete user@example.com
+writing-assistant-admin delete user@example.com
 ```
 
 **Warning:** This deletes:
@@ -218,7 +224,7 @@ This action cannot be undone!
 ### Promoting a User to Administrator
 
 ```bash
-python admin_users.py make-superuser user@example.com
+writing-assistant-admin make-superuser user@example.com
 ```
 
 Superusers can:
@@ -229,7 +235,7 @@ Superusers can:
 ### Viewing User Statistics
 
 ```bash
-python admin_users.py list
+writing-assistant-admin list
 ```
 
 Shows:
@@ -243,7 +249,7 @@ Shows:
 ### Getting Detailed User Information
 
 ```bash
-python admin_users.py info user@example.com
+writing-assistant-admin info user@example.com
 ```
 
 Shows:
@@ -264,15 +270,16 @@ Shows:
 
 **"User not found"**
 - Check spelling of email address
-- Use `admin_users.py list` to see all users
+- Use `writing-assistant-admin list` to see all users
 
 **"Permission denied" when accessing database**
 - Check file permissions: `ls -la ~/.writing_assistant/writing_assistant.db`
 - Ensure you have read/write access
 
-**Scripts won't run**
-- Make sure you're in the project directory
-- Check Python path: `python admin_users.py help`
+**Commands won't run**
+- Make sure the package is installed (`pip install talkpipe-writing-assistant`
+  or `pip install -e .` from a checkout)
+- Check the command works: `writing-assistant-admin help`
 
 **Database is locked**
 - Stop the server before running admin commands
@@ -296,7 +303,7 @@ If using a custom database location:
 export WRITING_ASSISTANT_DB_PATH=/path/to/database.db
 
 # Or specify in the admin command
-WRITING_ASSISTANT_DB_PATH=/path/to/database.db python admin_users.py list
+WRITING_ASSISTANT_DB_PATH=/path/to/database.db writing-assistant-admin list
 ```
 
 ## Backup and Restore

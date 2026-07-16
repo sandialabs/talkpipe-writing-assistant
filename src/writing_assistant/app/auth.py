@@ -5,7 +5,12 @@ import uuid
 from typing import Optional
 
 from fastapi import Depends, Request
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
+from fastapi_users import (
+    BaseUserManager,
+    FastAPIUsers,
+    InvalidPasswordException,
+    UUIDIDMixin,
+)
 from fastapi_users.authentication import (
     AuthenticationBackend,
     BearerTransport,
@@ -25,6 +30,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
     reset_password_token_secret = SECRET
     verification_token_secret = SECRET
+
+    async def validate_password(self, password: str, user) -> None:
+        """Enforce the same minimum password length as the registration page."""
+        if len(password) < 8:
+            raise InvalidPasswordException(
+                reason="Password must be at least 8 characters long"
+            )
 
     async def on_after_register(self, user: User, request: Optional[Request] = None):
         """Called after a user successfully registers."""

@@ -141,3 +141,22 @@ def test_main_script_execution():
     # Simple test that verifies the main function exists and is callable
     from writing_assistant.app.server import main
     assert callable(main)
+
+@patch('writing_assistant.app.server.uvicorn.run')
+@patch('sys.argv', ['server.py'])
+@patch('builtins.print')
+def test_main_prints_web_page_urls(mock_print, mock_uvicorn_run):
+    """The banner must point at the HTML pages, not the JSON API endpoints."""
+    from writing_assistant.app.server import main
+
+    main()
+
+    print_calls = [call[0][0] for call in mock_print.call_args_list if call[0]]
+
+    register_lines = [c for c in print_calls if "Register a new account at:" in c]
+    login_lines = [c for c in print_calls if "Login at:" in c]
+
+    assert register_lines and register_lines[0].endswith("/register")
+    assert "/auth/register" not in register_lines[0]
+    assert login_lines and login_lines[0].endswith("/login")
+    assert "/auth/jwt/login" not in login_lines[0]
