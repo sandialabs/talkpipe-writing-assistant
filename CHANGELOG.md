@@ -15,6 +15,7 @@
 - Renamed DOCKER_DEPLOYMENT.md to CONTAINER_DEPLOYMENT.md and made the container documentation Podman-first (Docker remains a fully compatible alternative with the same arguments); folded in Podman-specific notes: rootless port-conflict messages, `podman-compose` building the image before validating container options, the optional-`.env` compose syntax requirement, and reaching host services via `host.containers.internal`.
 - Moved the detailed container troubleshooting (Windows notes, browser connectivity) from the README front page into CONTAINER_DEPLOYMENT.md, leaving a compact pre-built-container section so Installation and Quick Start are prominent.
 - Container images now report the real package version: the Dockerfile takes an `APP_VERSION` build argument (compose passes `${APP_VERSION:-0.1.0}`; CI computes it with setuptools_scm) instead of hardcoding 0.1.0.
+- Fixed the black configuration in pyproject.toml (the `include`/`extend-exclude` patterns contained doubled backslashes, so `black --check` matched no files and passed vacuously) and reformatted the codebase so the check is meaningful.
 
 ## 0.1.4
 - README: Pre-built container section — optional `pull` (`run` fetches the image); avoid `pull pull` typo; Windows `docker`/`podman` one-liners; correct `-v` syntax (`/app/data`); browser connectivity troubleshooting (curl, `127.0.0.1` bind, alternate port, Podman on Windows, firewall).

@@ -8,6 +8,7 @@ from .definitions import Metadata
 
 _paragraph_lock = threading.Lock()
 
+
 def get_system_prompt(generation_mode: str) -> str:
     """Get system prompt based on generation mode"""
     base_context = """You are an expert writing assistant. Your role is to help improve written content with precision and skill.
@@ -146,7 +147,15 @@ Next paragraph:
 TASK: {generation_mode} the current paragraph using the context and requirements above.
 """
 
-def new_paragraph(text: str, metadata: Metadata, title: str = "", prev_paragraph: str = "", next_paragraph: str = "", generation_mode: str = "rewrite") -> str:
+
+def new_paragraph(
+    text: str,
+    metadata: Metadata,
+    title: str = "",
+    prev_paragraph: str = "",
+    next_paragraph: str = "",
+    generation_mode: str = "rewrite",
+) -> str:
 
     with _paragraph_lock:
         # Get the appropriate system prompt based on generation mode
@@ -154,20 +163,35 @@ def new_paragraph(text: str, metadata: Metadata, title: str = "", prev_paragraph
         print(f"=== Generation mode: {generation_mode} ===")
         print(f"=== System prompt: {system_prompt} ===")
 
-        f = (fillTemplate(template=PROMPT_TEMPLATE)
+        f = (
+            fillTemplate(template=PROMPT_TEMPLATE)
             | Print()
-            | LLMPrompt(system_prompt=system_prompt, multi_turn=False, source=metadata.source, model=metadata.model))
+            | LLMPrompt(
+                system_prompt=system_prompt,
+                multi_turn=False,
+                source=metadata.source,
+                model=metadata.model,
+            )
+        )
         f = f.as_function(single_in=True, single_out=True)
 
-
-        result = f({"text": text, "metadata": metadata, "title": title, "prev_paragraph": prev_paragraph, "next_paragraph": next_paragraph, "generation_mode": generation_mode})
+        result = f(
+            {
+                "text": text,
+                "metadata": metadata,
+                "title": title,
+                "prev_paragraph": prev_paragraph,
+                "next_paragraph": next_paragraph,
+                "generation_mode": generation_mode,
+            }
+        )
 
         # Clean up the result to prevent extra newlines
         if isinstance(result, str):
             cleaned_result = result.strip()
-            print(f"=== Generated text cleaned: {len(result)} -> {len(cleaned_result)} chars ===")
+            print(
+                f"=== Generated text cleaned: {len(result)} -> {len(cleaned_result)} chars ==="
+            )
             return cleaned_result
 
         return result
-
-

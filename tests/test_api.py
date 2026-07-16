@@ -56,22 +56,29 @@ def test_register_page_returns_html(client):
 #     assert data["tone"] == "friendly"
 
 
-@patch('writing_assistant.app.main.cb.new_paragraph')
+@patch("writing_assistant.app.main.cb.new_paragraph")
 def test_generate_text(mock_new_paragraph, authenticated_client):
     """Test text generation endpoint."""
     # Mock the text generation to return a test string
-    mock_new_paragraph.return_value = "This is generated text about AI changing the world."
+    mock_new_paragraph.return_value = (
+        "This is generated text about AI changing the world."
+    )
 
-    response = authenticated_client.post("/generate-text", data={
-        "user_text": "AI is changing the world",
-        "title": "AI Overview",
-        "generation_mode": "ideas"
-    })
+    response = authenticated_client.post(
+        "/generate-text",
+        data={
+            "user_text": "AI is changing the world",
+            "title": "AI Overview",
+            "generation_mode": "ideas",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "generated_text" in data
     assert isinstance(data["generated_text"], str)
-    assert data["generated_text"] == "This is generated text about AI changing the world."
+    assert (
+        data["generated_text"] == "This is generated text about AI changing the world."
+    )
 
     # Verify the mock was called
     mock_new_paragraph.assert_called_once()
@@ -87,23 +94,23 @@ def test_document_save_and_load(authenticated_client):
             {
                 "id": "section-1",
                 "text": "This is a test document.",
-                "generated_text": "AI-generated expansion of the first section"
+                "generated_text": "AI-generated expansion of the first section",
             },
             {
                 "id": "section-2",
                 "text": "This is another paragraph.",
-                "generated_text": "AI-generated expansion of the second section"
-            }
+                "generated_text": "AI-generated expansion of the second section",
+            },
         ],
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
+        "updated_at": "2024-01-01T00:00:00Z",
     }
 
     # Save the document
-    response = authenticated_client.post("/documents/save", data={
-        "filename": "test_doc",
-        "document_data": json.dumps(test_document)
-    })
+    response = authenticated_client.post(
+        "/documents/save",
+        data={"filename": "test_doc", "document_data": json.dumps(test_document)},
+    )
     assert response.status_code == 200
     save_data = response.json()
     assert save_data["status"] == "success"
@@ -131,13 +138,13 @@ def test_document_save_as(authenticated_client):
         "title": "Save As Test",
         "content": "Testing save as functionality",
         "sections": [],
-        "created_at": "2024-01-01T00:00:00Z"
+        "created_at": "2024-01-01T00:00:00Z",
     }
 
-    response = authenticated_client.post("/documents/save-as", data={
-        "filename": "save_as_test",
-        "document_data": json.dumps(test_document)
-    })
+    response = authenticated_client.post(
+        "/documents/save-as",
+        data={"filename": "save_as_test", "document_data": json.dumps(test_document)},
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
@@ -149,14 +156,14 @@ def test_document_delete(authenticated_client):
     test_document = {
         "title": "Delete Test",
         "content": "This will be deleted",
-        "sections": []
+        "sections": [],
     }
 
     # Save the document
-    response = authenticated_client.post("/documents/save", data={
-        "filename": "delete_test",
-        "document_data": json.dumps(test_document)
-    })
+    response = authenticated_client.post(
+        "/documents/save",
+        data={"filename": "delete_test", "document_data": json.dumps(test_document)},
+    )
     assert response.status_code == 200
     filename = response.json()["filename"]
 
@@ -173,8 +180,10 @@ def test_document_delete(authenticated_client):
     assert data["status"] == "error"
 
 
-@patch('writing_assistant.app.main.cb.new_paragraph')
-def test_generate_text_truncates_context_to_2000_chars(mock_new_paragraph, authenticated_client):
+@patch("writing_assistant.app.main.cb.new_paragraph")
+def test_generate_text_truncates_context_to_2000_chars(
+    mock_new_paragraph, authenticated_client
+):
     """Test that prev/next paragraphs are truncated to 2000 characters."""
     # Mock the text generation
     mock_new_paragraph.return_value = "Generated text."
@@ -183,13 +192,16 @@ def test_generate_text_truncates_context_to_2000_chars(mock_new_paragraph, authe
     # Each "word{i}" is about 6-7 chars, so 400 words = ~2600 chars
     long_paragraph = " ".join([f"word{i}" for i in range(400)])
 
-    response = authenticated_client.post("/generate-text", data={
-        "user_text": "Current paragraph",
-        "title": "Test Document",
-        "prev_paragraph": long_paragraph,
-        "next_paragraph": long_paragraph,
-        "generation_mode": "rewrite"
-    })
+    response = authenticated_client.post(
+        "/generate-text",
+        data={
+            "user_text": "Current paragraph",
+            "title": "Test Document",
+            "prev_paragraph": long_paragraph,
+            "next_paragraph": long_paragraph,
+            "generation_mode": "rewrite",
+        },
+    )
 
     assert response.status_code == 200
 
@@ -198,12 +210,16 @@ def test_generate_text_truncates_context_to_2000_chars(mock_new_paragraph, authe
 
     # Get the actual arguments passed to the callback
     call_args = mock_new_paragraph.call_args
-    prev_para = call_args.kwargs['prev_paragraph']
-    next_para = call_args.kwargs['next_paragraph']
+    prev_para = call_args.kwargs["prev_paragraph"]
+    next_para = call_args.kwargs["next_paragraph"]
 
     # Verify they are truncated to 2000 characters
-    assert len(prev_para) == 2000, f"Expected 2000 chars in prev_paragraph, got {len(prev_para)}"
-    assert len(next_para) == 2000, f"Expected 2000 chars in next_paragraph, got {len(next_para)}"
+    assert (
+        len(prev_para) == 2000
+    ), f"Expected 2000 chars in prev_paragraph, got {len(prev_para)}"
+    assert (
+        len(next_para) == 2000
+    ), f"Expected 2000 chars in next_paragraph, got {len(next_para)}"
 
     # Verify prev_paragraph gets the LAST 2000 characters
     assert prev_para == long_paragraph[-2000:]
@@ -212,8 +228,10 @@ def test_generate_text_truncates_context_to_2000_chars(mock_new_paragraph, authe
     assert next_para == long_paragraph[:2000]
 
 
-@patch('writing_assistant.app.main.cb.new_paragraph')
-def test_generate_text_includes_multiple_short_paragraphs(mock_new_paragraph, authenticated_client):
+@patch("writing_assistant.app.main.cb.new_paragraph")
+def test_generate_text_includes_multiple_short_paragraphs(
+    mock_new_paragraph, authenticated_client
+):
     """Test that multiple short paragraphs are included in context."""
     # Mock the text generation
     mock_new_paragraph.return_value = "Generated text."
@@ -235,13 +253,16 @@ def test_generate_text_includes_multiple_short_paragraphs(mock_new_paragraph, au
     prev_context = "\n\n".join(paragraphs[:4])  # First 4 paragraphs before current
     next_context = "\n\n".join(paragraphs[4:])  # Last 4 paragraphs after current
 
-    response = authenticated_client.post("/generate-text", data={
-        "user_text": "Current paragraph being edited",
-        "title": "Test Document",
-        "prev_paragraph": prev_context,
-        "next_paragraph": next_context,
-        "generation_mode": "rewrite"
-    })
+    response = authenticated_client.post(
+        "/generate-text",
+        data={
+            "user_text": "Current paragraph being edited",
+            "title": "Test Document",
+            "prev_paragraph": prev_context,
+            "next_paragraph": next_context,
+            "generation_mode": "rewrite",
+        },
+    )
 
     assert response.status_code == 200
 
@@ -250,8 +271,8 @@ def test_generate_text_includes_multiple_short_paragraphs(mock_new_paragraph, au
 
     # Get the actual arguments passed to the callback
     call_args = mock_new_paragraph.call_args
-    prev_para = call_args.kwargs['prev_paragraph']
-    next_para = call_args.kwargs['next_paragraph']
+    prev_para = call_args.kwargs["prev_paragraph"]
+    next_para = call_args.kwargs["next_paragraph"]
 
     # Verify that multiple paragraphs are included
     # Since each paragraph is ~250 chars + 2 for \n\n separator,
@@ -273,6 +294,7 @@ def test_generate_text_includes_multiple_short_paragraphs(mock_new_paragraph, au
     # Verify the exact content matches what we sent
     assert prev_para == prev_context
     assert next_para == next_context
+
 
 def test_register_rejects_short_password(client):
     """Registration must enforce the 8-character minimum server-side."""

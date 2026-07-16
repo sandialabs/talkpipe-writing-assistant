@@ -27,7 +27,9 @@ async def list_users():
             print("No users found.")
             return
 
-        print(f"\n{'ID':<38} {'Email':<30} {'Active':<8} {'Super':<8} {'Documents':<10} {'Created'}")
+        print(
+            f"\n{'ID':<38} {'Email':<30} {'Active':<8} {'Super':<8} {'Documents':<10} {'Created'}"
+        )
         print("-" * 120)
 
         for user in users:
@@ -73,7 +75,11 @@ async def delete_user(email: str):
         print(f"Documents: {doc_count}")
         print(f"Created: {user.created_at}")
 
-        confirm = input(f"\nAre you sure you want to delete this user? (yes/no): ").strip().lower()
+        confirm = (
+            input(f"\nAre you sure you want to delete this user? (yes/no): ")
+            .strip()
+            .lower()
+        )
 
         if confirm != "yes":
             print("Deletion cancelled.")
@@ -96,9 +102,7 @@ async def reset_password(email: str):
 
     session_maker = get_session_maker()
     async with session_maker() as session:
-        result = await session.execute(
-            select(User).where(User.email == email)
-        )
+        result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         if not user:
@@ -135,9 +139,7 @@ async def toggle_active(email: str):
 
     session_maker = get_session_maker()
     async with session_maker() as session:
-        result = await session.execute(
-            select(User).where(User.email == email)
-        )
+        result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         if not user:
@@ -160,9 +162,7 @@ async def make_superuser(email: str):
 
     session_maker = get_session_maker()
     async with session_maker() as session:
-        result = await session.execute(
-            select(User).where(User.email == email)
-        )
+        result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         if not user:
@@ -211,7 +211,9 @@ async def show_user_info(email: str):
         if user.documents:
             print(f"\nDocuments:")
             for doc in user.documents[:5]:  # Show first 5
-                print(f"  - {doc.filename} (updated: {doc.updated_at.strftime('%Y-%m-%d %H:%M')})")
+                print(
+                    f"  - {doc.filename} (updated: {doc.updated_at.strftime('%Y-%m-%d %H:%M')})"
+                )
             if len(user.documents) > 5:
                 print(f"  ... and {len(user.documents) - 5} more")
 
@@ -306,6 +308,7 @@ async def async_main():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

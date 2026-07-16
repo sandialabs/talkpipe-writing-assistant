@@ -121,16 +121,16 @@ exclude_lines = [
 [tool.black]
 line-length = 88
 target-version = ['py311']
-include = '\\.pyi?$'
+include = '\.pyi?$'
 extend-exclude = '''
 /(
   # directories
-  \\.eggs
-  | \\.git
-  | \\.hg
-  | \\.mypy_cache
-  | \\.tox
-  | \\.venv
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
   | build
   | dist
 )/

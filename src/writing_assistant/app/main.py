@@ -60,6 +60,7 @@ app.mount(
 )
 templates = Jinja2Templates(directory=str(app_dir / "templates"))
 
+
 def _allow_custom_env_vars_default() -> bool:
     """Read the ALLOW_CUSTOM_ENV_VARS environment variable (default: allowed)."""
     return os.getenv("ALLOW_CUSTOM_ENV_VARS", "true").strip().lower() not in (
@@ -395,9 +396,7 @@ async def generate_text(
             except json.JSONDecodeError:
                 logger.warning("Could not parse environment_variables as JSON")
         elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
-            logger.info(
-                "Custom environment variables disabled by server configuration"
-            )
+            logger.info("Custom environment variables disabled by server configuration")
 
         # Use a lock to prevent race conditions
         with _env_var_lock:
@@ -466,13 +465,9 @@ async def generate_text(
         # instead of a generic failure. Anything else stays generic to avoid
         # leaking internals.
         if isinstance(e, ValueError):
-            raise HTTPException(
-                status_code=400, detail=f"Failed to generate text: {e}"
-            )
+            raise HTTPException(status_code=400, detail=f"Failed to generate text: {e}")
         if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
-            raise HTTPException(
-                status_code=502, detail=f"Failed to generate text: {e}"
-            )
+            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate text")
 
 

@@ -16,11 +16,12 @@ class GUID(TypeDecorator):
 
     Uses PostgreSQL's UUID type, otherwise uses CHAR(36), storing as stringified hex values.
     """
+
     impl = CHAR
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return dialect.type_descriptor(PG_UUID())
         else:
             return dialect.type_descriptor(CHAR(36))
@@ -28,7 +29,7 @@ class GUID(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if value is None:
             return value
-        elif dialect.name == 'postgresql':
+        elif dialect.name == "postgresql":
             return str(value)
         else:
             if not isinstance(value, uuid.UUID):
@@ -47,16 +48,16 @@ class GUID(TypeDecorator):
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
 class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
     """User model for authentication."""
+
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        GUID(), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(
         String(320), unique=True, index=True, nullable=False
     )
@@ -83,6 +84,7 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
 
 class Document(Base):
     """Document model for storing user documents."""
+
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -119,13 +121,17 @@ class Document(Base):
 
 class DocumentSnapshot(Base):
     """Snapshot model for document history."""
+
     __tablename__ = "document_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Document relationship
     document_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Snapshot metadata

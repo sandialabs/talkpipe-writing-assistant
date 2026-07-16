@@ -53,7 +53,7 @@ def test_nocache_static_files():
     static_files = NoCacheStaticFiles(directory=".")
 
     # Mock the parent's file_response method
-    with patch.object(NoCacheStaticFiles.__bases__[0], 'file_response') as mock_parent:
+    with patch.object(NoCacheStaticFiles.__bases__[0], "file_response") as mock_parent:
         mock_response = Response()
         mock_parent.return_value = mock_response
 
@@ -98,11 +98,14 @@ def test_delete_document_not_found(authenticated_client):
 
 def test_generate_text_with_error(authenticated_client):
     """Test generate text with exception handling."""
-    with patch('writing_assistant.app.main.cb.new_paragraph', side_effect=Exception("LLM Error")):
-        response = authenticated_client.post("/generate-text", data={
-            "user_text": "Test text",
-            "generation_mode": "ideas"
-        })
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=Exception("LLM Error"),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test text", "generation_mode": "ideas"},
+        )
         # Should return an error
         assert response.status_code in [200, 500]
 
@@ -116,7 +119,9 @@ def test_get_user_preferences_empty(authenticated_client):
     assert data["preferences"] == {}
 
 
-async def test_get_user_preferences_with_data(authenticated_client, async_db_session, test_user):
+async def test_get_user_preferences_with_data(
+    authenticated_client, async_db_session, test_user
+):
     """Test getting user preferences with saved data."""
     import json
 
@@ -138,8 +143,7 @@ def test_save_user_preferences(authenticated_client):
     """Test saving user preferences."""
     preferences = {"theme": "dark", "fontSize": 16}
     response = authenticated_client.post(
-        "/user/preferences",
-        json={"preferences": preferences}
+        "/user/preferences", json={"preferences": preferences}
     )
     assert response.status_code == 200
     data = response.json()
@@ -150,17 +154,11 @@ def test_save_document_new(authenticated_client):
     """Test saving a new document."""
     import json
 
-    document_data = {
-        "title": "Test Document",
-        "sections": []
-    }
+    document_data = {"title": "Test Document", "sections": []}
 
     response = authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "test.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "test.json", "document_data": json.dumps(document_data)},
     )
     assert response.status_code == 200
     data = response.json()
@@ -173,31 +171,19 @@ def test_save_document_update_existing(authenticated_client):
     import json
 
     # Create initial document
-    document_data = {
-        "title": "Original Title",
-        "sections": []
-    }
+    document_data = {"title": "Original Title", "sections": []}
 
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "test.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "test.json", "document_data": json.dumps(document_data)},
     )
 
     # Update it
-    updated_data = {
-        "title": "Updated Title",
-        "sections": []
-    }
+    updated_data = {"title": "Updated Title", "sections": []}
 
     response = authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "test.json",
-            "document_data": json.dumps(updated_data)
-        }
+        data={"filename": "test.json", "document_data": json.dumps(updated_data)},
     )
     assert response.status_code == 200
     data = response.json()
@@ -209,10 +195,7 @@ def test_save_document_invalid_json(authenticated_client):
     """Test saving document with invalid JSON."""
     response = authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "test.json",
-            "document_data": "invalid json {"
-        }
+        data={"filename": "test.json", "document_data": "invalid json {"},
     )
     assert response.status_code == 400
 
@@ -221,17 +204,11 @@ def test_save_document_as(authenticated_client):
     """Test save-as endpoint."""
     import json
 
-    document_data = {
-        "title": "Test Document",
-        "sections": []
-    }
+    document_data = {"title": "Test Document", "sections": []}
 
     response = authenticated_client.post(
         "/documents/save-as",
-        data={
-            "filename": "copy.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "copy.json", "document_data": json.dumps(document_data)},
     )
     assert response.status_code == 200
     data = response.json()
@@ -243,17 +220,11 @@ def test_download_document_success(authenticated_client):
     import json
 
     # Create document
-    document_data = {
-        "title": "Download Test",
-        "sections": []
-    }
+    document_data = {"title": "Download Test", "sections": []}
 
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "download.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "download.json", "document_data": json.dumps(document_data)},
     )
 
     # Download it
@@ -268,17 +239,11 @@ def test_load_document_by_filename_success(authenticated_client):
     import json
 
     # Create document
-    document_data = {
-        "title": "Load Test",
-        "sections": []
-    }
+    document_data = {"title": "Load Test", "sections": []}
 
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "load.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "load.json", "document_data": json.dumps(document_data)},
     )
 
     # Load it
@@ -317,8 +282,8 @@ def test_list_documents_with_files(authenticated_client):
             "/documents/save",
             data={
                 "filename": f"doc{i}.json",
-                "document_data": json.dumps(document_data)
-            }
+                "document_data": json.dumps(document_data),
+            },
         )
 
     response = authenticated_client.get("/documents/list")
@@ -331,13 +296,18 @@ def test_generate_text_with_custom_env_vars(authenticated_client):
     """Test generate text with custom environment variables."""
     import json
 
-    with patch('writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS', True):
-        with patch('writing_assistant.app.main.cb.new_paragraph', return_value="Generated text"):
+    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
+        with patch(
+            "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
+        ):
             env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
-            response = authenticated_client.post("/generate-text", data={
-                "user_text": "Test",
-                "environment_variables": json.dumps(env_vars)
-            })
+            response = authenticated_client.post(
+                "/generate-text",
+                data={
+                    "user_text": "Test",
+                    "environment_variables": json.dumps(env_vars),
+                },
+            )
             assert response.status_code == 200
 
 
@@ -345,24 +315,31 @@ def test_generate_text_env_vars_disabled(authenticated_client):
     """Test generate text with custom env vars disabled."""
     import json
 
-    with patch('writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS', False):
-        with patch('writing_assistant.app.main.cb.new_paragraph', return_value="Generated text"):
+    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", False):
+        with patch(
+            "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
+        ):
             env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
-            response = authenticated_client.post("/generate-text", data={
-                "user_text": "Test",
-                "environment_variables": json.dumps(env_vars)
-            })
+            response = authenticated_client.post(
+                "/generate-text",
+                data={
+                    "user_text": "Test",
+                    "environment_variables": json.dumps(env_vars),
+                },
+            )
             assert response.status_code == 200
 
 
 def test_generate_text_invalid_env_json(authenticated_client):
     """Test generate text with invalid environment variables JSON."""
-    with patch('writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS', True):
-        with patch('writing_assistant.app.main.cb.new_paragraph', return_value="Generated text"):
-            response = authenticated_client.post("/generate-text", data={
-                "user_text": "Test",
-                "environment_variables": "invalid json"
-            })
+    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
+        with patch(
+            "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
+        ):
+            response = authenticated_client.post(
+                "/generate-text",
+                data={"user_text": "Test", "environment_variables": "invalid json"},
+            )
             assert response.status_code == 200
 
 
@@ -374,10 +351,7 @@ def test_create_snapshot_success(authenticated_client):
     document_data = {"title": "Snapshot Test", "sections": []}
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "snap.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "snap.json", "document_data": json.dumps(document_data)},
     )
 
     # Create snapshot
@@ -405,14 +379,12 @@ def test_create_snapshot_cleanup_old(authenticated_client):
     document_data = {"title": "Cleanup Test", "sections": []}
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "cleanup.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "cleanup.json", "document_data": json.dumps(document_data)},
     )
 
     # Create 12 snapshots
     import time
+
     for i in range(12):
         authenticated_client.post("/documents/snapshot/cleanup.json")
         time.sleep(0.01)  # Small delay to ensure different timestamps
@@ -432,10 +404,7 @@ def test_list_snapshots_success(authenticated_client):
     document_data = {"title": "List Snapshots", "sections": []}
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "listsnap.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "listsnap.json", "document_data": json.dumps(document_data)},
     )
 
     # Create snapshots
@@ -466,10 +435,7 @@ def test_load_snapshot_success(authenticated_client):
     document_data = {"title": "Load Snapshot", "sections": []}
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "loadsnap.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "loadsnap.json", "document_data": json.dumps(document_data)},
     )
 
     # Create snapshot
@@ -486,7 +452,9 @@ def test_load_snapshot_success(authenticated_client):
 
 def test_load_snapshot_not_found(authenticated_client):
     """Test loading non-existent snapshot."""
-    response = authenticated_client.get("/documents/snapshot/load/nonexistent_snapshot.json")
+    response = authenticated_client.get(
+        "/documents/snapshot/load/nonexistent_snapshot.json"
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "error"
@@ -500,10 +468,7 @@ def test_delete_document_success(authenticated_client):
     document_data = {"title": "Delete Me", "sections": []}
     authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "delete.json",
-            "document_data": json.dumps(document_data)
-        }
+        data={"filename": "delete.json", "document_data": json.dumps(document_data)},
     )
 
     # Delete it
@@ -523,12 +488,10 @@ def test_save_document_exception_handling(authenticated_client):
     # This confirms the error response structure
     response = authenticated_client.post(
         "/documents/save",
-        data={
-            "filename": "test.json",
-            "document_data": "{"  # Invalid JSON
-        }
+        data={"filename": "test.json", "document_data": "{"},  # Invalid JSON
     )
     assert response.status_code == 400
+
 
 def test_allow_custom_env_vars_env_variable():
     """ALLOW_CUSTOM_ENV_VARS=false must disable custom env vars."""
@@ -550,14 +513,17 @@ def test_allow_custom_env_vars_env_variable():
 def test_generate_text_surfaces_value_error(authenticated_client):
     """An unknown source must produce an actionable 400, not a generic 500."""
     with patch(
-        'writing_assistant.app.main.cb.new_paragraph',
+        "writing_assistant.app.main.cb.new_paragraph",
         side_effect=ValueError("Unknown source: bogus"),
     ):
-        response = authenticated_client.post("/generate-text", data={
-            "user_text": "Test",
-            "source": "bogus",
-            "model": "some-model",
-        })
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "bogus",
+                "model": "some-model",
+            },
+        )
     assert response.status_code == 400
     assert "Unknown source: bogus" in response.json()["detail"]
 
@@ -570,14 +536,17 @@ def test_generate_text_surfaces_connection_error(authenticated_client):
         "environment variable."
     )
     with patch(
-        'writing_assistant.app.main.cb.new_paragraph',
+        "writing_assistant.app.main.cb.new_paragraph",
         side_effect=ConnectionError(message),
     ):
-        response = authenticated_client.post("/generate-text", data={
-            "user_text": "Test",
-            "source": "ollama",
-            "model": "llama3.2",
-        })
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "ollama",
+                "model": "llama3.2",
+            },
+        )
     assert response.status_code == 502
     assert "TALKPIPE_OLLAMA_SERVER_URL" in response.json()["detail"]
 
@@ -585,12 +554,15 @@ def test_generate_text_surfaces_connection_error(authenticated_client):
 def test_generate_text_generic_error_stays_generic(authenticated_client):
     """Unexpected errors must not leak internals to the client."""
     with patch(
-        'writing_assistant.app.main.cb.new_paragraph',
+        "writing_assistant.app.main.cb.new_paragraph",
         side_effect=RuntimeError("secret internal state"),
     ):
-        response = authenticated_client.post("/generate-text", data={
-            "user_text": "Test",
-        })
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+            },
+        )
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to generate text"
 
@@ -604,14 +576,17 @@ def test_generate_text_normalizes_source_case(authenticated_client):
         return "Generated text"
 
     with patch(
-        'writing_assistant.app.main.cb.new_paragraph',
+        "writing_assistant.app.main.cb.new_paragraph",
         side_effect=fake_new_paragraph,
     ):
-        response = authenticated_client.post("/generate-text", data={
-            "user_text": "Test",
-            "source": " Ollama ",
-            "model": " llama3.2 ",
-        })
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": " Ollama ",
+                "model": " llama3.2 ",
+            },
+        )
     assert response.status_code == 200
     assert captured["metadata"].source == "ollama"
     assert captured["metadata"].model == "llama3.2"
@@ -619,21 +594,22 @@ def test_generate_text_normalizes_source_case(authenticated_client):
 
 def test_generate_text_reloads_talkpipe_config_for_env_vars(authenticated_client):
     """Per-request env vars must trigger a TalkPipe config reload to take effect."""
-    with patch('writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS', True):
+    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
         with patch(
-            'writing_assistant.app.main.cb.new_paragraph',
+            "writing_assistant.app.main.cb.new_paragraph",
             return_value="Generated text",
         ):
             with patch(
-                'writing_assistant.app.main.reset_talkpipe_config'
+                "writing_assistant.app.main.reset_talkpipe_config"
             ) as mock_reset:
-                env_vars = {
-                    "TALKPIPE_OLLAMA_SERVER_URL": "http://ollama.example:11434"
-                }
-                response = authenticated_client.post("/generate-text", data={
-                    "user_text": "Test",
-                    "environment_variables": json.dumps(env_vars),
-                })
+                env_vars = {"TALKPIPE_OLLAMA_SERVER_URL": "http://ollama.example:11434"}
+                response = authenticated_client.post(
+                    "/generate-text",
+                    data={
+                        "user_text": "Test",
+                        "environment_variables": json.dumps(env_vars),
+                    },
+                )
     assert response.status_code == 200
     # Reloaded once to pick up the request's env vars and once to restore.
     assert mock_reset.call_count == 2

@@ -66,9 +66,9 @@ def test_get_system_prompt_default():
     assert "provided paragraph" in prompt
 
 
-@patch('writing_assistant.core.callbacks.fillTemplate')
-@patch('writing_assistant.core.callbacks.Print')
-@patch('writing_assistant.core.callbacks.LLMPrompt')
+@patch("writing_assistant.core.callbacks.fillTemplate")
+@patch("writing_assistant.core.callbacks.Print")
+@patch("writing_assistant.core.callbacks.LLMPrompt")
 def test_new_paragraph_string_result(mock_llm, mock_print, mock_fill):
     """Test new_paragraph when LLM returns a string result."""
     # Setup mocks for the pipeline chain
@@ -85,9 +85,9 @@ def test_new_paragraph_string_result(mock_llm, mock_print, mock_fill):
     assert result == "Generated text with whitespace"
 
 
-@patch('writing_assistant.core.callbacks.fillTemplate')
-@patch('writing_assistant.core.callbacks.Print')
-@patch('writing_assistant.core.callbacks.LLMPrompt')
+@patch("writing_assistant.core.callbacks.fillTemplate")
+@patch("writing_assistant.core.callbacks.Print")
+@patch("writing_assistant.core.callbacks.LLMPrompt")
 def test_new_paragraph_non_string_result(mock_llm, mock_print, mock_fill):
     """Test new_paragraph when LLM returns a non-string result."""
     # Setup mocks to return a non-string result

@@ -130,7 +130,9 @@ async def test_user(async_db_session: AsyncSession) -> User:
 
 
 @pytest.fixture
-def authenticated_client(client: TestClient, async_db_session: AsyncSession, test_user: User) -> TestClient:
+def authenticated_client(
+    client: TestClient, async_db_session: AsyncSession, test_user: User
+) -> TestClient:
     """Create an authenticated test client with a valid JWT token."""
     # Login to get JWT token
     login_response = client.post(

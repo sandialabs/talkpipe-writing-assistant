@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr
 # User schemas for FastAPI Users
 class UserRead(schemas.BaseUser[uuid.UUID]):
     """Schema for reading user data."""
+
     id: uuid.UUID
     email: EmailStr
     is_active: bool = True
@@ -21,6 +22,7 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
 
 class UserCreate(schemas.BaseUserCreate):
     """Schema for creating a new user."""
+
     email: EmailStr
     password: str
     is_active: Optional[bool] = True
@@ -30,6 +32,7 @@ class UserCreate(schemas.BaseUserCreate):
 
 class UserUpdate(schemas.BaseUserUpdate):
     """Schema for updating user data."""
+
     password: Optional[str] = None
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = None
@@ -40,6 +43,7 @@ class UserUpdate(schemas.BaseUserUpdate):
 # Document schemas
 class DocumentBase(BaseModel):
     """Base document schema."""
+
     filename: str
     title: str
     content: str
@@ -47,11 +51,13 @@ class DocumentBase(BaseModel):
 
 class DocumentCreate(DocumentBase):
     """Schema for creating a document."""
+
     pass
 
 
 class DocumentUpdate(BaseModel):
     """Schema for updating a document."""
+
     filename: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
@@ -59,6 +65,7 @@ class DocumentUpdate(BaseModel):
 
 class DocumentRead(DocumentBase):
     """Schema for reading a document."""
+
     id: int
     user_id: uuid.UUID
     created_at: datetime
@@ -70,6 +77,7 @@ class DocumentRead(DocumentBase):
 
 class DocumentList(BaseModel):
     """Schema for listing documents."""
+
     id: int
     filename: str
     title: str
@@ -83,17 +91,20 @@ class DocumentList(BaseModel):
 # Snapshot schemas
 class SnapshotBase(BaseModel):
     """Base snapshot schema."""
+
     snapshot_name: str
     content: str
 
 
 class SnapshotCreate(SnapshotBase):
     """Schema for creating a snapshot."""
+
     pass
 
 
 class SnapshotRead(SnapshotBase):
     """Schema for reading a snapshot."""
+
     id: int
     document_id: int
     created_at: datetime

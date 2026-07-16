@@ -41,6 +41,7 @@ def get_database_url() -> str:
 _engine = None
 _async_session_maker = None
 
+
 def get_engine():
     """Get or create the database engine."""
     global _engine
@@ -49,9 +50,12 @@ def get_engine():
         _engine = create_async_engine(
             database_url,
             echo=False,  # Set to True for SQL query logging
-            connect_args={"check_same_thread": False} if "sqlite" in database_url else {},
+            connect_args=(
+                {"check_same_thread": False} if "sqlite" in database_url else {}
+            ),
         )
     return _engine
+
 
 def get_session_maker():
     """Get or create the async session maker."""

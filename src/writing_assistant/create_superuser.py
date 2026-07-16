@@ -42,15 +42,13 @@ async def create_superuser():
     # Create user
     async for session in get_async_session():
         # Check if user already exists
-        result = await session.execute(
-            select(User).where(User.email == email)
-        )
+        result = await session.execute(select(User).where(User.email == email))
         existing_user = result.scalar_one_or_none()
 
         if existing_user:
             print(f"\nUser with email {email} already exists.")
             update = input("Make this user a superuser? (y/n): ").strip().lower()
-            if update == 'y':
+            if update == "y":
                 existing_user.is_superuser = True
                 existing_user.is_active = True
                 existing_user.is_verified = True
