@@ -19,7 +19,10 @@ def _fail_if_port_in_use(host: str, port: int) -> None:
     first and uvicorn's bind error only appears afterwards, which looks
     like the server started when it did not. Only a genuine
     "address already in use" aborts here; every other problem (bad host,
-    unresolvable name, IPv6 quirks) is left for uvicorn to report.
+    unresolvable name) is left for uvicorn to report. Every address the
+    host resolves to is probed, because uvicorn binds all of them — a
+    listener on 127.0.0.1 must be caught even when localhost resolves
+    to ::1 first.
     """
     import errno
 
@@ -27,25 +30,25 @@ def _fail_if_port_in_use(host: str, port: int) -> None:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError:
         return  # let uvicorn report resolution problems
-    family, socktype, proto, _, sockaddr = infos[0]
-    try:
-        sock = socket.socket(family, socktype, proto)
-    except OSError:
-        return
-    with sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    for family, socktype, proto, _, sockaddr in infos:
         try:
-            sock.bind(sockaddr)
-        except OSError as exc:
-            if exc.errno != errno.EADDRINUSE:
-                return
-            print(
-                f"Error: cannot bind to {host}:{port} — the address is "
-                f"already in use.\nStop the other process using the port, "
-                f"or start with --port <other-port>.",
-                file=sys.stderr,
-            )
-            raise SystemExit(1)
+            sock = socket.socket(family, socktype, proto)
+        except OSError:
+            continue
+        with sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(sockaddr)
+            except OSError as exc:
+                if exc.errno != errno.EADDRINUSE:
+                    continue
+                print(
+                    f"Error: cannot bind to {host}:{port} — the address is "
+                    f"already in use.\nStop the other process using the port, "
+                    f"or start with --port <other-port>.",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
 
 
 async def init_db():

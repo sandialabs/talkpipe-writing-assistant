@@ -8,7 +8,8 @@ import pytest
 
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
-def test_main_default_arguments(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_default_arguments(mock_port_check, mock_uvicorn_run):
     """Test main function with default arguments."""
     from writing_assistant.app.server import main
 
@@ -24,7 +25,8 @@ def test_main_default_arguments(mock_uvicorn_run):
 
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py", "--host", "0.0.0.0", "--port", "9000", "--reload"])
-def test_main_custom_arguments(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_custom_arguments(mock_port_check, mock_uvicorn_run):
     """Test main function with custom arguments."""
     from writing_assistant.app.server import main
 
@@ -40,7 +42,8 @@ def test_main_custom_arguments(mock_uvicorn_run):
 
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py", "--disable-custom-env-vars"])
-def test_main_disable_custom_env_vars(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_disable_custom_env_vars(mock_port_check, mock_uvicorn_run):
     """Test main function with custom env vars disabled."""
     from writing_assistant.app.server import main
 
@@ -60,7 +63,8 @@ def test_main_disable_custom_env_vars(mock_uvicorn_run):
 )
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
-def test_main_environment_variables(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_environment_variables(mock_port_check, mock_uvicorn_run):
     """Test main function with environment variables."""
     from writing_assistant.app.server import main
 
@@ -77,7 +81,8 @@ def test_main_environment_variables(mock_uvicorn_run):
 @patch.dict(os.environ, {"WRITING_ASSISTANT_RELOAD": "false"})
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
-def test_main_reload_false_environment(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_reload_false_environment(mock_port_check, mock_uvicorn_run):
     """Test main function with reload disabled via environment variable."""
     from writing_assistant.app.server import main
 
@@ -92,7 +97,8 @@ def test_main_reload_false_environment(mock_uvicorn_run):
 @patch.dict(os.environ, {"WRITING_ASSISTANT_RELOAD": "TRUE"})
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
-def test_main_reload_true_case_insensitive(mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_reload_true_case_insensitive(mock_port_check, mock_uvicorn_run):
     """Test main function with reload enabled (case insensitive)."""
     from writing_assistant.app.server import main
 
@@ -107,7 +113,8 @@ def test_main_reload_true_case_insensitive(mock_uvicorn_run):
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
 @patch("builtins.print")
-def test_main_prints_server_info(mock_print, mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_prints_server_info(mock_port_check, mock_print, mock_uvicorn_run):
     """Test that main function prints server information."""
     from writing_assistant.app.server import main
 
@@ -150,7 +157,8 @@ def test_main_script_execution():
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py"])
 @patch("builtins.print")
-def test_main_prints_web_page_urls(mock_print, mock_uvicorn_run):
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_prints_web_page_urls(mock_port_check, mock_print, mock_uvicorn_run):
     """The banner must point at the HTML pages, not the JSON API endpoints."""
     from writing_assistant.app.server import main
 
@@ -165,6 +173,45 @@ def test_main_prints_web_page_urls(mock_print, mock_uvicorn_run):
     assert "/auth/register" not in register_lines[0]
     assert login_lines and login_lines[0].endswith("/login")
     assert "/auth/jwt/login" not in login_lines[0]
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+def test_main_port_in_use_detected_on_any_address_family(mock_uvicorn_run, capsys):
+    """A conflict on 127.0.0.1 must abort even when getaddrinfo resolves
+    localhost to ::1 first (uvicorn binds every resolved address, so the
+    IPv4 conflict would still kill it after the banner)."""
+    import socket
+
+    from writing_assistant.app.server import main
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen(1)
+        port = blocker.getsockname()[1]
+
+        real_getaddrinfo = socket.getaddrinfo
+
+        def ipv6_first(host, *args, **kwargs):
+            infos = real_getaddrinfo(host, *args, **kwargs)
+            v6 = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", port, 0, 0))
+            return [v6] + [info for info in infos if info[0] == socket.AF_INET]
+
+        with patch(
+            "writing_assistant.app.server.socket.getaddrinfo",
+            side_effect=ipv6_first,
+        ):
+            with patch("sys.argv", ["server.py", "--port", str(port)]):
+                with pytest.raises(SystemExit) as excinfo:
+                    main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "already in use" in captured.err
+        assert "Writing Assistant Server" not in captured.out
+        mock_uvicorn_run.assert_not_called()
+    finally:
+        blocker.close()
 
 
 @patch("writing_assistant.app.server.uvicorn.run")
