@@ -530,6 +530,62 @@ def test_generate_text_surfaces_value_error(authenticated_client):
     assert "Valid sources: openai, anthropic, ollama" in response.json()["detail"]
 
 
+_MISSING_MODEL_SOURCE_ERROR = ValueError(
+    "Model name and source must be provided, specified in the configuration "
+    "file, or in environment variables."
+)
+
+
+def test_generate_text_unconfigured_points_at_settings(authenticated_client):
+    """With no source and no model (and no server default), the error must
+    point the user at Settings → AI Settings, not at configuration files."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=_MISSING_MODEL_SOURCE_ERROR,
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test"},
+        )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Settings" in detail
+    assert "AI Settings" in detail
+    assert "configuration file" not in detail
+
+
+def test_generate_text_missing_model_points_at_model_field(authenticated_client):
+    """Source chosen but model empty: the error must say the model is missing."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=_MISSING_MODEL_SOURCE_ERROR,
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test", "source": "ollama"},
+        )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "No model name is set" in detail
+    assert "AI Settings" in detail
+
+
+def test_generate_text_missing_source_points_at_source_field(authenticated_client):
+    """Model set but no source: the error must say the source is missing."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=_MISSING_MODEL_SOURCE_ERROR,
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test", "model": "llama3.1:8b"},
+        )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "No AI source is selected" in detail
+    assert "openai, anthropic, or ollama" in detail
+
+
 def test_generate_text_other_value_error_not_suffixed(authenticated_client):
     """ValueErrors unrelated to the source must not get the valid-sources hint."""
     with patch(

@@ -314,6 +314,12 @@ podman-compose exec writing-assistant writing-assistant-admin make-superuser use
 podman-compose exec writing-assistant writing-assistant-admin help
 ```
 
+> **Dev container:** the development service (`writing-assistant-dev`) mounts
+> the source tree over `/app` and does not have the console scripts on its
+> `PATH`. Inside that container use the module form instead:
+> `podman-compose exec writing-assistant-dev python -m writing_assistant.admin_users list`
+> and `... python -m writing_assistant.create_superuser`.
+
 ### Direct Database Access
 
 ```bash

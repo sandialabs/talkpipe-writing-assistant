@@ -465,6 +465,36 @@ async def generate_text(
         # instead of a generic failure. Anything else stays generic to avoid
         # leaking internals.
         if isinstance(e, ValueError):
+            if "Model name and source must be provided" in str(e):
+                # TalkPipe could not resolve a model/source: the request
+                # supplied neither and the server has no default configured.
+                # The library message talks about configuration files and
+                # environment variables, which means nothing to a web-UI
+                # user - point them at Settings instead.
+                missing_source = not source.strip()
+                missing_model = not model.strip()
+                if missing_source and missing_model:
+                    hint = (
+                        "No AI source or model is configured. Open Settings "
+                        "→ AI Settings, choose an AI Source and enter a "
+                        "Model name (e.g. llama3.1:8b or gpt-4o), or ask the "
+                        "server administrator to configure a server default."
+                    )
+                elif missing_model:
+                    hint = (
+                        "No model name is set. Open Settings → AI "
+                        "Settings and enter a Model name (e.g. llama3.1:8b "
+                        "or gpt-4o)."
+                    )
+                else:
+                    hint = (
+                        "No AI source is selected. Open Settings → AI "
+                        "Settings and choose an AI Source (openai, anthropic, "
+                        "or ollama)."
+                    )
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to generate text: {hint}"
+                )
             detail = f"Failed to generate text: {e}"
             if "Unknown source" in str(e):
                 detail += ". Valid sources: openai, anthropic, ollama"

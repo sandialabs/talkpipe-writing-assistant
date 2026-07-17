@@ -222,7 +222,17 @@
                     }, 1000);
                 } else {
                     const error = await response.json();
-                    showError(error.detail || 'Login failed. Please check your credentials.');
+                    // Map FastAPI Users machine codes to human messages so
+                    // users never see raw codes like LOGIN_BAD_CREDENTIALS.
+                    let message = 'Login failed. Please check your credentials.';
+                    if (error.detail === 'LOGIN_BAD_CREDENTIALS') {
+                        message = 'Incorrect email or password.';
+                    } else if (error.detail === 'LOGIN_USER_NOT_VERIFIED') {
+                        message = 'This account has not been verified yet.';
+                    } else if (typeof error.detail === 'string') {
+                        message = error.detail;
+                    }
+                    showError(message);
                     loginButton.disabled = false;
                     loginButton.textContent = 'Login';
                 }
@@ -234,10 +244,27 @@
             }
         });
 
-        // Check if already logged in
-        if (localStorage.getItem('access_token')) {
-            window.location.href = '/';
-        }
+        // Check if already logged in. Validate the stored token first: a
+        // stale token (e.g. after a database reset) must not bounce the
+        // visitor back and forth between pages.
+        (async () => {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+            try {
+                const response = await fetch('/auth/check', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('token_type');
+                }
+            } catch (error) {
+                // Network error: stay on the page.
+                console.error('Auth check failed:', error);
+            }
+        })();
     </script>
 </body>
 </html>

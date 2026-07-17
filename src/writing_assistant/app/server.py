@@ -3,11 +3,49 @@
 import argparse
 import asyncio
 import os
+import socket
+import sys
 
 import uvicorn
 
 from .database import create_db_and_tables
 from .main import app
+
+
+def _fail_if_port_in_use(host: str, port: int) -> None:
+    """Exit with a clear error if host:port is already taken.
+
+    Without this check the success banner (URLs, database path) prints
+    first and uvicorn's bind error only appears afterwards, which looks
+    like the server started when it did not. Only a genuine
+    "address already in use" aborts here; every other problem (bad host,
+    unresolvable name, IPv6 quirks) is left for uvicorn to report.
+    """
+    import errno
+
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError:
+        return  # let uvicorn report resolution problems
+    family, socktype, proto, _, sockaddr = infos[0]
+    try:
+        sock = socket.socket(family, socktype, proto)
+    except OSError:
+        return
+    with sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(sockaddr)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                return
+            print(
+                f"Error: cannot bind to {host}:{port} — the address is "
+                f"already in use.\nStop the other process using the port, "
+                f"or start with --port <other-port>.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
 
 
 async def init_db():
@@ -76,9 +114,10 @@ def main():
         print("Database initialization complete.")
         return
 
-    # Get database path for display
-    import sys
+    # Fail fast (before the banner) if the port is already taken
+    _fail_if_port_in_use(args.host, args.port)
 
+    # Get database path for display
     from .database import get_database_url
 
     db_path = get_database_url().replace("sqlite+aiosqlite:///", "")

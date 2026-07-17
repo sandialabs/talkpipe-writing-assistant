@@ -352,6 +352,17 @@ src/writing_assistant/
 - **Document**: Complete document with sections, metadata, and snapshot management
 - **Callbacks**: AI text generation using TalkPipe with context-aware prompting
 
+### Customizing Generation
+
+The prompt templates and the four generation modes (rewrite, improve,
+proofread, ideas) live in `src/writing_assistant/core/callbacks.py`, built on
+TalkPipe's `LLMPrompt` segment. To change how text is generated — adjust the
+prompts, add a mode, or swap in a different TalkPipe pipeline — edit that
+module and reinstall (`pip install -e .` from a checkout). Any backend with
+an Ollama-, OpenAI-, or Anthropic-compatible endpoint works; point
+`TALKPIPE_OLLAMA_SERVER_URL` (or the provider API keys) at your endpoint and
+select the source/model in Settings → AI Settings.
+
 
 ## Troubleshooting
 

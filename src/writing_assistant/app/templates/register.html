@@ -287,10 +287,17 @@
                     let errorMsg = 'Registration failed. Please try again.';
 
                     if (error.detail) {
-                        if (typeof error.detail === 'string') {
-                            errorMsg = error.detail;
-                        } else if (error.detail.code === 'REGISTER_USER_ALREADY_EXISTS') {
+                        // FastAPI Users returns REGISTER_USER_ALREADY_EXISTS as a
+                        // plain string and password-validation failures as an
+                        // object with {code, reason} - map both to human text.
+                        if (error.detail === 'REGISTER_USER_ALREADY_EXISTS' ||
+                            error.detail.code === 'REGISTER_USER_ALREADY_EXISTS') {
                             errorMsg = 'An account with this email already exists.';
+                        } else if (error.detail.code === 'REGISTER_INVALID_PASSWORD' &&
+                                   error.detail.reason) {
+                            errorMsg = error.detail.reason;
+                        } else if (typeof error.detail === 'string') {
+                            errorMsg = error.detail;
                         }
                     }
 
@@ -306,10 +313,27 @@
             }
         });
 
-        // Check if already logged in
-        if (localStorage.getItem('access_token')) {
-            window.location.href = '/';
-        }
+        // Check if already logged in. Validate the stored token first: a
+        // stale token (e.g. after a database reset) must not bounce the
+        // visitor to a page that immediately sends them back here.
+        (async () => {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+            try {
+                const response = await fetch('/auth/check', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('token_type');
+                }
+            } catch (error) {
+                // Network error: stay on the page.
+                console.error('Auth check failed:', error);
+            }
+        })();
     </script>
 </body>
 </html>

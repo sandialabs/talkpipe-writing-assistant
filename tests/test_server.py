@@ -165,3 +165,33 @@ def test_main_prints_web_page_urls(mock_print, mock_uvicorn_run):
     assert "/auth/register" not in register_lines[0]
     assert login_lines and login_lines[0].endswith("/login")
     assert "/auth/jwt/login" not in login_lines[0]
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+def test_main_port_in_use_fails_before_banner(mock_uvicorn_run, capsys):
+    """When the port is already taken, main must exit with a clear error
+    instead of printing the success banner and letting uvicorn fail later."""
+    import socket
+
+    from writing_assistant.app.server import main
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        blocker.bind(("localhost", 0))
+        blocker.listen(1)
+        port = blocker.getsockname()[1]
+
+        with patch("sys.argv", ["server.py", "--port", str(port)]):
+            with pytest.raises(SystemExit) as excinfo:
+                main()
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert f"cannot bind to localhost:{port}" in captured.err
+        assert "already in use" in captured.err
+        assert "--port" in captured.err
+        # The success banner must not have been printed.
+        assert "Writing Assistant Server" not in captured.out
+        mock_uvicorn_run.assert_not_called()
+    finally:
+        blocker.close()
