@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- CI: the Safety dependency scan step passed a filename to `--output`, which safety 3.x rejects (it expects a format like `json`), so `safety-report.json` was never generated for the artifact upload; it now uses `--save-json`. Also upgraded the locked `nltk` from 3.9.4 to 3.10.0 to clear CVE-2026-54293 (a path-traversal advisory in nltk, pulled in as a dependency of safety itself), which was failing the `safety check` gate in CI.
 - When a generation request has no AI source/model and the server has no default, the error now tells the user exactly what to do in the app ("Open Settings → AI Settings and choose an AI Source / enter a Model name", distinguishing a missing model from a missing source) instead of surfacing the library's "specified in the configuration file, or in environment variables" message, which means nothing to a web-UI user.
 - The login page now shows "Incorrect email or password." instead of the raw `LOGIN_BAD_CREDENTIALS` code; the registration page likewise maps `REGISTER_USER_ALREADY_EXISTS` (in both string and object forms) and displays the human-readable reason for password-validation failures.
 - The login and register pages validate a stored token with `/auth/check` before auto-redirecting, and clear it if it is stale (e.g. after a database reset). Previously a stale token bounced visitors from `/register` or `/login` to the editor and straight back, making the register page appear broken.

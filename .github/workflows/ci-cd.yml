@@ -98,7 +98,7 @@ jobs:
 
     - name: Run Safety dependency scan
       run: |
-        safety check --json --output safety-report.json || true
+        safety check --save-json safety-report.json || true
         safety check
 
     - name: Upload security scan results
