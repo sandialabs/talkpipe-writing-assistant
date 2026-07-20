@@ -48,11 +48,18 @@ authentication error (use a GitHub
    ```bash
    podman run --rm -p 8001:8001 \
      -v wa_data:/app/data \
+     --add-host=host.containers.internal:host-gateway \
      ghcr.io/sandialabs/talkpipe-writing-assistant:latest
    ```
 
    Open **http://localhost:8001** or **http://127.0.0.1:8001** (use **`http`**,
    not `https`).
+
+   The `--add-host` flag makes the machine running the container reachable
+   from inside it as `host.containers.internal` — you need that to use an
+   Ollama server running on your own machine (see
+   [Connecting the Container to an LLM](#connecting-the-container-to-an-llm)).
+   It is harmless otherwise, and unnecessary if you only use cloud APIs.
 
    **Volume syntax:** `-v` is `host:container`. The path after the second `:`
    must be an **absolute path inside the container** — use **`/app/data`**,
@@ -64,7 +71,7 @@ You do **not** have to `pull` first — `run` is enough (it will fetch the image
 if needed). Example on one line:
 
 ```bat
-podman run --rm -p 8001:8001 -v wa_data:/app/data ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
+podman run --rm -p 8001:8001 -v wa_data:/app/data --add-host=host.containers.internal:host-gateway ghcr.io/sandialabs/talkpipe-writing-assistant:experimental
 ```
 
 Start your **Podman machine** (or **Docker Desktop**) before running. Stop the
@@ -107,6 +114,70 @@ container with **Ctrl+C** in that terminal.
 5. **Firewall or VPN** — allow the container engine through the firewall
    (e.g. **Windows Defender Firewall**, private networks) or briefly
    disconnect VPN to test.
+
+## Connecting the Container to an LLM
+
+The application generates text through TalkPipe, which supports **OpenAI**,
+**Anthropic**, and **Ollama** backends. Nothing in the image restricts
+outbound network access — if a connection fails, it is almost always one of
+the two issues below.
+
+**Verify with Test Connection:** after logging in, open **Settings → AI
+Settings** and click **Test Connection**. It performs a real, token-capped
+round trip through the selected source/model and reports an actionable
+error message on failure (bad key, wrong URL, model not pulled, unreachable
+host, ...). Use it after every configuration change.
+
+> **Image too old?** The Connection section (Server URL / API Key fields and
+> the Test Connection button) is a recent addition. If **Settings → AI
+> Settings** in your container has no Connection section, the image predates
+> the feature — pull a newer tag (e.g. `experimental`, or `latest` once the
+> next stable release is published) or build from the current source.
+
+### Cloud APIs (OpenAI, Anthropic)
+
+The container only needs ordinary outbound internet access. Provide keys
+either:
+
+- **Server-wide** — pass them when starting the container:
+
+  ```bash
+  podman run --rm -p 8001:8001 -v wa_data:/app/data \
+    -e OPENAI_API_KEY=sk-... \
+    -e ANTHROPIC_API_KEY=sk-ant-... \
+    ghcr.io/sandialabs/talkpipe-writing-assistant:latest
+  ```
+
+  (With compose, put them in `.env` — the compose file loads it.)
+
+- **Per-user** — each user enters an API key under **Settings → AI Settings
+  → Connection**. Per-user values are applied only for that user's requests
+  and require `ALLOW_CUSTOM_ENV_VARS` to be enabled (the default).
+
+If your organization routes traffic through an OpenAI/Anthropic-compatible
+gateway, set its base URL in the same Connection section (or server-wide via
+`OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL`).
+
+### Ollama
+
+**The #1 pitfall:** inside a container, `localhost` refers to the container
+itself — not your machine. An Ollama server running on the machine that
+hosts the container is **not** at `http://localhost:11434` from the
+container's point of view.
+
+| Where Ollama runs | Server URL to use |
+|---|---|
+| On the machine hosting the container | `http://host.containers.internal:11434` (requires the `--add-host` flag above; compose sets it automatically via `extra_hosts`) |
+| On another machine on your network | `http://that-machine.example:11434` |
+| In another container on the same compose network | `http://<service-name>:11434` |
+
+Set the URL either per-user (**Settings → AI Settings → Connection → Server
+URL**) or server-wide (`-e TALKPIPE_OLLAMA_SERVER_URL=...` /  `.env`).
+
+Also make sure Ollama itself accepts remote connections: by default it binds
+only to `127.0.0.1`, so a request arriving over the host gateway is refused.
+Start it with `OLLAMA_HOST=0.0.0.0 ollama serve` (or an equivalently scoped
+bind address) on the Ollama machine.
 
 ## Building from a Local Clone
 
@@ -203,14 +274,18 @@ The compose file loads `.env` automatically if it exists (it is optional).
 - `WRITING_ASSISTANT_PORT`: Server port (default: `8001`)
 - `WRITING_ASSISTANT_DB_PATH`: Database file path (default: `/app/data/writing_assistant.db`)
 - `OPENAI_API_KEY`: OpenAI API key for GPT models
+- `OPENAI_BASE_URL`: Alternate OpenAI-compatible endpoint (optional)
 - `ANTHROPIC_API_KEY`: Anthropic API key for Claude models
+- `ANTHROPIC_BASE_URL`: Alternate Anthropic-compatible endpoint (optional)
 - `TALKPIPE_OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
-- `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring environment variables through the UI
+- `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring connection settings (Server URL, API Key, environment variables) through the UI
 
 **Reaching services on the host:** inside the container, `localhost` is the
 container itself. The compose file maps `host.containers.internal` to the
 host gateway, so an Ollama server running on the host machine is reachable
-as `TALKPIPE_OLLAMA_SERVER_URL=http://host.containers.internal:11434`.
+as `TALKPIPE_OLLAMA_SERVER_URL=http://host.containers.internal:11434`. See
+[Connecting the Container to an LLM](#connecting-the-container-to-an-llm)
+for details and the standalone `podman run` equivalent.
 
 ### Compose Services
 
@@ -435,6 +510,14 @@ podman system df -v
 ```
 
 ## Troubleshooting
+
+### The App Runs but AI Generation Fails
+
+Use **Settings → AI Settings → Test Connection** first — it reports the
+actual failure (missing key, unreachable server, model not pulled) instead
+of a generic error. The most common cause when running in a container is an
+Ollama URL pointing at `localhost`, which is the container itself; see
+[Connecting the Container to an LLM](#connecting-the-container-to-an-llm).
 
 ### Wrong or Missing Service Name
 

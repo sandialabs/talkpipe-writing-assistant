@@ -195,6 +195,28 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                     <input type="text" id="ai-model" name="model" placeholder="e.g., gpt-4o, claude-sonnet-4-5, llama3.1:8b">
                                 </div>
 
+                                <div class="settings-section" id="ai-connection-section">
+                                    <h4>Connection</h4>
+                                    <small class="form-help" id="ai-connection-help">These apply to whichever AI Source is selected above (OpenAI, Anthropic, Ollama, ...). Leave blank to use the server's configuration.</small>
+
+                                    <div class="form-group" id="server-url-group">
+                                        <label for="ai-server-url">Server URL:</label>
+                                        <input type="text" id="ai-server-url" name="server_url" placeholder="e.g., http://host.containers.internal:11434 or https://api.example.com/v1">
+                                        <small class="form-help">The endpoint for the selected source: an Ollama server, or an OpenAI/Anthropic-compatible API base URL. If the app runs in a container, "localhost" is the container itself — point this at the machine actually running the model server (e.g. http://host.containers.internal:11434 for the container's host).</small>
+                                    </div>
+
+                                    <div class="form-group" id="api-key-group">
+                                        <label for="ai-api-key">API Key:</label>
+                                        <input type="password" id="ai-api-key" name="api_key" placeholder="e.g., sk-... (not needed for Ollama)" autocomplete="off">
+                                        <small class="form-help">API key for cloud sources (OpenAI, Anthropic). Stored in your browser's local storage and sent with each generation request. Ignored for Ollama.</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <button type="button" id="test-ai-connection-btn" class="btn btn-secondary">Test Connection</button>
+                                        <div id="ai-connection-status" class="ai-connection-status" aria-live="polite"></div>
+                                    </div>
+                                </div>
+
                                 <div class="settings-section">
                                     <h4>Environment Variables</h4>
                                     <small class="form-help">Configure environment variables for AI services. These are stored in your browser's local storage and sent with each generation request.</small>

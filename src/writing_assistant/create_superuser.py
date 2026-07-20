@@ -2,8 +2,21 @@
 """Create a superuser for the Writing Assistant application."""
 
 import asyncio
+import os
 import sys
 from getpass import getpass
+
+
+def login_url() -> str:
+    """Login URL matching the server's host/port configuration.
+
+    Uses the same environment variables and defaults as the server itself
+    (see app/server.py) so the closing hint stays correct when the server
+    runs on a non-default host or port.
+    """
+    host = os.getenv("WRITING_ASSISTANT_HOST", "localhost")
+    port = os.getenv("WRITING_ASSISTANT_PORT", "8001")
+    return f"http://{host}:{port}/login"
 
 
 async def create_superuser():
@@ -78,7 +91,7 @@ async def create_superuser():
         print(f"\n✓ Superuser created successfully!")
         print(f"  Email: {email}")
         print(f"  ID: {new_user.id}")
-        print(f"\nYou can now login at: http://localhost:8001/login")
+        print(f"\nYou can now login at: {login_url()}")
 
 
 def main():

@@ -2231,3 +2231,22 @@ body.dark-mode .dark-mode-toggle::after {
     background: var(--border-subtle);
     margin: 8px 0;
 }
+/* AI connection test status (Settings → AI Settings) */
+.ai-connection-status {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ai-connection-status.testing {
+    color: var(--info-color);
+}
+
+.ai-connection-status.ok {
+    color: var(--success-color);
+}
+
+.ai-connection-status.error {
+    color: var(--danger-color);
+}

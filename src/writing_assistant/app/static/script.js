@@ -225,6 +225,19 @@ class WritingAssistant {
 
         // Environment variables
         document.getElementById('add-env-var-btn').addEventListener('click', () => this.addEnvironmentVariableRow());
+
+        // AI connection test
+        document.getElementById('test-ai-connection-btn')?.addEventListener('click', () => this.testAIConnection());
+
+        // A test result only vouches for the values it was run with - clear
+        // it as soon as any connection-relevant field changes.
+        ['ai-source', 'ai-model', 'ai-server-url', 'ai-api-key'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) {
+                field.addEventListener('input', () => this.clearConnectionStatus());
+                field.addEventListener('change', () => this.clearConnectionStatus());
+            }
+        });
     }
 
     setupModals() {
@@ -753,6 +766,8 @@ class WritingAssistant {
             // Send environment variables as JSON (only if allowed by server)
             if (this.allowCustomEnvVars) {
                 formData.append('environment_variables', JSON.stringify(this.environmentVariables));
+                formData.append('server_url', this.getServerUrl());
+                formData.append('api_key', this.getApiKey());
             } else {
                 formData.append('environment_variables', '{}');
             }
@@ -893,8 +908,10 @@ class WritingAssistant {
         this.loadCurrentDocumentToSettingsForm();
 
         // Show/hide environment variables section based on server config
-        const envVarsSection = document.querySelector('.settings-section h4');
-        if (envVarsSection && envVarsSection.textContent === 'Environment Variables') {
+        const envVarsSection = Array.from(
+            document.querySelectorAll('.settings-section h4')
+        ).find(h4 => h4.textContent === 'Environment Variables');
+        if (envVarsSection) {
             const envVarsSectionParent = envVarsSection.parentElement;
             if (this.allowCustomEnvVars) {
                 envVarsSectionParent.style.display = '';
@@ -903,6 +920,37 @@ class WritingAssistant {
             } else {
                 envVarsSectionParent.style.display = 'none';
             }
+        }
+
+        // The Server URL / API Key overrides share the custom-env-vars trust
+        // switch: when the server disables it, hide the fields (the server
+        // would ignore them anyway). The Test Connection button stays
+        // available - testing the server-configured defaults is still useful.
+        const display = this.allowCustomEnvVars ? '' : 'none';
+        ['server-url-group', 'api-key-group'].forEach(id => {
+            const group = document.getElementById(id);
+            if (group) group.style.display = display;
+        });
+
+        // With the fields hidden, the default help text ("Leave blank …")
+        // would refer to inputs that are not there - explain the locked-down
+        // state instead.
+        const connectionHelp = document.getElementById('ai-connection-help');
+        if (connectionHelp) {
+            connectionHelp.textContent = this.allowCustomEnvVars
+                ? 'These apply to whichever AI Source is selected above (OpenAI, Anthropic, Ollama, ...). Leave blank to use the server\'s configuration.'
+                : 'Connection settings are managed by the server administrator. Test Connection checks the server\'s configuration for the selected source and model.';
+        }
+
+        // Stale connection results are misleading - clear on open.
+        this.clearConnectionStatus();
+    }
+
+    clearConnectionStatus() {
+        const connectionStatus = document.getElementById('ai-connection-status');
+        if (connectionStatus) {
+            connectionStatus.className = 'ai-connection-status';
+            connectionStatus.textContent = '';
         }
     }
 
@@ -1072,8 +1120,12 @@ class WritingAssistant {
 
             const sourceElement = document.getElementById('ai-source');
             const modelElement = document.getElementById('ai-model');
+            const serverUrlElement = document.getElementById('ai-server-url');
+            const apiKeyElement = document.getElementById('ai-api-key');
             if (sourceElement) sourceElement.value = this.normalizeAISource(savedSource);
             if (modelElement) modelElement.value = savedModel;
+            if (serverUrlElement) serverUrlElement.value = localStorage.getItem('aiServerUrl') || '';
+            if (apiKeyElement) apiKeyElement.value = localStorage.getItem('aiApiKey') || '';
 
             // Load writing settings from localStorage or use defaults
             const writingStyle = localStorage.getItem('writingStyle') || 'formal';
@@ -1144,7 +1196,9 @@ class WritingAssistant {
             background_context: document.getElementById('background-context').value,
             generation_directive: document.getElementById('generation-directive').value,
             word_limit: document.getElementById('word-limit').value || null,
-            environment_variables: this.environmentVariables || {}
+            environment_variables: this.environmentVariables || {},
+            server_url: this.getServerUrl(),
+            api_key: this.getApiKey()
         };
 
         try {
@@ -1163,6 +1217,8 @@ class WritingAssistant {
                 // Also update localStorage as cache
                 localStorage.setItem('generationSource', preferences.source);
                 localStorage.setItem('generationModel', preferences.model);
+                localStorage.setItem('aiServerUrl', preferences.server_url);
+                localStorage.setItem('aiApiKey', preferences.api_key);
                 localStorage.setItem('writingStyle', preferences.writing_style);
                 localStorage.setItem('targetAudience', preferences.target_audience);
                 localStorage.setItem('tone', preferences.tone);
@@ -1193,6 +1249,8 @@ class WritingAssistant {
                 // This ensures we don't keep the previous user's settings
                 localStorage.setItem('generationSource', prefs.source || '');
                 localStorage.setItem('generationModel', prefs.model || '');
+                localStorage.setItem('aiServerUrl', prefs.server_url || '');
+                localStorage.setItem('aiApiKey', prefs.api_key || '');
                 localStorage.setItem('writingStyle', prefs.writing_style || 'formal');
                 localStorage.setItem('targetAudience', prefs.target_audience || '');
                 localStorage.setItem('tone', prefs.tone || 'neutral');
@@ -1215,6 +1273,8 @@ class WritingAssistant {
             // On error, reset to defaults to avoid keeping previous user's settings
             localStorage.setItem('generationSource', '');
             localStorage.setItem('generationModel', '');
+            localStorage.setItem('aiServerUrl', '');
+            localStorage.setItem('aiApiKey', '');
             localStorage.setItem('writingStyle', 'formal');
             localStorage.setItem('targetAudience', '');
             localStorage.setItem('tone', 'neutral');
@@ -1246,6 +1306,10 @@ class WritingAssistant {
 
         document.getElementById('ai-source').value = this.normalizeAISource(savedSource);
         document.getElementById('ai-model').value = savedModel;
+        const resetServerUrl = document.getElementById('ai-server-url');
+        if (resetServerUrl) resetServerUrl.value = localStorage.getItem('aiServerUrl') || '';
+        const resetApiKey = document.getElementById('ai-api-key');
+        if (resetApiKey) resetApiKey.value = localStorage.getItem('aiApiKey') || '';
         document.getElementById('writing-style').value = savedWritingStyle;
         document.getElementById('target-audience').value = savedTargetAudience;
         document.getElementById('tone').value = savedTone;
@@ -1283,7 +1347,9 @@ class WritingAssistant {
             background_context: backgroundContext,
             generation_directive: generationDirective,
             word_limit: wordLimit,
-            environment_variables: this.environmentVariables || {}
+            environment_variables: this.environmentVariables || {},
+            server_url: this.getServerUrl(),
+            api_key: this.getApiKey()
         };
 
         try {
@@ -1302,6 +1368,8 @@ class WritingAssistant {
                 // Also update localStorage as cache
                 localStorage.setItem('generationSource', source);
                 localStorage.setItem('generationModel', model);
+                localStorage.setItem('aiServerUrl', preferences.server_url);
+                localStorage.setItem('aiApiKey', preferences.api_key);
 
                 // Update document metadata with current source and model
                 this.documentMetadata.source = source;
@@ -1343,7 +1411,10 @@ class WritingAssistant {
             { id: 'generation-directive', value: (this.documentMetadata?.generation_directive || savedGenerationDirective) },
             { id: 'word-limit', value: (this.documentMetadata?.word_limit || savedWordLimit) },
             { id: 'ai-source', value: this.normalizeAISource(this.documentMetadata?.source || savedSource) },
-            { id: 'ai-model', value: (this.documentMetadata?.model || savedModel) }
+            { id: 'ai-model', value: (this.documentMetadata?.model || savedModel) },
+            // Connection settings are environment-specific, not part of the document.
+            { id: 'ai-server-url', value: localStorage.getItem('aiServerUrl') || '' },
+            { id: 'ai-api-key', value: localStorage.getItem('aiApiKey') || '' }
         ];
 
         fields.forEach(field => {
@@ -2870,6 +2941,69 @@ undo() {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // AI Connection (fields apply to whichever AI source is selected)
+    getServerUrl() {
+        const field = document.getElementById('ai-server-url');
+        if (field) {
+            return field.value.trim();
+        }
+        return (localStorage.getItem('aiServerUrl') || '').trim();
+    }
+
+    getApiKey() {
+        const field = document.getElementById('ai-api-key');
+        if (field) {
+            return field.value.trim();
+        }
+        return (localStorage.getItem('aiApiKey') || '').trim();
+    }
+
+    async testAIConnection() {
+        const button = document.getElementById('test-ai-connection-btn');
+        const statusEl = document.getElementById('ai-connection-status');
+        if (!statusEl) return;
+
+        button.disabled = true;
+        statusEl.className = 'ai-connection-status testing';
+        statusEl.textContent = 'Testing connection…';
+
+        try {
+            const formData = new FormData();
+            formData.append('source', document.getElementById('ai-source')?.value || '');
+            formData.append('model', document.getElementById('ai-model')?.value || '');
+            if (this.allowCustomEnvVars) {
+                // Test with the settings exactly as currently entered in the
+                // dialog (including unsaved edits), like the generation request.
+                this.saveEnvironmentVariables();
+                formData.append('environment_variables', JSON.stringify(this.environmentVariables));
+                formData.append('server_url', this.getServerUrl());
+                formData.append('api_key', this.getApiKey());
+            } else {
+                formData.append('environment_variables', '{}');
+            }
+
+            const response = await this.authFetch('/ai/test-connection', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.available) {
+                statusEl.className = 'ai-connection-status ok';
+                statusEl.textContent = `✓ Connected: ${result.source} / ${result.model}`;
+            } else {
+                statusEl.className = 'ai-connection-status error';
+                statusEl.textContent = `✗ ${result.reason || 'Connection failed.'}`;
+            }
+        } catch (error) {
+            console.error('Error testing AI connection:', error);
+            statusEl.className = 'ai-connection-status error';
+            statusEl.textContent = '✗ Could not run the connection test. Check the server logs.';
+        } finally {
+            button.disabled = false;
+        }
     }
 }
 

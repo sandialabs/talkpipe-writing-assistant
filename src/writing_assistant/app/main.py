@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import threading
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
 
+from ..core import ai_connection
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
 from .auth import auth_backend, current_active_user, fastapi_users
@@ -74,6 +75,74 @@ def _allow_custom_env_vars_default() -> bool:
 # Configurable via the ALLOW_CUSTOM_ENV_VARS environment variable or the
 # --disable-custom-env-vars CLI flag (the flag wins when passed).
 ALLOW_CUSTOM_ENV_VARS = _allow_custom_env_vars_default()
+
+
+def _request_env_vars(
+    environment_variables: str, source: str, server_url: str, api_key: str
+) -> dict:
+    """Environment overrides a request is allowed to apply.
+
+    Both the free-form environment variables and the dedicated connection
+    fields (Server URL / API Key, interpreted per AI source) let a user
+    redirect where the server connects, so they share the
+    ALLOW_CUSTOM_ENV_VARS trust switch. The dedicated fields map to the
+    variables the selected source's client reads (see
+    ai_connection.SOURCE_CONNECTION_ENV_VARS) so users don't have to know
+    the variable names; they win over hand-entered variables of the same
+    name.
+    """
+    env_vars = {}
+    if not ALLOW_CUSTOM_ENV_VARS:
+        if (
+            environment_variables not in ("", "{}")
+            or server_url.strip()
+            or api_key.strip()
+        ):
+            logger.info("Custom environment variables disabled by server configuration")
+        return env_vars
+    if environment_variables:
+        try:
+            env_vars = json.loads(environment_variables)
+            # Log the names only - values may contain API keys.
+            logger.debug(
+                "Applying custom environment variables: %s",
+                sorted(env_vars.keys()),
+            )
+        except json.JSONDecodeError:
+            logger.warning("Could not parse environment_variables as JSON")
+            env_vars = {}
+    env_vars.update(ai_connection.connection_env_overrides(source, server_url, api_key))
+    return env_vars
+
+
+@contextmanager
+def _temporary_env_vars(env_vars: dict):
+    """Apply per-request environment variables, restoring them afterwards.
+
+    Holds a lock for the duration so concurrent requests cannot see each
+    other's variables. TalkPipe caches its configuration on first load, so
+    the config cache is reset on entry and exit whenever variables change.
+    """
+    with _env_var_lock:
+        original_env = {}
+        for key, value in env_vars.items():
+            if key in os.environ:
+                original_env[key] = os.environ[key]
+            os.environ[key] = str(value)
+        if env_vars:
+            reset_talkpipe_config()
+        try:
+            yield
+        finally:
+            for key in env_vars.keys():
+                if key in original_env:
+                    os.environ[key] = original_env[key]
+                else:
+                    os.environ.pop(key, None)
+            # Drop the per-request values from TalkPipe's config cache
+            # so later requests see the server-level configuration again.
+            if env_vars:
+                reset_talkpipe_config()
 
 
 # Include FastAPI Users authentication routers
@@ -379,84 +448,47 @@ async def generate_text(
     source: str = Form(default=""),
     model: str = Form(default=""),
     environment_variables: str = Form(default="{}"),
+    server_url: str = Form(default=""),
+    api_key: str = Form(default=""),
     user: User = Depends(current_active_user),
 ):
     """Generate text for a section - requires authentication."""
     try:
-        # Parse environment variables from request
-        env_vars = {}
-        if environment_variables and ALLOW_CUSTOM_ENV_VARS:
-            try:
-                env_vars = json.loads(environment_variables)
-                # Log the names only - values may contain API keys.
-                logger.debug(
-                    "Applying custom environment variables: %s",
-                    sorted(env_vars.keys()),
-                )
-            except json.JSONDecodeError:
-                logger.warning("Could not parse environment_variables as JSON")
-        elif environment_variables and not ALLOW_CUSTOM_ENV_VARS:
-            logger.info("Custom environment variables disabled by server configuration")
+        env_vars = _request_env_vars(environment_variables, source, server_url, api_key)
 
-        # Use a lock to prevent race conditions
-        with _env_var_lock:
-            # Store original environment variables
-            original_env = {}
-            for key, value in env_vars.items():
-                if key in os.environ:
-                    original_env[key] = os.environ[key]
-                os.environ[key] = str(value)
+        with _temporary_env_vars(env_vars):
+            # Create metadata from request parameters
+            metadata = Metadata()
+            metadata.writing_style = writing_style
+            metadata.target_audience = target_audience
+            metadata.tone = tone
+            metadata.background_context = background_context
+            metadata.generation_directive = generation_directive
+            metadata.word_limit = word_limit
+            # Source names are lowercase (openai, anthropic, ollama);
+            # normalize so "Ollama" etc. from the UI still works.
+            metadata.source = source.strip().lower()
+            metadata.model = model.strip()
 
-            # TalkPipe caches its configuration on first load, so environment
-            # variables set for this request (e.g. TALKPIPE_OLLAMA_SERVER_URL)
-            # would otherwise be ignored. Force a reload so they take effect.
-            if env_vars:
-                reset_talkpipe_config()
+            # Truncate context to 2000 characters
+            # prev_paragraph: keep LAST 2000 characters (most recent context)
+            if prev_paragraph and len(prev_paragraph) > 2000:
+                prev_paragraph = prev_paragraph[-2000:]
 
-            try:
-                # Create metadata from request parameters
-                metadata = Metadata()
-                metadata.writing_style = writing_style
-                metadata.target_audience = target_audience
-                metadata.tone = tone
-                metadata.background_context = background_context
-                metadata.generation_directive = generation_directive
-                metadata.word_limit = word_limit
-                # Source names are lowercase (openai, anthropic, ollama);
-                # normalize so "Ollama" etc. from the UI still works.
-                metadata.source = source.strip().lower()
-                metadata.model = model.strip()
+            # next_paragraph: keep FIRST 2000 characters (upcoming context)
+            if next_paragraph and len(next_paragraph) > 2000:
+                next_paragraph = next_paragraph[:2000]
 
-                # Truncate context to 2000 characters
-                # prev_paragraph: keep LAST 2000 characters (most recent context)
-                if prev_paragraph and len(prev_paragraph) > 2000:
-                    prev_paragraph = prev_paragraph[-2000:]
+            generated_text = cb.new_paragraph(
+                text=user_text,
+                metadata=metadata,
+                title=title,
+                prev_paragraph=prev_paragraph,
+                next_paragraph=next_paragraph,
+                generation_mode=generation_mode,
+            )
 
-                # next_paragraph: keep FIRST 2000 characters (upcoming context)
-                if next_paragraph and len(next_paragraph) > 2000:
-                    next_paragraph = next_paragraph[:2000]
-
-                generated_text = cb.new_paragraph(
-                    text=user_text,
-                    metadata=metadata,
-                    title=title,
-                    prev_paragraph=prev_paragraph,
-                    next_paragraph=next_paragraph,
-                    generation_mode=generation_mode,
-                )
-
-                return {"generated_text": generated_text}
-            finally:
-                # Restore original environment variables
-                for key in env_vars.keys():
-                    if key in original_env:
-                        os.environ[key] = original_env[key]
-                    else:
-                        os.environ.pop(key, None)
-                # Drop the per-request values from TalkPipe's config cache
-                # so later requests see the server-level configuration again.
-                if env_vars:
-                    reset_talkpipe_config()
+            return {"generated_text": generated_text}
 
     except Exception as e:
         logger.error(f"Error generating text: {e}", exc_info=True)
@@ -511,6 +543,38 @@ async def generate_text(
             # below to avoid leaking internals.
             raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate text")
+
+
+@app.post("/ai/test-connection")
+async def test_ai_connection(
+    source: str = Form(default=""),
+    model: str = Form(default=""),
+    environment_variables: str = Form(default="{}"),
+    server_url: str = Form(default=""),
+    api_key: str = Form(default=""),
+    user: User = Depends(current_active_user),
+):
+    """Test whether the configured AI source/model is reachable.
+
+    Works with any registered AI source (openai, anthropic, ollama, ...):
+    runs a minimal token-capped probe through the same TalkPipe adapter the
+    generation path uses (workbench-style), under the same per-request
+    environment overrides as /generate-text, and reports an actionable
+    reason on failure.
+    """
+    env_vars = _request_env_vars(environment_variables, source, server_url, api_key)
+    # Tell the probe which connection values came from the dialog (and were
+    # actually applied) so its failure hints can point back at the right
+    # field instead of at server-side configuration.
+    ui_server_url = server_url.strip() if ALLOW_CUSTOM_ENV_VARS else ""
+    ui_api_key = bool(api_key.strip()) and ALLOW_CUSTOM_ENV_VARS
+    with _temporary_env_vars(env_vars):
+        return ai_connection.test_connection(
+            source.strip().lower(),
+            model.strip(),
+            server_url_override=ui_server_url,
+            api_key_supplied=ui_api_key,
+        )
 
 
 @app.post("/documents/snapshot/{filename}")

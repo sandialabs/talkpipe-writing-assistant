@@ -199,10 +199,17 @@ writing-assistant
 ```
 
 Alternatively, set it without restarting the server: in the web interface,
-open Settings → AI Settings → Environment Variables and add
-`TALKPIPE_OLLAMA_SERVER_URL` there. Values set this way are stored in your
-browser and applied per generation request (unless the server was started
-with `--disable-custom-env-vars`).
+open Settings → AI Settings → Connection and enter the address in **Server
+URL**. Values set this way are stored in your browser and applied per
+generation request (unless the server was started with
+`--disable-custom-env-vars`).
+
+The Connection fields work with every source, not just Ollama: **Server
+URL** is the Ollama server for `ollama` or an alternate API endpoint for
+`openai`/`anthropic`, and **API Key** supplies your key for the cloud
+sources. Use the **Test Connection** button to verify the settings with a
+real round trip before generating — it reports exactly what is wrong
+(missing key, unreachable server, model not pulled) on failure.
 
 > **Note:** AI Source is a dropdown offering `openai`, `anthropic`, and
 > `ollama`, plus "Server default", which defers to the source configured on
@@ -357,8 +364,11 @@ src/writing_assistant/
 The prompt templates and the four generation modes (rewrite, improve,
 proofread, ideas) live in `src/writing_assistant/core/callbacks.py`, built on
 TalkPipe's `LLMPrompt` segment. To change how text is generated — adjust the
-prompts, add a mode, or swap in a different TalkPipe pipeline — edit that
-module and reinstall (`pip install -e .` from a checkout). Any backend with
+prompts or swap in a different TalkPipe pipeline — edit that module and
+reinstall (`pip install -e .` from a checkout). To add a whole new mode you
+also need to add its button to the web UI: the mode buttons are defined in
+`src/writing_assistant/app/templates/index.html` (the `.mode-btn` elements)
+and sent by `src/writing_assistant/app/static/script.js`. Any backend with
 an Ollama-, OpenAI-, or Anthropic-compatible endpoint works; point
 `TALKPIPE_OLLAMA_SERVER_URL` (or the provider API keys) at your endpoint and
 select the source/model in Settings → AI Settings.
