@@ -117,8 +117,8 @@ container with **Ctrl+C** in that terminal.
 
 ## Connecting the Container to an LLM
 
-The application generates text through TalkPipe, which supports **OpenAI**,
-**Anthropic**, and **Ollama** backends. Nothing in the image restricts
+The application generates text through TalkPipe, which works with LLM
+endpoints including **OpenAI**, **Anthropic**, and **Ollama**. Nothing in the image restricts
 outbound network access — if a connection fails, it is almost always one of
 the two issues below.
 

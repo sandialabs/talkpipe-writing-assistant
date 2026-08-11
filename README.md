@@ -12,7 +12,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Maintain consistency**: AI understands your document's context, style, and tone across all sections
 - **Iterate quickly**: Multiple generation modes (rewrite, improve, proofread, ideas) let you refine content efficiently
 - **Stay organized**: Structure documents into sections with main points and supporting text
-- **Work offline**: Use local LLMs via Ollama or cloud-based models via OpenAI, Anthropic, and more
+- **Use the LLM of your choice**: Works with LLM endpoints including OpenAI, Anthropic, and Ollama — cloud APIs, compatible gateways, or fully local, offline models
 
 <center><img src="docs/screenshot.png" width=80%></center>
 
@@ -30,7 +30,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Document Management**: Save, load, and manage multiple documents with automatic snapshots
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
-- **Flexible AI Backend**: Support for OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
+- **Flexible AI Backend**: Works with LLM endpoints including OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
@@ -57,7 +57,7 @@ and production deployment, see the
 ### Prerequisites
 
 - Python 3.11.4 or higher
-- An AI backend: OpenAI, Anthropic, or Ollama (local)
+- Access to an LLM endpoint: OpenAI, Anthropic, Ollama (local), or any compatible endpoint
 
 > **Note:** On most modern systems (Debian/Ubuntu, Fedora, macOS with Homebrew),
 > installing into the system Python is blocked or `pip` is not installed at all.
@@ -165,7 +165,7 @@ The server will start on `http://localhost:8001` and display:
 
 ### 3. Configure AI Backend
 
-You need to configure one of the supported AI backends:
+Point the application at an LLM endpoint — OpenAI, Anthropic, and Ollama are supported out of the box:
 
 **Option A: OpenAI (Cloud)**
 1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
@@ -204,9 +204,9 @@ URL**. Values set this way are stored in your browser and applied per
 generation request (unless the server was started with
 `--disable-custom-env-vars`).
 
-The Connection fields work with every source, not just Ollama: **Server
-URL** is the Ollama server for `ollama` or an alternate API endpoint for
-`openai`/`anthropic`, and **API Key** supplies your key for the cloud
+The Connection fields apply to whichever source is selected: **Server
+URL** is an alternate API endpoint for `openai`/`anthropic` or the Ollama
+server for `ollama`, and **API Key** supplies your key for the cloud
 sources. Use the **Test Connection** button to verify the settings with a
 real round trip before generating — it reports exactly what is wrong
 (missing key, unreachable server, model not pulled) on failure.
@@ -369,9 +369,10 @@ reinstall (`pip install -e .` from a checkout). To add a whole new mode you
 also need to add its button to the web UI: the mode buttons are defined in
 `src/writing_assistant/app/templates/index.html` (the `.mode-btn` elements)
 and sent by `src/writing_assistant/app/static/script.js`. Any backend with
-an Ollama-, OpenAI-, or Anthropic-compatible endpoint works; point
-`TALKPIPE_OLLAMA_SERVER_URL` (or the provider API keys) at your endpoint and
-select the source/model in Settings → AI Settings.
+an OpenAI-, Anthropic-, or Ollama-compatible endpoint works; point the
+provider API key / base URL settings (or `TALKPIPE_OLLAMA_SERVER_URL` for
+Ollama) at your endpoint and select the source/model in Settings → AI
+Settings.
 
 
 ## Troubleshooting
