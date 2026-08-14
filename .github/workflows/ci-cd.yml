@@ -103,7 +103,8 @@ jobs:
 
     - name: Upload security scan results
       uses: actions/upload-artifact@v7
-      if: always()
+      # upload-artifact v4+ refuses to run when the server isn't github.com
+      if: always() && github.server_url == 'https://github.com'
       with:
         name: security-reports
         path: |
@@ -113,6 +114,8 @@ jobs:
   build-container:
     runs-on: ubuntu-latest
     needs: [test, security-scan]
+    # pushes to ghcr.io with a GitHub token; no equivalent on Gitea
+    if: github.server_url == 'https://github.com'
     permissions:
       contents: read
       packages: write
@@ -191,6 +194,8 @@ jobs:
   codeql-analysis:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    # needs GitHub's code-scanning API, which Gitea does not implement
+    if: github.server_url == 'https://github.com'
     permissions:
       actions: read
       contents: read
