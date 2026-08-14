@@ -21,10 +21,18 @@ User interfaces should be visually appealing and maintain consistency with each 
 pip install -e .[dev]
 
 # Development installation (uv — uses committed uv.lock for reproducible deps)
-uv sync --frozen --extra dev
+uv sync --extra dev
 # Then: uv run pytest  …  or activate .venv and use pytest / writing-assistant as usual
 
 # After editing pyproject.toml dependencies: uv lock  (then commit uv.lock)
+
+# CI deliberately does NOT use the lock: it installs with pip and resolves
+# fresh, so it sees what `pip install talkpipe-writing-assistant` resolves and
+# breaks when a user's install would. Do not "fix" CI by switching it to
+# `uv sync`. The lock is a development convenience, not a security control —
+# fix a vulnerable dependency by raising its floor in pyproject.toml, and
+# re-run `uv lock` after any dependency change so `uv lock --check` stays
+# green in CI.
 
 # Production installation
 pip install talkpipe-writing-assistant

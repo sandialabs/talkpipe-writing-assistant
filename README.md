@@ -99,19 +99,24 @@ cd talkpipe-writing-assistant
 pip install -e .[dev]
 ```
 
-### Development with uv (reproducible dependency lock)
+### Development environment (uv, with a reproducible lock)
 
-The repo includes [`uv.lock`](uv.lock) so CI and local installs can use the same resolved versions. Install [uv](https://github.com/astral-sh/uv), then:
+The repo includes [`uv.lock`](uv.lock) so contributors share one resolved set of versions. Install [uv](https://github.com/astral-sh/uv), then:
 
 ```bash
 git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
 cd talkpipe-writing-assistant
-uv sync --frozen --extra dev
+uv sync --extra dev
 ```
 
 Run tests and tools via the project environment, for example `uv run pytest`, or activate the virtualenv (`.venv` on Unix: `source .venv/bin/activate`).
 
-After changing dependencies in `pyproject.toml`, refresh the lockfile with `uv lock` and commit `uv.lock`. To bump versions, use `uv lock --upgrade` or `uv lock --upgrade-package <name>`.
+**CI does not use the lockfile.** It installs with pip (`pip install -e '.[dev]'`) and resolves dependencies fresh, on purpose: that is what someone running `pip install talkpipe-writing-assistant` gets, so the build breaks when *they* would break. A dependency problem that only the lockfile hides is one we want CI to see — this project has been bitten by exactly that, when an unpinned FastAPI release broke it.
+
+Two consequences worth remembering:
+
+- `uv.lock` is a development convenience. It pins nothing for users and is not a security control — the version floors in `pyproject.toml` are what actually protect an install. Fix a vulnerable dependency by raising its floor, not by refreshing the lock.
+- The lock must still stay honest. CI runs `uv lock --check`, which installs nothing and fails only when `uv.lock` and `pyproject.toml` have drifted apart. After changing dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lock`. To bump versions, use `uv lock --upgrade` or `uv lock --upgrade-package <name>`.
 
 ### Using a container (Podman or Docker)
 

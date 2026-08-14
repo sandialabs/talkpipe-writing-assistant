@@ -177,3 +177,5 @@ cython_debug/
 *NOCOMMIT* 
 .aider*
 .secret
+safety-report.json
+bandit-report.json
