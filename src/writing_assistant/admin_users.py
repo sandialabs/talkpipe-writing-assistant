@@ -6,7 +6,7 @@ import sys
 from getpass import getpass
 
 
-async def list_users():
+async def list_users() -> None:
     """List all users."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -37,7 +37,7 @@ async def list_users():
             doc_count = len(user.documents) if user.documents else 0
 
             print(
-                f"{str(user.id):<38} "
+                f"{user.id!s:<38} "
                 f"{user.email:<30} "
                 f"{'Yes' if user.is_active else 'No':<8} "
                 f"{'Yes' if user.is_superuser else 'No':<8} "
@@ -46,7 +46,7 @@ async def list_users():
             )
 
 
-async def delete_user(email: str):
+async def delete_user(email: str) -> None:
     """Delete a user and all their documents."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -76,7 +76,7 @@ async def delete_user(email: str):
         print(f"Created: {user.created_at}")
 
         confirm = (
-            input(f"\nAre you sure you want to delete this user? (yes/no): ")
+            input("\nAre you sure you want to delete this user? (yes/no): ")
             .strip()
             .lower()
         )
@@ -92,7 +92,7 @@ async def delete_user(email: str):
         print(f"✓ User '{email}' and all associated data deleted successfully.")
 
 
-async def reset_password(email: str):
+async def reset_password(email: str) -> None:
     """Reset a user's password."""
     from fastapi_users.password import PasswordHelper
     from sqlalchemy import select
@@ -130,7 +130,7 @@ async def reset_password(email: str):
         print(f"✓ Password reset successfully for {email}")
 
 
-async def toggle_active(email: str):
+async def toggle_active(email: str) -> None:
     """Toggle user active status."""
     from sqlalchemy import select
 
@@ -153,7 +153,7 @@ async def toggle_active(email: str):
         print(f"✓ User '{email}' is now {status}")
 
 
-async def make_superuser(email: str):
+async def make_superuser(email: str) -> None:
     """Make a user a superuser."""
     from sqlalchemy import select
 
@@ -176,7 +176,7 @@ async def make_superuser(email: str):
         print(f"✓ User '{email}' is now a superuser")
 
 
-async def show_user_info(email: str):
+async def show_user_info(email: str) -> None:
     """Show detailed user information."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -197,9 +197,9 @@ async def show_user_info(email: str):
             print(f"User with email '{email}' not found.")
             return
 
-        print(f"\n{'='*60}")
-        print(f"User Information")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("User Information")
+        print(f"{'=' * 60}")
         print(f"ID:          {user.id}")
         print(f"Email:       {user.email}")
         print(f"Active:      {user.is_active}")
@@ -209,7 +209,7 @@ async def show_user_info(email: str):
         print(f"Documents:   {len(user.documents) if user.documents else 0}")
 
         if user.documents:
-            print(f"\nDocuments:")
+            print("\nDocuments:")
             for doc in user.documents[:5]:  # Show first 5
                 print(
                     f"  - {doc.filename} (updated: {doc.updated_at.strftime('%Y-%m-%d %H:%M')})"
@@ -218,7 +218,7 @@ async def show_user_info(email: str):
                 print(f"  ... and {len(user.documents) - 5} more")
 
 
-def print_help():
+def print_help() -> None:
     """Print help message."""
     print("""
 Writing Assistant - User Administration Tool
@@ -245,7 +245,7 @@ Note: This tool requires direct access to the database.
     """)
 
 
-async def async_main():
+async def async_main() -> None:
     """Async main entry point."""
     from writing_assistant.app.database import create_db_and_tables, get_engine
 
@@ -317,7 +317,7 @@ async def async_main():
         await engine.dispose()
 
 
-def main():
+def main() -> None:
     """Main entry point for the admin command."""
     try:
         asyncio.run(async_main())

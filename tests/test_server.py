@@ -1,7 +1,7 @@
 """Tests for the server.py module."""
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,10 +17,10 @@ def test_main_default_arguments(mock_port_check, mock_uvicorn_run):
 
     # Verify uvicorn.run was called with default values
     mock_uvicorn_run.assert_called_once()
-    args, kwargs = mock_uvicorn_run.call_args
+    _args, kwargs = mock_uvicorn_run.call_args
     assert kwargs["host"] == "localhost"
     assert kwargs["port"] == 8001
-    assert kwargs["reload"] == False
+    assert not kwargs["reload"]
 
 
 @patch("writing_assistant.app.server.uvicorn.run")
@@ -34,10 +34,10 @@ def test_main_custom_arguments(mock_port_check, mock_uvicorn_run):
 
     # Verify uvicorn.run was called with custom values
     mock_uvicorn_run.assert_called_once()
-    args, kwargs = mock_uvicorn_run.call_args
+    _args, kwargs = mock_uvicorn_run.call_args
     assert kwargs["host"] == "0.0.0.0"
     assert kwargs["port"] == 9000
-    assert kwargs["reload"] == True
+    assert kwargs["reload"]
 
 
 @patch("writing_assistant.app.server.uvicorn.run")
@@ -72,10 +72,10 @@ def test_main_environment_variables(mock_port_check, mock_uvicorn_run):
 
     # Verify uvicorn.run was called with environment variable values
     mock_uvicorn_run.assert_called_once()
-    args, kwargs = mock_uvicorn_run.call_args
+    _args, kwargs = mock_uvicorn_run.call_args
     assert kwargs["host"] == "192.168.1.100"
     assert kwargs["port"] == 8080
-    assert kwargs["reload"] == True
+    assert kwargs["reload"]
 
 
 @patch.dict(os.environ, {"WRITING_ASSISTANT_RELOAD": "false"})
@@ -90,8 +90,8 @@ def test_main_reload_false_environment(mock_port_check, mock_uvicorn_run):
 
     # Verify reload is false
     mock_uvicorn_run.assert_called_once()
-    args, kwargs = mock_uvicorn_run.call_args
-    assert kwargs["reload"] == False
+    _args, kwargs = mock_uvicorn_run.call_args
+    assert not kwargs["reload"]
 
 
 @patch.dict(os.environ, {"WRITING_ASSISTANT_RELOAD": "TRUE"})
@@ -106,8 +106,8 @@ def test_main_reload_true_case_insensitive(mock_port_check, mock_uvicorn_run):
 
     # Verify reload is true (case insensitive)
     mock_uvicorn_run.assert_called_once()
-    args, kwargs = mock_uvicorn_run.call_args
-    assert kwargs["reload"] == True
+    _args, kwargs = mock_uvicorn_run.call_args
+    assert kwargs["reload"]
 
 
 @patch("writing_assistant.app.server.uvicorn.run")
@@ -169,9 +169,11 @@ def test_main_prints_web_page_urls(mock_port_check, mock_print, mock_uvicorn_run
     register_lines = [c for c in print_calls if "Register a new account at:" in c]
     login_lines = [c for c in print_calls if "Login at:" in c]
 
-    assert register_lines and register_lines[0].endswith("/register")
+    assert register_lines
+    assert register_lines[0].endswith("/register")
     assert "/auth/register" not in register_lines[0]
-    assert login_lines and login_lines[0].endswith("/login")
+    assert login_lines
+    assert login_lines[0].endswith("/login")
     assert "/auth/jwt/login" not in login_lines[0]
 
 
@@ -197,13 +199,15 @@ def test_main_port_in_use_detected_on_any_address_family(mock_uvicorn_run, capsy
             v6 = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", port, 0, 0))
             return [v6] + [info for info in infos if info[0] == socket.AF_INET]
 
-        with patch(
-            "writing_assistant.app.server.socket.getaddrinfo",
-            side_effect=ipv6_first,
+        with (
+            patch(
+                "writing_assistant.app.server.socket.getaddrinfo",
+                side_effect=ipv6_first,
+            ),
+            patch("sys.argv", ["server.py", "--port", str(port)]),
+            pytest.raises(SystemExit) as excinfo,
         ):
-            with patch("sys.argv", ["server.py", "--port", str(port)]):
-                with pytest.raises(SystemExit) as excinfo:
-                    main()
+            main()
 
         assert excinfo.value.code == 1
         captured = capsys.readouterr()
@@ -228,9 +232,11 @@ def test_main_port_in_use_fails_before_banner(mock_uvicorn_run, capsys):
         blocker.listen(1)
         port = blocker.getsockname()[1]
 
-        with patch("sys.argv", ["server.py", "--port", str(port)]):
-            with pytest.raises(SystemExit) as excinfo:
-                main()
+        with (
+            patch("sys.argv", ["server.py", "--port", str(port)]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
+            main()
 
         assert excinfo.value.code == 1
         captured = capsys.readouterr()

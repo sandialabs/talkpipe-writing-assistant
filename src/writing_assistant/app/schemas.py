@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from fastapi_users import schemas
 from pydantic import BaseModel, EmailStr
@@ -25,19 +24,19 @@ class UserCreate(schemas.BaseUserCreate):
 
     email: EmailStr
     password: str
-    is_active: Optional[bool] = True
-    is_superuser: Optional[bool] = False
-    is_verified: Optional[bool] = False
+    is_active: bool | None = True
+    is_superuser: bool | None = False
+    is_verified: bool | None = False
 
 
 class UserUpdate(schemas.BaseUserUpdate):
     """Schema for updating user data."""
 
-    password: Optional[str] = None
-    email: Optional[EmailStr] = None
-    is_active: Optional[bool] = None
-    is_superuser: Optional[bool] = None
-    is_verified: Optional[bool] = None
+    password: str | None = None
+    email: EmailStr | None = None
+    is_active: bool | None = None
+    is_superuser: bool | None = None
+    is_verified: bool | None = None
 
 
 # Document schemas
@@ -52,15 +51,13 @@ class DocumentBase(BaseModel):
 class DocumentCreate(DocumentBase):
     """Schema for creating a document."""
 
-    pass
-
 
 class DocumentUpdate(BaseModel):
     """Schema for updating a document."""
 
-    filename: Optional[str] = None
-    title: Optional[str] = None
-    content: Optional[str] = None
+    filename: str | None = None
+    title: str | None = None
+    content: str | None = None
 
 
 class DocumentRead(DocumentBase):
@@ -98,8 +95,6 @@ class SnapshotBase(BaseModel):
 
 class SnapshotCreate(SnapshotBase):
     """Schema for creating a snapshot."""
-
-    pass
 
 
 class SnapshotRead(SnapshotBase):

@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -38,7 +38,7 @@ def test_get_database_url_creates_parent_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         custom_path = f"{tmpdir}/subdir/test.db"
         with patch.dict(os.environ, {"WRITING_ASSISTANT_DB_PATH": custom_path}):
-            url = get_database_url()
+            get_database_url()
             parent_dir = Path(custom_path).parent
             assert parent_dir.exists()
 

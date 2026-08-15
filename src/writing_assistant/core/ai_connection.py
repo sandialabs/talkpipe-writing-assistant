@@ -7,6 +7,7 @@ failure instead of a bare boolean.
 """
 
 import logging
+from typing import Any
 
 from talkpipe.llm.config import getPromptAdapter, getPromptSources
 from talkpipe.util.config import get_config
@@ -35,7 +36,7 @@ SOURCE_CONNECTION_ENV_VARS = {
 
 def connection_env_overrides(
     source: str, server_url: str = "", api_key: str = ""
-) -> dict:
+) -> dict[str, Any]:
     """Environment overrides for the generic Server URL / API Key fields.
 
     The fields are source-agnostic in the UI; this resolves them to the
@@ -59,7 +60,9 @@ def resolved_ollama_url() -> str:
     return get_config().get(OLLAMA_SERVER_URL) or "http://localhost:11434"
 
 
-def _result(available, source, model, reason):
+def _result(
+    available: bool, source: str | None, model: str | None, reason: str | None
+) -> dict[str, Any]:
     return {
         "available": available,
         "source": source,
@@ -139,7 +142,7 @@ def test_connection(
     model: str,
     server_url_override: str = "",
     api_key_supplied: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Probe the given source/model and report availability.
 
     Empty source/model fall back to the server-level TalkPipe defaults,
@@ -174,8 +177,7 @@ def test_connection(
             False,
             source,
             model,
-            f"Unknown AI source '{source}'. Known sources: "
-            f"{', '.join(known_sources)}.",
+            f"Unknown AI source '{source}'. Known sources: {', '.join(known_sources)}.",
         )
 
     try:
@@ -183,7 +185,7 @@ def test_connection(
         adapter.complete_text_without_context(
             TEST_PROMPT, temperature=0.0, max_tokens=TEST_MAX_TOKENS
         )
-    except Exception as e:  # noqa: BLE001 - every failure becomes a reason
+    except Exception as e:
         logger.info(f"AI connection test failed for {source}/{model}: {e}")
         reason = str(e)
         if source == "ollama":

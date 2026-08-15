@@ -1,0 +1,20 @@
+# Opt-in desktop hooks mirroring the CI lint job: `pre-commit install` once
+# per clone; `pre-commit run --all-files` reproduces the gate locally.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.3  # keep in step with the ruff pin in pyproject.toml
+    hooks:
+      - id: ruff-check
+        args: [--fix, --show-fixes]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        # The project venv's mypy (so versions match uv.lock): install and
+        # run pre-commit from inside it -- `uv run pre-commit ...` or an
+        # activated .venv -- so `mypy` resolves on PATH.
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false

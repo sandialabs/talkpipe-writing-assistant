@@ -1,10 +1,7 @@
 """Tests to improve coverage of main.py endpoints and error handling."""
 
 import json
-from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 
 def test_root_endpoint(client):
@@ -296,51 +293,57 @@ def test_generate_text_with_custom_env_vars(authenticated_client):
     """Test generate text with custom environment variables."""
     import json
 
-    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
-        with patch(
+    with (
+        patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True),
+        patch(
             "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
-        ):
-            env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
-            response = authenticated_client.post(
-                "/generate-text",
-                data={
-                    "user_text": "Test",
-                    "environment_variables": json.dumps(env_vars),
-                },
-            )
-            assert response.status_code == 200
+        ),
+    ):
+        env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "environment_variables": json.dumps(env_vars),
+            },
+        )
+        assert response.status_code == 200
 
 
 def test_generate_text_env_vars_disabled(authenticated_client):
     """Test generate text with custom env vars disabled."""
     import json
 
-    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", False):
-        with patch(
+    with (
+        patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", False),
+        patch(
             "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
-        ):
-            env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
-            response = authenticated_client.post(
-                "/generate-text",
-                data={
-                    "user_text": "Test",
-                    "environment_variables": json.dumps(env_vars),
-                },
-            )
-            assert response.status_code == 200
+        ),
+    ):
+        env_vars = {"OLLAMA_BASE_URL": "http://localhost:11434"}
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "environment_variables": json.dumps(env_vars),
+            },
+        )
+        assert response.status_code == 200
 
 
 def test_generate_text_invalid_env_json(authenticated_client):
     """Test generate text with invalid environment variables JSON."""
-    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
-        with patch(
+    with (
+        patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True),
+        patch(
             "writing_assistant.app.main.cb.new_paragraph", return_value="Generated text"
-        ):
-            response = authenticated_client.post(
-                "/generate-text",
-                data={"user_text": "Test", "environment_variables": "invalid json"},
-            )
-            assert response.status_code == 200
+        ),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test", "environment_variables": "invalid json"},
+        )
+        assert response.status_code == 200
 
 
 def test_create_snapshot_success(authenticated_client):
@@ -372,7 +375,6 @@ def test_create_snapshot_not_found(authenticated_client):
 
 def test_create_snapshot_cleanup_old(authenticated_client):
     """Test that old snapshots are cleaned up (keep only 10)."""
-    import asyncio
     import json
 
     # Create document
@@ -385,7 +387,7 @@ def test_create_snapshot_cleanup_old(authenticated_client):
     # Create 12 snapshots
     import time
 
-    for i in range(12):
+    for _i in range(12):
         authenticated_client.post("/documents/snapshot/cleanup.json")
         time.sleep(0.01)  # Small delay to ensure different timestamps
 
@@ -718,22 +720,22 @@ def test_generate_text_normalizes_source_case(authenticated_client):
 
 def test_generate_text_reloads_talkpipe_config_for_env_vars(authenticated_client):
     """Per-request env vars must trigger a TalkPipe config reload to take effect."""
-    with patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True):
-        with patch(
+    with (
+        patch("writing_assistant.app.main.ALLOW_CUSTOM_ENV_VARS", True),
+        patch(
             "writing_assistant.app.main.cb.new_paragraph",
             return_value="Generated text",
-        ):
-            with patch(
-                "writing_assistant.app.main.reset_talkpipe_config"
-            ) as mock_reset:
-                env_vars = {"TALKPIPE_OLLAMA_SERVER_URL": "http://ollama.example:11434"}
-                response = authenticated_client.post(
-                    "/generate-text",
-                    data={
-                        "user_text": "Test",
-                        "environment_variables": json.dumps(env_vars),
-                    },
-                )
+        ),
+        patch("writing_assistant.app.main.reset_talkpipe_config") as mock_reset,
+    ):
+        env_vars = {"TALKPIPE_OLLAMA_SERVER_URL": "http://ollama.example:11434"}
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "environment_variables": json.dumps(env_vars),
+            },
+        )
     assert response.status_code == 200
     # Reloaded once to pick up the request's env vars and once to restore.
     assert mock_reset.call_count == 2

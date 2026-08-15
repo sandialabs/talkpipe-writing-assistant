@@ -54,10 +54,13 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.24.0",  # For testing FastAPI endpoints
-    "black>=26.3.1",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
+    # Lint/type tools are pinned to a minor series on purpose: ruff promotes
+    # new rules and mypy adds checks in minor releases, and CI resolves fresh,
+    # so an open floor would turn a tool release into a red build. Bump the
+    # pins deliberately (and the ruff-pre-commit rev with them).
+    "ruff>=0.16.3,<0.17",
+    "mypy>=2.3,<3",
+    "pre-commit>=4.0",
     "bandit>=1.7.7",
     "safety>=2.3.0",
 ]
@@ -125,32 +128,70 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["build", "dist", ".venv"]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["writing_assistant"]
+[tool.ruff.lint]
+# An explicit select rather than ruff's (version-dependent) defaults, so a
+# ruff upgrade never silently changes what CI enforces. CI fails on any
+# finding; there is no advisory pass.
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "PIE", "RUF", "PERF", "RET", "ISC", "FLY",
+    "PT",       # pytest style
+    "T10",      # debugger left in
+    "LOG", "G", # logging
+    "PGH",      # blanket noqa / type: ignore
+    "PLE",      # pylint errors only
+]
+ignore = [
+    "E501",   # line length: ruff format governs code; long strings/docstrings stay
+    "ISC001", # conflicts with the formatter
+    "G004",   # f-strings in logging calls are accepted style here
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest-style rules only make sense in the test suite (an application
+# function that happens to be named test_* is not a test).
+"src/**" = ["PT"]
+# Tests assert on exception *types* deliberately; requiring a message match
+# on every `pytest.raises` adds noise without catching bugs.
+"tests/**" = ["PT011"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are the documented way to declare
+# parameters; they are not the mutable-default trap B008 exists to catch.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Body",
+    "fastapi.Path",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Cookie",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["writing_assistant"]
+
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12+ so mypy can parse modern dependency stubs (e.g. numpy uses `type`
+# statements); the package itself still supports Python 3.11.
+python_version = "3.12"
+files = ["src"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -164,6 +205,7 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 show_error_codes = true
+enable_error_code = ["ignore-without-code"]
 
 [[tool.mypy.overrides]]
 module = [

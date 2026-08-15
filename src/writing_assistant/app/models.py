@@ -2,16 +2,17 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 from fastapi_users.db import SQLAlchemyBaseUserTable
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import CHAR, TypeDecorator
+from sqlalchemy.types import CHAR, TypeDecorator, TypeEngine
 
 
-class GUID(TypeDecorator):
+class GUID(TypeDecorator[uuid.UUID]):
     """Platform-independent GUID type.
 
     Uses PostgreSQL's UUID type, otherwise uses CHAR(36), storing as stringified hex values.
@@ -20,36 +21,34 @@ class GUID(TypeDecorator):
     impl = CHAR
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(PG_UUID())
-        else:
-            return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(
+        self, value: uuid.UUID | str | None, dialect: Dialect
+    ) -> str | None:
         if value is None:
             return value
-        elif dialect.name == "postgresql":
+        if dialect.name == "postgresql":
             return str(value)
-        else:
-            if not isinstance(value, uuid.UUID):
-                return str(uuid.UUID(value))
-            else:
-                return str(value)
+        if not isinstance(value, uuid.UUID):
+            return str(uuid.UUID(value))
+        return str(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(
+        self, value: uuid.UUID | str | None, dialect: Dialect
+    ) -> uuid.UUID | None:
         if value is None:
             return value
-        else:
-            if not isinstance(value, uuid.UUID):
-                value = uuid.UUID(value)
-            return value
+        if not isinstance(value, uuid.UUID):
+            value = uuid.UUID(value)
+        return value
 
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
-
-    pass
 
 
 class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
@@ -72,9 +71,7 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
     )
 
     # User preferences (JSON stored as text)
-    preferences: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True, default=None
-    )
+    preferences: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     # Relationship to documents
     documents: Mapped[list["Document"]] = relationship(

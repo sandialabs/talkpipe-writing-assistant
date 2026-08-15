@@ -4,13 +4,14 @@ import json
 import logging
 import os
 import threading
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize the database on application startup."""
     await create_db_and_tables()
     yield
@@ -48,7 +49,7 @@ app_dir = Path(__file__).parent
 class NoCacheStaticFiles(StaticFiles):
     """Static files handler that disables caching."""
 
-    def file_response(self, *args, **kwargs) -> Response:
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -79,7 +80,7 @@ ALLOW_CUSTOM_ENV_VARS = _allow_custom_env_vars_default()
 
 def _request_env_vars(
     environment_variables: str, source: str, server_url: str, api_key: str
-) -> dict:
+) -> dict[str, Any]:
     """Environment overrides a request is allowed to apply.
 
     Both the free-form environment variables and the dedicated connection
@@ -91,7 +92,7 @@ def _request_env_vars(
     the variable names; they win over hand-entered variables of the same
     name.
     """
-    env_vars = {}
+    env_vars: dict[str, Any] = {}
     if not ALLOW_CUSTOM_ENV_VARS:
         if (
             environment_variables not in ("", "{}")
@@ -116,7 +117,7 @@ def _request_env_vars(
 
 
 @contextmanager
-def _temporary_env_vars(env_vars: dict):
+def _temporary_env_vars(env_vars: dict[str, Any]) -> Iterator[None]:
     """Apply per-request environment variables, restoring them afterwards.
 
     Holds a lock for the duration so concurrent requests cannot see each
@@ -134,7 +135,7 @@ def _temporary_env_vars(env_vars: dict):
         try:
             yield
         finally:
-            for key in env_vars.keys():
+            for key in env_vars:
                 if key in original_env:
                     os.environ[key] = original_env[key]
                 else:
@@ -178,7 +179,7 @@ app.include_router(
 
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
+async def read_root(request: Request) -> HTMLResponse:
     """Homepage - main app interface."""
     empty_document = {"title": "", "sections": []}
     return templates.TemplateResponse(
@@ -189,26 +190,26 @@ async def read_root(request: Request):
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request) -> HTMLResponse:
     """Login page."""
     return templates.TemplateResponse(request, "login.html")
 
 
 @app.get("/register", response_class=HTMLResponse)
-async def register_page(request: Request):
+async def register_page(request: Request) -> HTMLResponse:
     """Registration page."""
     return templates.TemplateResponse(request, "register.html")
 
 
 @app.get("/favicon.ico")
-async def favicon():
+async def favicon() -> FileResponse:
     """Serve favicon."""
     favicon_path = app_dir / "static" / "favicon.ico"
     return FileResponse(favicon_path, media_type="image/x-icon")
 
 
 @app.get("/config")
-async def get_config():
+async def get_config() -> dict[str, Any]:
     """Get server configuration."""
     return {
         "allow_custom_env_vars": ALLOW_CUSTOM_ENV_VARS,
@@ -217,7 +218,7 @@ async def get_config():
 
 
 @app.get("/auth/check")
-async def check_auth(user: User = Depends(current_active_user)):
+async def check_auth(user: User = Depends(current_active_user)) -> dict[str, Any]:
     """Check if user is authenticated."""
     return {
         "authenticated": True,
@@ -230,7 +231,7 @@ async def check_auth(user: User = Depends(current_active_user)):
 async def get_user_preferences(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Get user preferences."""
     try:
         # Refresh user to get latest data
@@ -238,11 +239,10 @@ async def get_user_preferences(
 
         if user.preferences:
             return {"status": "success", "preferences": json.loads(user.preferences)}
-        else:
-            # Return empty preferences if none saved
-            return {"status": "success", "preferences": {}}
+        # Return empty preferences if none saved
+        return {"status": "success", "preferences": {}}
     except Exception as e:
-        logger.error(f"Error retrieving user preferences: {e}", exc_info=True)
+        logger.exception(f"Error retrieving user preferences: {e}")
         return {"status": "error", "message": "Failed to retrieve user preferences"}
 
 
@@ -251,7 +251,7 @@ async def save_user_preferences(
     request: Request,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Save user preferences."""
     try:
         # Get JSON data from request body
@@ -265,7 +265,7 @@ async def save_user_preferences(
         return {"status": "success", "message": "Preferences saved"}
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error saving user preferences: {e}", exc_info=True)
+        logger.exception(f"Error saving user preferences: {e}")
         return {"status": "error", "message": "Failed to save user preferences"}
 
 
@@ -275,7 +275,7 @@ async def save_document(
     document_data: str = Form(...),
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Save or update a document for the current user."""
     try:
         # Parse document data
@@ -301,28 +301,27 @@ async def save_document(
                 "filename": filename,
                 "message": "Document updated",
             }
-        else:
-            # Create new document
-            new_doc = Document(
-                user_id=user.id, filename=filename, title=title, content=document_data
-            )
-            db.add(new_doc)
-            await db.commit()
-            return {
-                "status": "success",
-                "filename": filename,
-                "message": "Document created",
-            }
+        # Create new document
+        new_doc = Document(
+            user_id=user.id, filename=filename, title=title, content=document_data
+        )
+        db.add(new_doc)
+        await db.commit()
+        return {
+            "status": "success",
+            "filename": filename,
+            "message": "Document created",
+        }
 
     except json.JSONDecodeError as e:
-        logger.error(
-            f"Invalid JSON in save_document for {filename}: {e}", exc_info=True
-        )
-        raise HTTPException(status_code=400, detail="Invalid JSON in document data")
+        logger.exception(f"Invalid JSON in save_document for {filename}: {e}")
+        raise HTTPException(
+            status_code=400, detail="Invalid JSON in document data"
+        ) from e
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error saving document {filename}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save document")
+        logger.exception(f"Error saving document {filename}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save document") from e
 
 
 @app.post("/documents/save-as")
@@ -331,7 +330,7 @@ async def save_document_as(
     document_data: str = Form(...),
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Save document with a new filename."""
     # Reuse the save_document logic
     return await save_document(filename, document_data, user, db)
@@ -342,7 +341,7 @@ async def download_document(
     filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> Response:
     """Download a document as JSON file."""
     try:
         result = await db.execute(
@@ -365,8 +364,10 @@ async def download_document(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading document {filename}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to download document")
+        logger.exception(f"Error downloading document {filename}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to download document"
+        ) from e
 
 
 @app.get("/documents/load/{filename}")
@@ -374,7 +375,7 @@ async def load_document_by_filename(
     filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Load a specific document."""
     try:
         result = await db.execute(
@@ -393,10 +394,10 @@ async def load_document_by_filename(
         return {"status": "success", "document": document_data}
 
     except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in document {filename}: {e}", exc_info=True)
+        logger.exception(f"Invalid JSON in document {filename}: {e}")
         return {"status": "error", "message": "Document contains invalid data"}
     except Exception as e:
-        logger.error(f"Error loading document {filename}: {e}", exc_info=True)
+        logger.exception(f"Error loading document {filename}: {e}")
         return {"status": "error", "message": "Failed to load document"}
 
 
@@ -404,7 +405,7 @@ async def load_document_by_filename(
 async def list_documents(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """List all documents for the current user."""
     try:
         result = await db.execute(
@@ -428,7 +429,7 @@ async def list_documents(
         return {"files": files}
 
     except Exception as e:
-        logger.error(f"Error listing documents: {e}", exc_info=True)
+        logger.exception(f"Error listing documents: {e}")
         return {"error": "Failed to list documents"}
 
 
@@ -444,14 +445,14 @@ async def generate_text(
     tone: str = Form(default="neutral"),
     background_context: str = Form(default=""),
     generation_directive: str = Form(default=""),
-    word_limit: Optional[int] = Form(default=None),
+    word_limit: int | None = Form(default=None),
     source: str = Form(default=""),
     model: str = Form(default=""),
     environment_variables: str = Form(default="{}"),
     server_url: str = Form(default=""),
     api_key: str = Form(default=""),
     user: User = Depends(current_active_user),
-):
+) -> dict[str, str]:
     """Generate text for a section - requires authentication."""
     try:
         env_vars = _request_env_vars(environment_variables, source, server_url, api_key)
@@ -491,7 +492,7 @@ async def generate_text(
             return {"generated_text": generated_text}
 
     except Exception as e:
-        logger.error(f"Error generating text: {e}", exc_info=True)
+        logger.exception(f"Error generating text: {e}")
         # Configuration errors (unknown source, unreachable or missing model)
         # carry curated, actionable messages - surface those to the user
         # instead of a generic failure. Anything else stays generic to avoid
@@ -526,13 +527,15 @@ async def generate_text(
                     )
                 raise HTTPException(
                     status_code=400, detail=f"Failed to generate text: {hint}"
-                )
+                ) from e
             detail = f"Failed to generate text: {e}"
             if "Unknown source" in str(e):
                 detail += ". Valid sources: openai, anthropic, ollama"
-            raise HTTPException(status_code=400, detail=detail)
+            raise HTTPException(status_code=400, detail=detail) from e
         if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
-            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to generate text: {e}"
+            ) from e
         if isinstance(e, RuntimeError) and str(e).startswith(
             ("Could not initialize the", "Could not authenticate with")
         ):
@@ -541,8 +544,10 @@ async def generate_text(
             # with these curated, actionable messages - surface them like the
             # other configuration errors. Other RuntimeErrors stay generic
             # below to avoid leaking internals.
-            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate text")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to generate text: {e}"
+            ) from e
+        raise HTTPException(status_code=500, detail="Failed to generate text") from e
 
 
 @app.post("/ai/test-connection")
@@ -553,7 +558,7 @@ async def test_ai_connection(
     server_url: str = Form(default=""),
     api_key: str = Form(default=""),
     user: User = Depends(current_active_user),
-):
+) -> dict[str, Any]:
     """Test whether the configured AI source/model is reachable.
 
     Works with any registered AI source (openai, anthropic, ollama, ...):
@@ -582,7 +587,7 @@ async def create_snapshot(
     filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Create a timestamped snapshot of a document."""
     try:
         # Find the document
@@ -628,7 +633,7 @@ async def create_snapshot(
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error creating snapshot for {filename}: {e}", exc_info=True)
+        logger.exception(f"Error creating snapshot for {filename}: {e}")
         return {"status": "error", "message": "Failed to create snapshot"}
 
 
@@ -637,7 +642,7 @@ async def list_snapshots(
     filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """List all snapshots for a specific document."""
     try:
         # Find the document
@@ -671,7 +676,7 @@ async def list_snapshots(
         return {"status": "success", "snapshots": snapshot_list}
 
     except Exception as e:
-        logger.error(f"Error listing snapshots for {filename}: {e}", exc_info=True)
+        logger.exception(f"Error listing snapshots for {filename}: {e}")
         return {"status": "error", "message": "Failed to list snapshots"}
 
 
@@ -680,7 +685,7 @@ async def load_snapshot(
     snapshot_filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Load a specific snapshot's content."""
     try:
         # Find snapshot through document ownership
@@ -703,12 +708,10 @@ async def load_snapshot(
         return {"status": "success", "document": document_data}
 
     except json.JSONDecodeError as e:
-        logger.error(
-            f"Invalid JSON in snapshot {snapshot_filename}: {e}", exc_info=True
-        )
+        logger.exception(f"Invalid JSON in snapshot {snapshot_filename}: {e}")
         return {"status": "error", "message": "Snapshot contains invalid data"}
     except Exception as e:
-        logger.error(f"Error loading snapshot {snapshot_filename}: {e}", exc_info=True)
+        logger.exception(f"Error loading snapshot {snapshot_filename}: {e}")
         return {"status": "error", "message": "Failed to load snapshot"}
 
 
@@ -717,7 +720,7 @@ async def delete_document(
     filename: str,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict[str, Any]:
     """Delete a document (and all its snapshots)."""
     try:
         # Find the document
@@ -742,7 +745,7 @@ async def delete_document(
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Error deleting document {filename}: {e}", exc_info=True)
+        logger.exception(f"Error deleting document {filename}: {e}")
         return {"status": "error", "message": "Failed to delete document"}
 
 

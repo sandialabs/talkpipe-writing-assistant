@@ -40,7 +40,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
         • Replace passive voice in sentence 2 with active voice for stronger impact
         • Connect the second and third ideas with a transitional phrase showing causation
         """
-    elif generation_mode == "rewrite":
+    if generation_mode == "rewrite":
         return f"""
         {base_context}
         Completely rewrite the current paragraph to maximize clarity, engagement, and impact.
@@ -57,7 +57,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Output only the rewritten paragraph.
         """
-    elif generation_mode == "improve":
+    if generation_mode == "improve":
         return f"""
         {base_context}
         Enhance the provided current while preserving its essential structure and meaning.
@@ -75,7 +75,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Output only the improved paragraph.
         """
-    elif generation_mode == "proofread":
+    if generation_mode == "proofread":
         return f"""
         {base_context}
         Proofread the current paragraph for errors and clarity issues.
@@ -97,9 +97,8 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Output only the corrected paragraph.
         """
-    else:
-        # Default to rewrite
-        return f"""
+    # Default to rewrite
+    return f"""
         {base_context}
         Rewrite or improve the provided paragraph to enhance its effectiveness.
 
@@ -126,7 +125,7 @@ SURROUNDING CONTEXT:
 
 ================================
 
-Previous paragraph: 
+Previous paragraph:
 
 {prev_paragraph}
 
@@ -138,7 +137,7 @@ Current paragraph to assist with:
 
 ================================
 
-Next paragraph: 
+Next paragraph:
 
 {next_paragraph}
 
@@ -194,4 +193,6 @@ def new_paragraph(
             )
             return cleaned_result
 
-        return result
+        # Non-string results are passed through untouched (pinned by tests),
+        # so this deliberately escapes the declared str contract.
+        return result  # type: ignore[no-any-return]

@@ -1,6 +1,7 @@
 """Tests for the AI connection test feature (workbench-style availability check)."""
 
 import os
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 class FakeAdapter:
     """Stands in for a TalkPipe prompt adapter."""
 
-    instances = []
+    instances: ClassVar[list["FakeAdapter"]] = []
 
     def __init__(self, model, **kwargs):
         self.model = model
@@ -53,7 +54,7 @@ def test_connection_success_with_explicit_source_and_model():
     assert result["reason"] is None
     # The probe must actually have hit the adapter, with a capped generation.
     assert len(FakeAdapter.instances) == 1
-    prompt, kwargs = FakeAdapter.instances[0].probes[0]
+    _prompt, kwargs = FakeAdapter.instances[0].probes[0]
     assert kwargs.get("max_tokens") is not None
 
 

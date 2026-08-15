@@ -230,12 +230,12 @@ def test_generate_text_truncates_context_to_2000_chars(
     next_para = call_args.kwargs["next_paragraph"]
 
     # Verify they are truncated to 2000 characters
-    assert (
-        len(prev_para) == 2000
-    ), f"Expected 2000 chars in prev_paragraph, got {len(prev_para)}"
-    assert (
-        len(next_para) == 2000
-    ), f"Expected 2000 chars in next_paragraph, got {len(next_para)}"
+    assert len(prev_para) == 2000, (
+        f"Expected 2000 chars in prev_paragraph, got {len(prev_para)}"
+    )
+    assert len(next_para) == 2000, (
+        f"Expected 2000 chars in next_paragraph, got {len(next_para)}"
+    )
 
     # Verify prev_paragraph gets the LAST 2000 characters
     assert prev_para == long_paragraph[-2000:]

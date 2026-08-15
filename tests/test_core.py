@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from writing_assistant.core.callbacks import get_system_prompt, new_paragraph
 from writing_assistant.core.definitions import Metadata
 

@@ -2,14 +2,25 @@
 
 import os
 import uuid
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import Depends
 from fastapi_users.db import SQLAlchemyUserDatabase
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from .models import Base, User
+
+# mypy cannot see that the SQLAlchemy ``Mapped[...]`` columns on ``User``
+# satisfy fastapi-users' ``UserProtocol`` when checking type-variable bounds
+# (it compares the class-level descriptor types, not the instance attribute
+# types); the model does satisfy the protocol at runtime.
+UserDatabase = SQLAlchemyUserDatabase[User, uuid.UUID]  # type: ignore[type-var]
 
 
 # Database URL - using SQLite by default, stored in user's home directory
@@ -38,11 +49,11 @@ def get_database_url() -> str:
 
 
 # Lazy initialization - these will be created when first accessed
-_engine = None
-_async_session_maker = None
+_engine: AsyncEngine | None = None
+_async_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
-def get_engine():
+def get_engine() -> AsyncEngine:
     """Get or create the database engine."""
     global _engine
     if _engine is None:
@@ -57,7 +68,7 @@ def get_engine():
     return _engine
 
 
-def get_session_maker():
+def get_session_maker() -> async_sessionmaker[AsyncSession]:
     """Get or create the async session maker."""
     global _async_session_maker
     if _async_session_maker is None:
@@ -69,7 +80,7 @@ def get_session_maker():
     return _async_session_maker
 
 
-async def create_db_and_tables():
+async def create_db_and_tables() -> None:
     """Create database tables."""
     engine = get_engine()
     async with engine.begin() as conn:
@@ -83,6 +94,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+async def get_user_db(
+    session: AsyncSession = Depends(get_async_session),
+) -> AsyncGenerator[UserDatabase, None]:
     """Dependency to get user database."""
-    yield SQLAlchemyUserDatabase(session, User)
+    yield UserDatabase(session, User)  # type: ignore[type-var]  # see UserDatabase

@@ -16,7 +16,7 @@ import sys
 # Allow running from a source checkout without installing the package.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from writing_assistant.create_superuser import main  # noqa: E402
+from writing_assistant.create_superuser import main
 
 if __name__ == "__main__":
     main()

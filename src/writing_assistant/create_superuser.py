@@ -19,7 +19,7 @@ def login_url() -> str:
     return f"http://{host}:{port}/login"
 
 
-async def create_superuser():
+async def create_superuser() -> None:
     """Create a superuser account."""
     import uuid
 
@@ -88,13 +88,13 @@ async def create_superuser():
         session.add(new_user)
         await session.commit()
 
-        print(f"\n✓ Superuser created successfully!")
+        print("\n✓ Superuser created successfully!")
         print(f"  Email: {email}")
         print(f"  ID: {new_user.id}")
         print(f"\nYou can now login at: {login_url()}")
 
 
-def main():
+def main() -> None:
     """Main entry point for the create-superuser command."""
     try:
         asyncio.run(create_superuser())

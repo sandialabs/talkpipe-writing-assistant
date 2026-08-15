@@ -48,17 +48,17 @@ def _fail_if_port_in_use(host: str, port: int) -> None:
                     f"or start with --port <other-port>.",
                     file=sys.stderr,
                 )
-                raise SystemExit(1)
+                raise SystemExit(1) from None
 
 
-async def init_db():
+async def init_db() -> None:
     """Initialize the database."""
     print("Initializing database...")
     await create_db_and_tables()
     print("Database initialized successfully.")
 
 
-def main():
+def main() -> None:
     """Main entry point for the writing assistant server."""
     parser = argparse.ArgumentParser(
         description="Writing Assistant Web Server - Multi-User"
@@ -125,7 +125,7 @@ def main():
 
     db_path = get_database_url().replace("sqlite+aiosqlite:///", "")
 
-    print(f"\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
+    print("\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
     print(
         f"📝 Access your writing assistant at: http://{args.host}:{args.port}/",
         flush=True,

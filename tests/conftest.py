@@ -1,9 +1,10 @@
 """Pytest configuration and fixtures."""
 
 import asyncio
+import contextlib
 import os
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,8 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
-from writing_assistant.app.auth import get_user_manager
-from writing_assistant.app.database import get_async_session, get_user_db
+from writing_assistant.app.database import get_async_session
 from writing_assistant.app.main import app
 from writing_assistant.app.models import Base, User
 
@@ -51,7 +51,6 @@ def _isolate_app_database(tmp_path_factory):
 
 def pytest_sessionfinish(session, exitstatus):
     """Clean up async engine after all tests complete."""
-    import asyncio
 
     # Dispose of the async engine to close all connections and threads
     try:
@@ -68,13 +67,11 @@ def pytest_sessionfinish(session, exitstatus):
             asyncio.run(test_engine.dispose())
     except Exception:
         # Fallback: try to close the underlying sync engine
-        try:
+        with contextlib.suppress(Exception):
             test_engine.sync_engine.dispose(close=True)
-        except Exception:
-            pass
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Create a fresh database for each test."""
     # Create tables
@@ -90,7 +87,7 @@ async def async_db_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def client(async_db_session: AsyncSession):
     """Create a test client with overridden database dependency."""
 
