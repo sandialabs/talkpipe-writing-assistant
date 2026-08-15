@@ -72,21 +72,22 @@ pytest tests/test_api.py
 **Note:** Tests now use FastAPI Users authentication with test user fixtures. See the test fixtures in `tests/conftest.py` for details on test user setup.
 
 ### Code Quality
+
+CI fails on any finding from ruff (lint + format) or mypy — there is no
+advisory mode. Run them before pushing:
+
 ```bash
-# Format code
-black src/ tests/
-isort src/ tests/
+ruff check .           # lint; fix most findings with: ruff check --fix .
+ruff format --check .  # formatting; apply with: ruff format .
+mypy                   # static types over src/ (config in pyproject.toml)
 
-# Lint code
-flake8 src/ tests/
-
-# Type checking
-mypy src/
-
-# Security scanning
+# Security scanning (CI runs these in the security-scan job)
 bandit -r src/
 safety check
 ```
+
+`pre-commit install` (opt-in, per clone) runs the ruff/mypy checks on every
+commit; `pre-commit run --all-files` reproduces the CI gate locally.
 
 ### Container Commands (Podman primary; Docker compatible)
 ```bash
