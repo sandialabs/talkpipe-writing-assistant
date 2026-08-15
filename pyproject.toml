@@ -132,7 +132,9 @@ exclude_lines = [
 line-length = 88
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["build", "dist", ".venv"]
+# *.md: ruff would otherwise reformat Python code blocks in prose; the docs
+# are not part of this gate.
+extend-exclude = ["build", "dist", ".venv", "*.md"]
 
 [tool.ruff.lint]
 # An explicit select rather than ruff's (version-dependent) defaults, so a
