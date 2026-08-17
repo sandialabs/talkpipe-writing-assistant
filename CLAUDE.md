@@ -247,7 +247,7 @@ Environment variables:
 ### Dependencies
 
 The application depends on:
-- **TalkPipe** (>=0.9.2): AI pipeline functionality
+- **TalkPipe** (>=1.0.0b2): AI pipeline functionality (ships `py.typed`; mypy checks its real types)
 - **FastAPI[standard]** (>=0.104.1): Web framework
 - **FastAPI-Users[sqlalchemy]** (>=13.0.0): User authentication and management
 - **SQLAlchemy[asyncio]** (>=2.0.0): ORM and database toolkit
