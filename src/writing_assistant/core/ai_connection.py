@@ -184,13 +184,16 @@ def test_connection(
             TEST_PROMPT, temperature=0.0, max_tokens=TEST_MAX_TOKENS
         )
     except Exception as e:  # noqa: BLE001 - every failure becomes a reason
-        logger.info(f"AI connection test failed for {source}/{model}: {e}")
-        reason = str(e)
+        logger.info(
+            f"AI connection test failed for {source}/{model}",
+            exc_info=True,
+        )
+        reason = "Connection test failed. Please verify your AI source settings."
         if source == "ollama":
             reason += _ollama_failure_hint(model, server_url_override)
         elif source in ("openai", "anthropic"):
             reason += _cloud_failure_hint(
-                source, reason, server_url_override, api_key_supplied
+                source, "", server_url_override, api_key_supplied
             )
         return _result(False, source, model, reason)
 
