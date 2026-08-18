@@ -492,10 +492,14 @@ async def generate_text(
 
     except Exception as e:
         logger.error(f"Error generating text: {e}", exc_info=True)
-        # Configuration errors (unknown source, unreachable or missing model)
-        # carry curated, actionable messages - surface those to the user
-        # instead of a generic failure. Anything else stays generic to avoid
-        # leaking internals.
+        # The exception is classified (missing settings, unknown source,
+        # credentials, missing model, unreachable server) and the user gets
+        # a message written here from safe inputs - the request's own
+        # source/model and the classification - never the exception text,
+        # which may carry internal hostnames, paths or SDK internals. The
+        # full detail is in the server log above.
+        norm_source = source.strip().lower()
+        norm_model = model.strip()
         if isinstance(e, ValueError):
             if "Model name and source must be provided" in str(e):
                 # TalkPipe could not resolve a model/source: the request
@@ -503,8 +507,8 @@ async def generate_text(
                 # The library message talks about configuration files and
                 # environment variables, which means nothing to a web-UI
                 # user - point them at Settings instead.
-                missing_source = not source.strip()
-                missing_model = not model.strip()
+                missing_source = not norm_source
+                missing_model = not norm_model
                 if missing_source and missing_model:
                     hint = (
                         "No AI source or model is configured. Open Settings "
@@ -524,24 +528,29 @@ async def generate_text(
                         "Settings and choose an AI Source (openai, anthropic, "
                         "or ollama)."
                     )
-                raise HTTPException(
-                    status_code=400, detail=f"Failed to generate text: {hint}"
+            elif "Unknown source" in str(e):
+                hint = (
+                    f"Unknown AI source '{norm_source}'. Valid sources: "
+                    "openai, anthropic, ollama"
                 )
-            detail = f"Failed to generate text: {e}"
-            if "Unknown source" in str(e):
-                detail += ". Valid sources: openai, anthropic, ollama"
-            raise HTTPException(status_code=400, detail=detail)
-        if isinstance(e, ConnectionError) or type(e).__name__ == "ResponseError":
-            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
-        if isinstance(e, RuntimeError) and str(e).startswith(
-            ("Could not initialize the", "Could not authenticate with")
-        ):
-            # TalkPipe wraps LLM credential/client-setup failures (e.g. a
-            # missing OPENAI_API_KEY or ANTHROPIC_API_KEY) in RuntimeError
-            # with these curated, actionable messages - surface them like the
-            # other configuration errors. Other RuntimeErrors stay generic
-            # below to avoid leaking internals.
-            raise HTTPException(status_code=502, detail=f"Failed to generate text: {e}")
+            else:
+                hint = (
+                    "Invalid generation settings (ValueError). Details are "
+                    "in the server log."
+                )
+            raise HTTPException(status_code=400, detail=f"Failed to generate text: {hint}")
+
+        category = ai_connection.classify_failure(e)
+        if category in ("credentials", "missing_model", "connection"):
+            # A configuration/backend problem the user can act on: describe
+            # it the same way the Test Connection button would, pointing at
+            # the dialog fields that were actually in play for this request.
+            ui_server_url = server_url.strip() if ALLOW_CUSTOM_ENV_VARS else ""
+            ui_api_key = bool(api_key.strip()) and ALLOW_CUSTOM_ENV_VARS
+            reason = ai_connection.failure_reason(
+                e, norm_source, norm_model, ui_server_url, ui_api_key
+            )
+            raise HTTPException(status_code=502, detail=f"Failed to generate text: {reason}")
         raise HTTPException(status_code=500, detail="Failed to generate text")
 
 

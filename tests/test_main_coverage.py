@@ -525,9 +525,12 @@ def test_generate_text_surfaces_value_error(authenticated_client):
             },
         )
     assert response.status_code == 400
-    assert "Unknown source: bogus" in response.json()["detail"]
+    detail = response.json()["detail"]
+    # The rejected value comes from the request itself, not from the
+    # exception text.
+    assert "Unknown AI source 'bogus'" in detail
     # The error must also tell the user which values are accepted.
-    assert "Valid sources: openai, anthropic, ollama" in response.json()["detail"]
+    assert "Valid sources: openai, anthropic, ollama" in detail
 
 
 _MISSING_MODEL_SOURCE_ERROR = ValueError(
@@ -586,11 +589,13 @@ def test_generate_text_missing_source_points_at_source_field(authenticated_clien
     assert "openai, anthropic, or ollama" in detail
 
 
-def test_generate_text_other_value_error_not_suffixed(authenticated_client):
-    """ValueErrors unrelated to the source must not get the valid-sources hint."""
+def test_generate_text_other_value_error_not_echoed(authenticated_client):
+    """ValueErrors unrelated to the source are still reported as a
+    configuration problem (400), but their text is not echoed and they must
+    not get the valid-sources hint."""
     with patch(
         "writing_assistant.app.main.cb.new_paragraph",
-        side_effect=ValueError("some other configuration problem"),
+        side_effect=ValueError("some other configuration problem /etc/secret"),
     ):
         response = authenticated_client.post(
             "/generate-text",
@@ -601,8 +606,12 @@ def test_generate_text_other_value_error_not_suffixed(authenticated_client):
             },
         )
     assert response.status_code == 400
-    assert "some other configuration problem" in response.json()["detail"]
-    assert "Valid sources" not in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "some other configuration problem" not in detail
+    assert "/etc/secret" not in detail
+    assert "ValueError" in detail
+    assert "server log" in detail
+    assert "Valid sources" not in detail
 
 
 def test_generate_text_surfaces_missing_api_key_error(authenticated_client):
@@ -626,7 +635,13 @@ def test_generate_text_surfaces_missing_api_key_error(authenticated_client):
             },
         )
     assert response.status_code == 502
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "Authentication with OpenAI failed" in detail
+    # Points at the one-click fix (API Key field) as well as the server-side
+    # variable, without echoing the SDK's own wording.
+    assert "API Key field" in detail
+    assert "OPENAI_API_KEY" in detail
+    assert "Could not initialize the OpenAI client" not in detail
 
 
 def test_generate_text_surfaces_missing_anthropic_key_error(authenticated_client):
@@ -649,7 +664,10 @@ def test_generate_text_surfaces_missing_anthropic_key_error(authenticated_client
             },
         )
     assert response.status_code == 502
-    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "Authentication with Anthropic failed" in detail
+    assert "ANTHROPIC_API_KEY" in detail
+    assert "Could not authenticate with Anthropic" not in detail
 
 
 def test_generate_text_surfaces_connection_error(authenticated_client):
@@ -672,7 +690,49 @@ def test_generate_text_surfaces_connection_error(authenticated_client):
             },
         )
     assert response.status_code == 502
-    assert "TALKPIPE_OLLAMA_SERVER_URL" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "Could not connect to the Ollama server" in detail
+    # Web-UI users are pointed at the Server URL field, not at the library's
+    # environment-variable text (which is not echoed).
+    assert "Server URL" in detail
+    assert "If your Ollama server is remote" not in detail
+
+
+def test_generate_text_bad_key_supplied_via_ui(authenticated_client):
+    """When the failing key came from the API Key field in the dialog, the
+    error must say to double-check that field rather than ask for a key."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=RuntimeError("Could not authenticate with Anthropic."),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={
+                "user_text": "Test",
+                "source": "anthropic",
+                "model": "claude-sonnet-4-5",
+                "api_key": "sk-ant-bad",
+            },
+        )
+    assert response.status_code == 502
+    assert "API Key entered in AI Settings" in response.json()["detail"]
+
+
+def test_generate_text_missing_ollama_model(authenticated_client):
+    """An Ollama 404 for the model is reported as a missing model with the
+    pull command, not as an unreachable server."""
+    with patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        side_effect=LookupError("Model 'llama3.2' is not available on the Ollama server"),
+    ):
+        response = authenticated_client.post(
+            "/generate-text",
+            data={"user_text": "Test", "source": "ollama", "model": "llama3.2"},
+        )
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert "ollama pull llama3.2" in detail
+    assert "host.containers.internal" not in detail
 
 
 def test_generate_text_generic_error_stays_generic(authenticated_client):
