@@ -73,10 +73,17 @@ RUN mkdir -p /app/data && \
 # Copy the built wheel from builder stage
 COPY --from=builder --chown=app:app /build/dist/*.whl /tmp/
 
-# Install runtime Python dependencies and the application
-RUN python3 -m pip install --no-cache-dir --upgrade pip && \
-    python3 -m pip install --no-cache-dir /tmp/*.whl && \
-    rm -f /tmp/*.whl
+# Install the application, then remove pip from the runtime image. pip is only
+# needed for this one install, and pip >= 25 ships an SBOM of its *vendored*
+# code (pip/_vendor/bom.cdx.json) that Trivy reports as installed packages
+# (e.g. setuptools 70.3.0 / CVE-2025-47273, msgpack) even though nothing
+# outside pip uses them. Dropping pip removes both the false positives and an
+# unneeded tool from the shipped image.
+RUN python3 -m pip install --no-cache-dir /tmp/*.whl && \
+    rm -f /tmp/*.whl && \
+    dnf remove -y python3-pip && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
 # Copy only necessary runtime files
 COPY --chown=app:app pyproject.toml ./
