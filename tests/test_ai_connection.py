@@ -57,7 +57,10 @@ def test_connection_success_with_explicit_source_and_model():
     assert kwargs.get("max_tokens") is not None
 
 
-def test_connection_failure_surfaces_adapter_error():
+def test_connection_failure_classifies_unreachable_server():
+    """A connection failure is reported as such, in the app's own words,
+    without echoing the raw exception text (which may carry internal
+    hostnames or other server-side details)."""
     from writing_assistant.core import ai_connection
 
     with (
@@ -67,7 +70,57 @@ def test_connection_failure_surfaces_adapter_error():
         result = ai_connection.test_connection("ollama", "llama3.1:8b")
 
     assert result["available"] is False
-    assert "connection refused by test double" in result["reason"]
+    assert "Could not connect to the Ollama server" in result["reason"]
+    assert "connection refused by test double" not in result["reason"]
+
+
+class LeakyAdapter(FakeAdapter):
+    def complete_text_without_context(self, prompt, **kwargs):
+        raise RuntimeError("secret internal detail: /srv/private/path token=abc")
+
+
+def test_connection_unexpected_failure_never_echoes_exception_text():
+    """Unclassified failures name the error type (safe, and enough to search
+    the server log for) but never the exception message."""
+    from writing_assistant.core import ai_connection
+
+    with (
+        patch.object(ai_connection, "getPromptAdapter", return_value=LeakyAdapter),
+        patch.object(ai_connection, "getPromptSources", return_value=["ollama"]),
+        patch.object(ai_connection, "get_config", return_value={}),
+    ):
+        result = ai_connection.test_connection("ollama", "llama3.1:8b")
+
+    assert result["available"] is False
+    assert "secret internal detail" not in result["reason"]
+    assert "abc" not in result["reason"]
+    assert "RuntimeError" in result["reason"]
+    assert "server log" in result["reason"]
+
+
+class MissingModelAdapter(FakeAdapter):
+    def complete_text_without_context(self, prompt, **kwargs):
+        # Mirrors the ResponseError TalkPipe re-raises for an Ollama 404.
+        raise LookupError("Model 'llama3.1:8b' is not available on the Ollama server")
+
+
+def test_connection_ollama_missing_model_suggests_pull():
+    from writing_assistant.core import ai_connection
+
+    with (
+        patch.object(
+            ai_connection, "getPromptAdapter", return_value=MissingModelAdapter
+        ),
+        patch.object(ai_connection, "getPromptSources", return_value=["ollama"]),
+        patch.object(ai_connection, "get_config", return_value={}),
+    ):
+        result = ai_connection.test_connection("ollama", "llama3.1:8b")
+
+    assert result["available"] is False
+    assert "llama3.1:8b" in result["reason"]
+    assert "ollama pull llama3.1:8b" in result["reason"]
+    # A missing model is not a connectivity problem: no container/URL advice.
+    assert "host.containers.internal" not in result["reason"]
 
 
 def test_connection_unknown_source():
@@ -162,6 +215,9 @@ def test_connection_cloud_missing_key_mentions_api_key_field():
     assert result["available"] is False
     assert "API Key field" in result["reason"]
     assert "OPENAI_API_KEY" in result["reason"]
+    # The SDK's own wording is not echoed - the app describes the failure.
+    assert "Could not initialize the OpenAI client" not in result["reason"]
+    assert "Authentication with OpenAI failed" in result["reason"]
 
 
 def test_connection_cloud_bad_key_supplied_via_ui():

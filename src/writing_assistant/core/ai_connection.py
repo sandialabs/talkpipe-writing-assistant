@@ -95,6 +95,8 @@ def _ollama_failure_hint(model: str, server_url_override: str = "") -> str:
 # Substrings that mark a cloud-provider failure as a credentials problem.
 _CREDENTIAL_ERROR_MARKERS = (
     "missing credentials",
+    "could not authenticate",
+    "could not initialize the",
     "api_key",
     "api key",
     "authentication",
@@ -102,35 +104,165 @@ _CREDENTIAL_ERROR_MARKERS = (
     "401",
 )
 
+# Substrings that mark a failure as "the server answered, but does not have
+# this model" (e.g. TalkPipe's re-raised Ollama 404, or a cloud 404).
+_MISSING_MODEL_MARKERS = (
+    "is not available on the ollama server",
+    "model not found",
+    "does not exist",
+    "not_found_error",
+    "404",
+)
+
+# Substrings that mark a failure as "could not reach the server at all".
+_CONNECTION_ERROR_MARKERS = (
+    "failed to connect",
+    "connection refused",
+    "connection error",
+    "connect call failed",
+    "name or service not known",
+    "nodename nor servname",
+    "temporary failure in name resolution",
+    "timed out",
+    "timeout",
+    "unreachable",
+    "network",
+    "ssl",
+)
+
+# Exception class names that mean "could not reach the server", beyond the
+# builtin ConnectionError/TimeoutError families (httpx / the OpenAI and
+# Anthropic SDKs / ollama). Matched by name so none of them is imported here.
+_CONNECTION_ERROR_TYPE_NAMES = (
+    "ConnectError",
+    "ConnectTimeout",
+    "ReadTimeout",
+    "APIConnectionError",
+    "APITimeoutError",
+    "ResponseError",
+)
+
+_SOURCE_DISPLAY_NAMES = {
+    "ollama": "Ollama",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+}
+
+
+def _display_name(source: str) -> str:
+    return _SOURCE_DISPLAY_NAMES.get(source, source)
+
+
+def classify_failure(exc: BaseException) -> str:
+    """Bucket a probe failure into ``credentials``, ``missing_model``,
+    ``connection`` or ``unknown``.
+
+    The exception's type and message are consulted only to choose the
+    bucket - nothing from the message is returned - so the user-facing
+    reason built from the bucket can be phrased by the app without echoing
+    SDK/library text (which may carry internal hostnames, file paths or
+    other server-side details).
+    """
+    msg = str(exc).lower()
+    if any(marker in msg for marker in _CREDENTIAL_ERROR_MARKERS):
+        return "credentials"
+    if any(marker in msg for marker in _MISSING_MODEL_MARKERS):
+        return "missing_model"
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+        return "connection"
+    if type(exc).__name__ in _CONNECTION_ERROR_TYPE_NAMES:
+        return "connection"
+    if any(marker in msg for marker in _CONNECTION_ERROR_MARKERS):
+        return "connection"
+    return "unknown"
+
+
+def failure_reason(
+    exc: BaseException,
+    source: str,
+    model: str,
+    server_url_override: str,
+    api_key_supplied: bool,
+) -> str:
+    """Build the user-facing reason for a failed probe or generation.
+
+    Shared by the Test Connection probe and /generate-text so both describe
+    the same failure the same way. Everything in the returned text is either authored here or came from
+    the user's own request (source, model); the exception contributes only
+    its category and, for unclassified failures, its class name (a safe,
+    searchable handle for whoever reads the server log, where the full
+    traceback is recorded).
+    """
+    category = classify_failure(exc)
+    name = _display_name(source)
+
+    if category == "credentials":
+        reason = f"Authentication with {name} failed (missing or invalid API key)."
+        if source in ("openai", "anthropic"):
+            reason += _cloud_failure_hint(source, server_url_override, api_key_supplied)
+        return reason
+
+    if category == "missing_model":
+        reason = (
+            f"The {name} server is reachable but does not have the model '{model}'."
+        )
+        if source == "ollama":
+            reason += (
+                f" Pull it on the Ollama host (`ollama pull {model}`) or "
+                "check the Model name in AI Settings."
+            )
+        else:
+            reason += " Check the Model name in AI Settings."
+        return reason
+
+    if category == "connection":
+        reason = (
+            f"Could not connect to the {name} server (connection refused, "
+            "host not found, or timed out)."
+        )
+    else:
+        reason = (
+            f"Connection test failed with an unexpected error "
+            f"({type(exc).__name__}). Details are in the server log."
+        )
+    if source == "ollama":
+        reason += _ollama_failure_hint(model, server_url_override)
+    elif source in ("openai", "anthropic"):
+        reason += _cloud_url_hint(server_url_override)
+    return reason
+
+
+def _cloud_url_hint(server_url_override: str) -> str:
+    if not server_url_override:
+        return ""
+    return (
+        f" This test used the Server URL from your AI Settings "
+        f"({server_url_override})."
+    )
+
 
 def _cloud_failure_hint(
-    source: str, reason: str, server_url_override: str, api_key_supplied: bool
+    source: str, server_url_override: str, api_key_supplied: bool
 ) -> str:
-    """UI-oriented remediation for OpenAI/Anthropic failures.
+    """UI-oriented remediation for an OpenAI/Anthropic credentials failure.
 
     The underlying SDK errors talk about environment variables and SDK
     parameters; a web-UI user's one-click fix is the API Key field sitting
     right above the Test Connection button, so mention that first.
     """
-    hint = ""
-    if any(marker in reason.lower() for marker in _CREDENTIAL_ERROR_MARKERS):
-        if api_key_supplied:
-            hint += (
-                " The API Key entered in AI Settings was used for this "
-                "test — double-check that key."
-            )
-        else:
-            key_var = SOURCE_CONNECTION_ENV_VARS.get(source, {}).get("api_key")
-            key_var_text = f" set {key_var}" if key_var else " set the API key"
-            hint += (
-                " Enter your key in the API Key field above (Settings → AI "
-                f"Settings → Connection), or{key_var_text} on the server."
-            )
-    if server_url_override:
-        hint += (
-            f" This test used the Server URL from your AI Settings "
-            f"({server_url_override})."
+    if api_key_supplied:
+        hint = (
+            " The API Key entered in AI Settings was used for this "
+            "test — double-check that key."
         )
+    else:
+        key_var = SOURCE_CONNECTION_ENV_VARS.get(source, {}).get("api_key")
+        key_var_text = f" set {key_var}" if key_var else " set the API key"
+        hint = (
+            " Enter your key in the API Key field above (Settings → AI "
+            f"Settings → Connection), or{key_var_text} on the server."
+        )
+    hint += _cloud_url_hint(server_url_override)
     return hint
 
 
@@ -184,14 +316,14 @@ def test_connection(
             TEST_PROMPT, temperature=0.0, max_tokens=TEST_MAX_TOKENS
         )
     except Exception as e:  # noqa: BLE001 - every failure becomes a reason
-        logger.info(f"AI connection test failed for {source}/{model}: {e}")
-        reason = str(e)
-        if source == "ollama":
-            reason += _ollama_failure_hint(model, server_url_override)
-        elif source in ("openai", "anthropic"):
-            reason += _cloud_failure_hint(
-                source, reason, server_url_override, api_key_supplied
-            )
+        # Full detail (message + traceback) goes to the server log only; the
+        # user gets a category-based explanation built by _failure_reason,
+        # never the exception text itself.
+        logger.info(
+            f"AI connection test failed for {source}/{model}",
+            exc_info=True,
+        )
+        reason = failure_reason(e, source, model, server_url_override, api_key_supplied)
         return _result(False, source, model, reason)
 
     return _result(True, source, model, None)
