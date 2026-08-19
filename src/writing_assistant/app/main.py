@@ -538,7 +538,9 @@ async def generate_text(
                     "Invalid generation settings (ValueError). Details are "
                     "in the server log."
                 )
-            raise HTTPException(status_code=400, detail=f"Failed to generate text: {hint}")
+            raise HTTPException(
+                status_code=400, detail=f"Failed to generate text: {hint}"
+            )
 
         category = ai_connection.classify_failure(e)
         if category in ("credentials", "missing_model", "connection"):
@@ -550,7 +552,9 @@ async def generate_text(
             reason = ai_connection.failure_reason(
                 e, norm_source, norm_model, ui_server_url, ui_api_key
             )
-            raise HTTPException(status_code=502, detail=f"Failed to generate text: {reason}")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to generate text: {reason}"
+            )
         raise HTTPException(status_code=500, detail="Failed to generate text")
 
 

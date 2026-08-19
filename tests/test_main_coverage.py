@@ -723,7 +723,9 @@ def test_generate_text_missing_ollama_model(authenticated_client):
     pull command, not as an unreachable server."""
     with patch(
         "writing_assistant.app.main.cb.new_paragraph",
-        side_effect=LookupError("Model 'llama3.2' is not available on the Ollama server"),
+        side_effect=LookupError(
+            "Model 'llama3.2' is not available on the Ollama server"
+        ),
     ):
         response = authenticated_client.post(
             "/generate-text",

@@ -203,7 +203,9 @@ def failure_reason(
         return reason
 
     if category == "missing_model":
-        reason = f"The {name} server is reachable but does not have the model '{model}'."
+        reason = (
+            f"The {name} server is reachable but does not have the model '{model}'."
+        )
         if source == "ollama":
             reason += (
                 f" Pull it on the Ollama host (`ollama pull {model}`) or "
@@ -321,9 +323,7 @@ def test_connection(
             f"AI connection test failed for {source}/{model}",
             exc_info=True,
         )
-        reason = failure_reason(
-            e, source, model, server_url_override, api_key_supplied
-        )
+        reason = failure_reason(e, source, model, server_url_override, api_key_supplied)
         return _result(False, source, model, reason)
 
     return _result(True, source, model, None)

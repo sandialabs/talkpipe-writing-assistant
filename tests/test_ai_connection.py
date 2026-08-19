@@ -108,7 +108,9 @@ def test_connection_ollama_missing_model_suggests_pull():
     from writing_assistant.core import ai_connection
 
     with (
-        patch.object(ai_connection, "getPromptAdapter", return_value=MissingModelAdapter),
+        patch.object(
+            ai_connection, "getPromptAdapter", return_value=MissingModelAdapter
+        ),
         patch.object(ai_connection, "getPromptSources", return_value=["ollama"]),
         patch.object(ai_connection, "get_config", return_value={}),
     ):
