@@ -1,0 +1,1 @@
+Merge branch '${HeadBranch}': ${PullRequestTitle}
