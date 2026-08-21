@@ -38,9 +38,14 @@ jobs:
         # Install into a project venv rather than the interpreter itself: on a
         # self-hosted runner /opt/hostedtoolcache is a volume shared by every
         # job, so installing there leaks packages between repos.
-        python -m venv .venv
+        # --upgrade-deps: a fresh venv seeds pip and, on Python < 3.12,
+        # setuptools from the interpreter's bundled wheels, which lag PyPI
+        # by many releases. Nothing here depends on setuptools at runtime,
+        # but that seeded copy sits in the scanned environment and has
+        # failed the Safety scan (CVE-2026-59890, fixed in setuptools 83),
+        # so upgrade the seeded packages to current releases first.
+        python -m venv --upgrade-deps .venv
         echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-        .venv/bin/python -m pip install --upgrade pip
         .venv/bin/pip install -e .[dev]
 
     - name: Run tests with coverage
@@ -71,9 +76,8 @@ jobs:
     - name: Install dependencies
       run: |
         # see the note on the test job's install step
-        python -m venv .venv
+        python -m venv --upgrade-deps .venv
         echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-        .venv/bin/python -m pip install --upgrade pip
         .venv/bin/pip install -e ".[dev]"
 
     - name: Ruff lint
@@ -119,9 +123,8 @@ jobs:
     - name: Install dependencies for security scan
       run: |
         # see the note on the test job's install step
-        python -m venv .venv
+        python -m venv --upgrade-deps .venv
         echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-        .venv/bin/python -m pip install --upgrade pip
         .venv/bin/pip install -e .[dev,security]
 
     - name: Run Bandit security scan

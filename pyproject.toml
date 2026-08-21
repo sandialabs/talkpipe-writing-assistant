@@ -1,5 +1,7 @@
 [build-system]
-requires = ["setuptools", "setuptools_scm"]
+# setuptools floor is a security minimum (CVE-2026-59890, fixed in 83.0.0);
+# it only governs the isolated build environment, not the installed app.
+requires = ["setuptools>=83", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
