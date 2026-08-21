@@ -23,11 +23,11 @@ def test_docker_latest_uses_prerelease_flag_not_substring_checks(
     assert "contains(github.ref_name, 'alpha')" not in workflow_text
 
 
-def test_docker_experimental_for_develop_push_and_prerelease_releases(
+def test_docker_experimental_for_prerelease_releases(
     workflow_text: str,
 ) -> None:
     assert (
-        "type=raw,value=experimental,enable=${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'release' && github.event.release.prerelease) }}"
+        "type=raw,value=experimental,enable=${{ github.event_name == 'release' && github.event.release.prerelease }}"
         in workflow_text
     )
 

@@ -22,9 +22,9 @@ CI publishes a public image to
 | **Platforms** | Linux **amd64** and **arm64** (release builds). The app runs in a **Linux** container; on Windows and macOS use [Podman](https://podman.io/) / Podman Desktop or [Docker Desktop](https://docs.docker.com/desktop/) (they run Linux containers under the hood). |
 
 **Tags (typical):** `latest` — stable GitHub Release (not marked pre-release);
-`experimental` — pushes to the `develop` branch or a pre-release GitHub
-Release; branch names (e.g. `main`) and commit SHAs are also published. Check
-the package page for the exact tag after a workflow run.
+`experimental` — a pre-release GitHub Release; branch names (e.g. `main`) and
+commit SHAs are also published. Check the package page for the exact tag
+after a workflow run.
 
 **Registry login:** This package is **public**, so you can `pull` and `run`
 without logging in to GHCR. You only need `podman login ghcr.io` if the image

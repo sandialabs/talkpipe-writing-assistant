@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, master, 'bugfix/**', 'feature/**', "chore/**" ]
+    branches: [ main, 'bugfix/**', 'feature/**', "chore/**" ]
   pull_request:
-    branches: [ main, develop, master, 'bugfix/**', 'feature/**', "chore/**"  ]
+    branches: [ main, 'bugfix/**', 'feature/**', "chore/**"  ]
   release:
     types: [ published ]
 
@@ -209,7 +209,7 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=sha
           type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
-          type=raw,value=experimental,enable=${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'release' && github.event.release.prerelease) }}
+          type=raw,value=experimental,enable=${{ github.event_name == 'release' && github.event.release.prerelease }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v7
