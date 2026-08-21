@@ -46,7 +46,7 @@ podman run --rm -p 8001:8001 \
 
 Then open **http://localhost:8001** (use `http`, not `https`). `docker run` works with the same flags. `run` pulls the image automatically — no separate `pull` step is needed.
 
-**Tags:** `latest` — stable release; `experimental` — pre-releases; branch names and commit SHAs are also published.
+**Tags:** `latest` — stable release; `experimental` — pre-releases. Images are published only on releases, each also tagged with its version and commit SHA.
 
 For Windows notes, connectivity troubleshooting, building from a local clone,
 and production deployment, see the

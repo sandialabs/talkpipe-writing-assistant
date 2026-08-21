@@ -32,6 +32,12 @@ def test_docker_experimental_for_prerelease_releases(
     )
 
 
+def test_container_push_only_on_release(workflow_text: str) -> None:
+    assert "push: ${{ github.event_name == 'release' }}" in workflow_text
+    assert "load: ${{ github.event_name != 'release' }}" in workflow_text
+    assert "push: true" not in workflow_text
+
+
 def test_multi_arch_only_on_release(workflow_text: str) -> None:
     assert (
         "platforms: ${{ github.event_name == 'release' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}"
