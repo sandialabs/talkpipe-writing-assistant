@@ -223,6 +223,24 @@ real round trip before generating — it reports exactly what is wrong
 > `ollama`, plus "Server default", which defers to the source configured on
 > the server (TalkPipe configuration).
 
+**Server default (administrators):** to give every account a working model
+without each user visiting AI Settings, set TalkPipe's default source and
+model in the server's environment before starting it — users who leave AI
+Source on "Server default" and Model blank then use it:
+
+```bash
+export TALKPIPE_DEFAULT_MODEL_SOURCE=ollama
+export TALKPIPE_DEFAULT_MODEL_NAME=llama3.1:8b
+export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"   # if not local
+writing-assistant --host 0.0.0.0 --disable-custom-env-vars
+```
+
+The same keys can go in `~/.talkpipe.toml` (`default_model_source = "ollama"`,
+`default_model_name = "llama3.1:8b"`) of the account running the server;
+environment variables override the file. **Test Connection** with the
+Server-default source reports which model the server resolved. Any source
+or model a user picks in AI Settings takes precedence over the default.
+
 ### 4. Start Writing!
 
 1. After logging in, the editor opens directly — add a title and start typing.
@@ -261,10 +279,14 @@ between sections), and a suggestion panel that follows the section under
 the cursor.
 
 Before asking for suggestions, tell the TUI which model to use: press `F3`,
-open the **AI Settings** tab, choose the AI source and enter a model name
-(see [Configure AI Backend](#3-configure-ai-backend)), press **Test
+press `F3` again to switch to the **AI Settings** tab (or `Left`/`Right`
+with the tab bar focused), choose the AI source (`Enter` opens the
+dropdown) and enter a model name (see
+[Configure AI Backend](#3-configure-ai-backend)), press **Test
 Connection**, then **Save AI Settings**. The choice is stored with your
-account, so the web interface uses it too.
+account, so the web interface uses it too. If the administrator configured
+a server default, leave the source on "Server default" and the model blank
+— Test Connection shows which model the server resolves.
 
 | Key | Action |
 |-----|--------|
@@ -276,12 +298,19 @@ account, so the web interface uses it too.
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
-| `Ctrl+Q` | Quit |
+| `Esc` | Close a dialog or menu without changes |
+| `Ctrl+Q` | Quit (asks first if there are unsaved changes; `Ctrl+C` copies the editor selection and does not quit) |
+
+The editor works down to 60x16. Below 22 rows the mode buttons are hidden so
+the suggestion panel stays on screen (F5–F8 and Ctrl+U still work), and
+below 80 columns the buttons use short labels. If a suggestion comes back
+as several paragraphs, **Use This Text** inserts them as several sections.
 
 The login token is remembered in `~/.writing_assistant/tui_session.json`
 (mode 600; set `WRITING_ASSISTANT_TUI_HOME` to move it), so the next launch
-skips the login screen and reopens the last document. `writing-assistant-tui
---logout` forgets the saved session. Import/Export use the same JSON
+skips the login screen and reopens the last document at the section you
+were working on. `writing-assistant-tui --logout` forgets the saved
+session. Import/Export use the same JSON
 document format as the web UI, so files move between the two freely.
 
 ## Usage
@@ -295,7 +324,8 @@ writing-assistant
 # Custom port
 writing-assistant --port 8080
 
-# Custom host and port
+# Custom host and port (0.0.0.0 accepts connections from other machines;
+# the banner then shows this machine's name in the URLs)
 writing-assistant --host 0.0.0.0 --port 8080
 
 # Enable auto-reload for development
@@ -336,6 +366,8 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
 | `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
+| `TALKPIPE_DEFAULT_MODEL_SOURCE` | Server-wide default AI source, used when a request leaves the source on "Server default" (`openai`, `anthropic`, `ollama`) | unset (users must choose one) |
+| `TALKPIPE_DEFAULT_MODEL_NAME` | Server-wide default model name, used when a request leaves Model blank | unset |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
 | `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`) | last used, else `http://localhost:8001` |
 | `WRITING_ASSISTANT_TUI_HOME` | Directory for the TUI's saved session (`tui_session.json`) | `~/.writing_assistant` |
@@ -344,8 +376,8 @@ Configure the application with these environment variables:
 **Security Options:**
 - `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`): Prevents users from configuring environment variables through the browser interface
   - Use this for shared deployments or when you want centralized credential management
-  - Environment variables must be set at the server level (via shell environment)
-  - The Environment Variables section will be hidden in the UI
+  - Environment variables must be set at the server level (via shell environment) — see the server default above for choosing the model centrally as well
+  - The Connection (Server URL, API Key) and Environment Variables fields are hidden in both the web and terminal interfaces; the startup banner notes that the switch is on
 
 
 **Configure document metadata**:

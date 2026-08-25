@@ -18,6 +18,7 @@ from textual.widgets._tabbed_content import ContentTabs
 from writing_assistant.app.database import get_async_session
 from writing_assistant.app.main import app as fastapi_app
 from writing_assistant.tui.app import (
+    HELP_TEXT,
     ConfirmScreen,
     EditorScreen,
     LoginScreen,
@@ -763,3 +764,145 @@ async def test_new_document_dialog_fits_small_terminal(tui_app):
         await _settle(pilot)
         assert isinstance(app.screen, EditorScreen)
         assert app.screen.title_input.value == "Fits"
+
+
+async def test_short_terminal_keeps_suggestion_panel_on_screen(tui_app):
+    """At 20 rows the panel and mode buttons were laid out below the screen."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+    for size in ((70, 20), (80, 20), (60, 16)):
+        app = WritingAssistantApp(
+            Session.load(), client_factory=tui_app._client_factory
+        )
+        async with app.run_test(size=size) as pilot:
+            await _settle(pilot)
+            editor = app.screen
+            assert isinstance(editor, EditorScreen)
+            assert editor.has_class("compact"), size
+            panel = editor.query_one("#suggestion-panel").region
+            assert panel.bottom <= size[1] - 1, (size, panel)
+            assert editor.query_one("#suggestion-scroll").region.height >= 3
+            assert editor.query_one("#editor", TextArea).region.height >= 4
+            # The mode bar is hidden; the keys still generate.
+            assert not editor.query_one("#mode-bar").display
+            # Narrow (below 80 columns): shorter labels so the row fits.
+            label = str(editor.query_one("#mode-ideas", Button).label)
+            if size[0] < 80:
+                assert editor.has_class("narrow")
+                assert label == "Ideas"
+            else:
+                assert not editor.has_class("narrow")
+                assert label == "Ideas (F5)"
+    # Back at 80x24 the full labels and the mode bar are back.
+    app = WritingAssistantApp(Session.load(), client_factory=tui_app._client_factory)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await _settle(pilot)
+        editor = app.screen
+        assert not editor.has_class("compact")
+        assert not editor.has_class("narrow")
+        assert str(editor.query_one("#mode-ideas", Button).label) == "Ideas (F5)"
+        bar = editor.query_one("#mode-bar").region
+        assert bar.height == 3, bar
+        assert bar.bottom <= 23, bar
+        assert editor.query_one("#editor", TextArea).region.height >= 9
+
+
+async def test_settings_f3_switches_tabs_and_fits_narrow_terminal(tui_app):
+    """Keyboard users had no documented way to reach the AI Settings tab."""
+    app = tui_app
+    async with app.run_test(size=(70, 24)) as pilot:
+        # Register from the keyboard (the login box scrolls at this size).
+        await pilot.click("#toggle")
+        app.screen.query_one("#email", Input).value = EMAIL
+        app.screen.query_one("#password", Input).value = PASSWORD
+        confirm = app.screen.query_one("#confirm", Input)
+        confirm.value = PASSWORD
+        confirm.focus()
+        await pilot.press("enter")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen), _login_message(app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings, SettingsScreen)
+        tabs = settings.query_one("#tabs")
+        assert tabs.active == "tab-document"
+        await pilot.press("f3")
+        await _settle(pilot)
+        assert tabs.active == "tab-ai"
+        assert app.focused is settings.query_one("#source")
+        await pilot.press("f3")
+        await _settle(pilot)
+        assert tabs.active == "tab-document"
+        assert app.focused is settings.query_one("#writing_style")
+        # All four Document buttons fit in 70 columns (Close was clipped).
+        for button in settings.query("#document-buttons Button").results(Button):
+            assert button.region.x + button.region.width <= 70, button.label
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+
+
+async def test_relaunch_resumes_at_the_last_cursor_position(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("one\n\ntwo\n\nthree")
+        await pilot.pause()
+        await pilot.press("ctrl+s")
+        await _settle(pilot)
+        app.screen.query_one("#value", Input).value = "resume"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert editor.filename == "resume.json"
+        area.move_cursor((4, 2))
+        await pilot.pause()
+        assert "Section 3 of 3" in _text(editor.query_one("#section-info", Static))
+        await pilot.press("ctrl+q")
+        await _settle(pilot)
+    assert Session.load().last_cursor == [4, 2]
+
+    app2 = WritingAssistantApp(Session.load(), client_factory=app._client_factory)
+    async with app2.run_test(size=SIZE) as pilot:
+        await _settle(pilot)
+        editor = app2.screen
+        assert isinstance(editor, EditorScreen)
+        assert editor.filename == "resume.json"
+        assert editor.query_one("#editor", TextArea).cursor_location == (4, 2)
+        assert "Section 3 of 3" in _text(editor.query_one("#section-info", Static))
+        # A different document starts at the top again.
+        await pilot.press("ctrl+n")
+        await _settle(pilot)
+        app2.screen.query_one("#title", Input).value = "Other"
+        await pilot.click("#create")
+        await _settle(pilot)
+        assert Session.load().last_cursor is None
+
+
+async def test_register_mode_states_the_password_minimum(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        password = app.screen.query_one("#password", Input)
+        assert "8 characters" not in password.placeholder
+        await pilot.click("#toggle")
+        await _settle(pilot)
+        assert "at least 8 characters" in password.placeholder
+        await pilot.click("#toggle")
+        await _settle(pilot)
+        assert "8 characters" not in password.placeholder
+
+
+def test_help_text_covers_dialog_keys():
+    for phrase in ("Esc", "F3 switches", "Ctrl+C", "PageUp", "several paragraphs"):
+        assert phrase in HELP_TEXT, phrase
+
+
+def test_main_help_names_the_session_file(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
+    assert excinfo.value.code == 0
+    out = capsys.readouterr().out
+    assert "tui_session.json" in out
+    assert "WRITING_ASSISTANT_TUI_HOME" in out

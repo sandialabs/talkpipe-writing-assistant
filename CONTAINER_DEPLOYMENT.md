@@ -278,6 +278,7 @@ The compose file loads `.env` automatically if it exists (it is optional).
 - `ANTHROPIC_API_KEY`: Anthropic API key for Claude models
 - `ANTHROPIC_BASE_URL`: Alternate Anthropic-compatible endpoint (optional)
 - `TALKPIPE_OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
+- `TALKPIPE_DEFAULT_MODEL_SOURCE` / `TALKPIPE_DEFAULT_MODEL_NAME`: server-wide default AI source and model, used for accounts that leave AI Source on "Server default" and Model blank (see the README's Configure AI Backend section)
 - `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring connection settings (Server URL, API Key, environment variables) through the UI
 
 **Reaching services on the host:** inside the container, `localhost` is the
