@@ -11,13 +11,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
+from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
@@ -409,7 +412,10 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         with Vertical(classes="dialog dialog-settings"):
             yield Label("Settings", classes="dialog-title")
             with TabbedContent(id="tabs"):
-                with TabPane("Document", id="tab-document"), VerticalScroll():
+                with (
+                    TabPane("Document", id="tab-document"),
+                    VerticalScroll(can_focus=False),
+                ):
                     with Horizontal(classes="form-row"):
                         with Vertical(classes="form-col"):
                             yield Label("Writing style")
@@ -452,7 +458,10 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
                         id="word_limit",
                         type="integer",
                     )
-                with TabPane("AI Settings", id="tab-ai"), VerticalScroll():
+                with (
+                    TabPane("AI Settings", id="tab-ai"),
+                    VerticalScroll(can_focus=False),
+                ):
                     with Horizontal(classes="form-row"):
                         with Vertical(classes="form-col"):
                             yield Label("AI source")
@@ -1270,10 +1279,34 @@ class EditorScreen(Screen[None]):
                 confirm_label="Save",
             )
         )
-        if filename:
-            if not filename.endswith(".json"):
-                filename += ".json"
-            self._save_as(filename, save_as=True)
+        if not filename:
+            return
+        if not filename.endswith(".json"):
+            filename += ".json"
+        if filename != self.filename and not await self._confirm_overwrite(filename):
+            return
+        self._save_as(filename, save_as=True)
+
+    async def _confirm_overwrite(self, filename: str) -> bool:
+        """Ask before Save As replaces a different document in the library."""
+        try:
+            documents = await self.client.list_documents()
+        except AuthError:
+            await self._session_expired()
+            return False
+        except ApiError as exc:
+            self.notify(exc.message, severity="error", timeout=10)
+            return False
+        if not any(doc.get("filename") == filename for doc in documents):
+            return True
+        result = await self.app.push_screen_wait(
+            ConfirmScreen(
+                "Overwrite document",
+                f'"{filename}" already exists. Replace it with this document?',
+                confirm_label="Overwrite",
+            )
+        )
+        return bool(result)
 
     @work
     async def _save_as(self, filename: str, *, save_as: bool) -> None:
@@ -1588,7 +1621,10 @@ class EditorScreen(Screen[None]):
                 ):
                     self.metadata["source"] = new_ai["source"]
                     self.metadata["model"] = new_ai["model"]
-                    self._mark_dirty()
+                    # An empty, never-saved document has nothing to lose, so
+                    # do not turn it into "unsaved changes" on quit.
+                    if self.filename or self.title_input.value or self.editor.text:
+                        self._mark_dirty()
                 self.notify("AI settings saved.")
 
 
@@ -1607,12 +1643,21 @@ def _suggest_filename(title: str) -> str:
 
 
 def _format_timestamp(value: Any) -> str:
+    """Render a server timestamp in local time.
+
+    The server stamps documents and snapshots in UTC without an offset;
+    shown as-is they contradict the user's clock (and the local-time stamp
+    in snapshot names), so naive values are treated as UTC.
+    """
     if not value:
         return ""
     try:
-        return datetime.fromisoformat(str(value)).strftime("%Y-%m-%d %H:%M")
+        moment = datetime.fromisoformat(str(value))
     except ValueError:
         return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
 # --------------------------------------------------------------------------
@@ -1620,11 +1665,73 @@ def _format_timestamp(value: Any) -> str:
 # --------------------------------------------------------------------------
 
 
+class EditorCommands(Provider):
+    """Command-palette (Ctrl+P) entries for the editor's actions.
+
+    Mirrors the File menu, Settings, Help and the generation modes so the
+    palette advertised in the footer can find the application's own
+    commands, not just Textual's built-ins.
+    """
+
+    def _commands(self) -> list[tuple[str, str, Callable[[], Any]]]:
+        screen = self.screen
+        if not isinstance(screen, EditorScreen):
+            return []
+        commands: list[tuple[str, str, Callable[[], Any]]] = [
+            (f"{label}: {help_text}", "", getattr(screen, f"action_{name}"))
+            for name, label, help_text in EDITOR_COMMANDS
+        ]
+        commands.extend(
+            (
+                f"{label} the current section",
+                f"AI suggestion ({key.upper()})",
+                partial(screen.action_generate, mode),
+            )
+            for mode, label, key in GENERATION_MODES
+        )
+        return commands
+
+    async def search(self, query: str) -> Hits:
+        matcher = self.matcher(query)
+        for title, help_text, callback in self._commands():
+            score = matcher.match(title)
+            if score > 0:
+                yield Hit(
+                    score, matcher.highlight(title), callback, help=help_text or None
+                )
+
+    async def discover(self) -> Hits:
+        for title, help_text, callback in self._commands():
+            yield DiscoveryHit(title, callback, help=help_text or None)
+
+
+EDITOR_COMMANDS: list[tuple[str, str, str]] = [
+    ("new", "New document", "Start a new document (Ctrl+N)"),
+    ("save", "Save", "Save the document (Ctrl+S)"),
+    ("save_as", "Save As", "Save the document under another name"),
+    ("open", "Open", "Open a document from the library (Ctrl+O)"),
+    ("delete", "Delete document", "Delete the open document from the library"),
+    ("snapshot", "Create snapshot", "Keep a copy of the saved document"),
+    ("revert", "Revert to snapshot", "Load an earlier snapshot into the editor"),
+    ("import", "Import from file", "Load a document JSON file"),
+    ("export", "Export to file", "Write the document JSON to a file"),
+    ("copy", "Copy document to clipboard", "Copy the document text"),
+    ("settings", "Settings", "Document and AI settings (F3)"),
+    ("help", "Help", "Keyboard reference (F1)"),
+    ("use_suggestion", "Use suggestion", "Replace the section with it (Ctrl+U)"),
+    ("logout", "Log out", "Forget the saved session and return to login"),
+]
+
+
 class WritingAssistantApp(App[None]):
     """Textual application: login screen first, then the editor."""
 
     TITLE = "Writing Assistant"
     CSS_PATH = "app.tcss"
+    COMMANDS: ClassVar[set[type[Provider] | Callable[[], type[Provider]]]] = {
+        *App.COMMANDS,
+        EditorCommands,
+    }
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
@@ -1713,8 +1820,8 @@ def main(argv: list[str] | None = None) -> None:
         "--server",
         default=None,
         help=(
-            "Server URL (default: the last one used, WRITING_ASSISTANT_TUI_SERVER, "
-            "or http://localhost:8001)"
+            "Server URL (default: WRITING_ASSISTANT_TUI_SERVER if set, else the "
+            "last one used, else http://localhost:8001)"
         ),
     )
     parser.add_argument(
