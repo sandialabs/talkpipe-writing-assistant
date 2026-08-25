@@ -13,7 +13,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -749,8 +749,7 @@ class LoginScreen(Screen[None]):
     async def _authenticate(
         self, server: str, email: str, password: str, register: bool
     ) -> None:
-        app = self.app
-        assert isinstance(app, WritingAssistantApp)
+        app = cast("WritingAssistantApp", self.app)
         client = app.make_client(server)
         try:
             if register:
@@ -902,9 +901,9 @@ class EditorScreen(Screen[None]):
         )
 
     async def _session_expired(self) -> None:
-        app = self.app
-        assert isinstance(app, WritingAssistantApp)
-        app.back_to_login("Your session has expired. Please log in again.")
+        cast("WritingAssistantApp", self.app).back_to_login(
+            "Your session has expired. Please log in again."
+        )
 
     # -- helpers ---------------------------------------------------------------
 
@@ -1499,9 +1498,7 @@ class EditorScreen(Screen[None]):
         await self.client.logout()
         self.session.token = None
         self.session.save()
-        app = self.app
-        assert isinstance(app, WritingAssistantApp)
-        app.back_to_login("")
+        cast("WritingAssistantApp", self.app).back_to_login("")
 
     @work
     async def action_quit_app(self) -> None:
