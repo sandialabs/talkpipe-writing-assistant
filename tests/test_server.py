@@ -43,12 +43,17 @@ def test_main_custom_arguments(mock_port_check, mock_uvicorn_run):
 @patch("writing_assistant.app.server.uvicorn.run")
 @patch("sys.argv", ["server.py", "--disable-custom-env-vars"])
 @patch("writing_assistant.app.server._fail_if_port_in_use")
-def test_main_disable_custom_env_vars(mock_port_check, mock_uvicorn_run):
+def test_main_disable_custom_env_vars(mock_port_check, mock_uvicorn_run, monkeypatch):
     """Test main function with custom env vars disabled."""
+    import writing_assistant.app.main as main_module
     from writing_assistant.app.server import main
 
+    # main() flips the module-level flag; restore it so later tests (the TUI
+    # settings dialog, for one) see the default.
+    monkeypatch.setattr(main_module, "ALLOW_CUSTOM_ENV_VARS", True)
     main()
 
+    assert main_module.ALLOW_CUSTOM_ENV_VARS is False
     # Verify uvicorn.run was called
     mock_uvicorn_run.assert_called_once()
 
