@@ -139,6 +139,34 @@ def test_main_prints_server_info(mock_port_check, mock_print, mock_uvicorn_run):
     assert any("Register a new account at:" in call for call in print_calls)
 
 
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--host", "0.0.0.0", "--disable-custom-env-vars"])
+@patch("builtins.print")
+@patch("writing_assistant.app.server._fail_if_port_in_use")
+def test_main_banner_for_wildcard_bind(
+    mock_port_check, mock_print, mock_uvicorn_run, monkeypatch
+):
+    """`http://0.0.0.0:8001/` is not a URL anyone can open: the banner names
+    the machine instead, says it listens on all interfaces, and notes that
+    custom environment variables are off."""
+    import socket
+
+    import writing_assistant.app.main as main_module
+    from writing_assistant.app.server import main
+
+    monkeypatch.setattr(main_module, "ALLOW_CUSTOM_ENV_VARS", True)
+    main()
+
+    lines = [call[0][0] for call in mock_print.call_args_list if call[0]]
+    access = next(line for line in lines if "Access your writing assistant at:" in line)
+    assert "0.0.0.0" not in access
+    assert f"http://{socket.gethostname()}:8001/" in access
+    assert any("Listening on all interfaces (0.0.0.0)" in line for line in lines)
+    assert any("Custom environment variables are disabled" in line for line in lines)
+    # The bind address itself is unchanged.
+    assert mock_uvicorn_run.call_args.kwargs["host"] == "0.0.0.0"
+
+
 @patch("writing_assistant.app.server.asyncio.run")
 @patch("sys.argv", ["server.py", "--init-db"])
 def test_main_init_db_flag(mock_asyncio_run):

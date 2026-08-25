@@ -181,6 +181,27 @@ document_snapshots (
 )
 ```
 
+## Server-Wide AI Defaults
+
+Users normally pick an AI source and model themselves (Settings → AI
+Settings, in the web or terminal interface). To provide one centrally —
+typical together with `--disable-custom-env-vars`, so connection details
+stay on the server — set TalkPipe's default source and model in the
+environment the server starts from:
+
+```bash
+export TALKPIPE_DEFAULT_MODEL_SOURCE=ollama          # openai | anthropic | ollama
+export TALKPIPE_DEFAULT_MODEL_NAME=llama3.1:8b
+export TALKPIPE_OLLAMA_SERVER_URL=http://ollama-host:11434   # for ollama
+writing-assistant --host 0.0.0.0 --disable-custom-env-vars
+```
+
+Accounts that leave AI Source on "Server default" and Model blank then use
+that model; a source/model chosen by a user overrides it. The same keys can
+live in `~/.talkpipe.toml` (`default_model_source`, `default_model_name`)
+of the account running the server. Cloud keys (`OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`) are set the same way, server-side.
+
 ## Common Tasks
 
 ### Creating the First Admin User

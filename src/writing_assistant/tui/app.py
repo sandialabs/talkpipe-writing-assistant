@@ -22,6 +22,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.events import Resize
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
@@ -103,6 +104,7 @@ HELP_TEXT = """\
   F7      Improve
   F8      Proofread
   Ctrl+U  Use the suggestion as the section text
+  (A suggestion with several paragraphs becomes several sections.)
 
 [b]Documents[/b]
   F2      File menu: New, Save, Save As, Open, Delete, Create snapshot,
@@ -113,7 +115,19 @@ HELP_TEXT = """\
   F3      Settings: writing style, tone, audience, context, directive,
           word limit; AI source/model, connection, environment variables
   F1      This help
-  Ctrl+Q  Quit
+  Ctrl+Q  Quit (asks first if there are unsaved changes)
+  Ctrl+C  Copies the selection in the editor; it does not quit
+
+[b]Dialogs[/b]
+  Esc         Close any dialog or menu without changes
+  Enter       Confirm (or open a dropdown, then Up/Down and Enter)
+  Tab         Next field; Shift+Tab previous
+  In Settings, F3 switches between the Document and AI Settings tabs
+  (so do Left/Right while the tab bar is focused).
+  Long dialogs such as this one scroll: Up/Down, PageUp/PageDown.
+
+On a short terminal (fewer than 22 rows) the mode buttons are hidden to
+keep the suggestion panel on screen; the keys above still work.
 
 Documents are stored on the writing-assistant server, in the same per-user
 library the web interface uses, so you can switch between the two freely.
@@ -390,7 +404,13 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
     settings as defaults) or ``None`` when cancelled.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+    # F3 opened the dialog, so F3 again is the natural "other tab" key for
+    # someone working from the keyboard (Textual's own way — Left/Right on
+    # the focused tab bar — is not discoverable).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("f3", "next_tab", "Switch tab", priority=True),
+    ]
 
     def __init__(
         self,
@@ -411,6 +431,10 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         ai = self._ai
         with Vertical(classes="dialog dialog-settings"):
             yield Label("Settings", classes="dialog-title")
+            yield Static(
+                "F3 switches tabs · Tab moves between fields · Esc closes",
+                classes="dialog-hint",
+            )
             with TabbedContent(id="tabs"):
                 with (
                     TabPane("Document", id="tab-document"),
@@ -521,7 +545,7 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
             with Horizontal(classes="dialog-buttons", id="document-buttons"):
                 yield Button("Save to Document", variant="primary", id="document")
                 yield Button("Save as Default", variant="success", id="default")
-                yield Button("Reset to Defaults", id="reset")
+                yield Button("Reset", id="reset")
                 yield Button("Close", id="cancel")
             with Horizontal(classes="dialog-buttons hidden", id="ai-buttons"):
                 yield Button("Test Connection", id="test")
@@ -610,6 +634,13 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
     @on(Button.Pressed, "#cancel-ai")
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+    def action_next_tab(self) -> None:
+        tabs = self.query_one("#tabs", TabbedContent)
+        tabs.active = "tab-ai" if tabs.active == "tab-document" else "tab-document"
+        # Land on the first field of the new tab, as Tab from the bar would.
+        first = "#source" if tabs.active == "tab-ai" else "#writing_style"
+        self.query_one(first).focus()
 
     @on(TabbedContent.TabActivated, "#tabs")
     def _tab_changed(self, event: TabbedContent.TabActivated) -> None:
@@ -740,6 +771,9 @@ class LoginScreen(Screen[None]):
         )
         self.query_one("#toggle", Button).label = (
             "Back to login" if self._register_mode else "Create an account"
+        )
+        self.query_one("#password", Input).placeholder = (
+            "password (at least 8 characters)" if self._register_mode else "password"
         )
         self._set_message("")
 
@@ -889,7 +923,30 @@ class EditorScreen(Screen[None]):
     async def on_mount(self) -> None:
         editor = self.query_one("#editor", TextArea)
         editor.focus()
+        self._fit_to_size(self.size.width, self.size.height)
         await self._load_server_state()
+
+    def on_resize(self, event: Resize) -> None:
+        self._fit_to_size(event.size.width, event.size.height)
+
+    # Rows: topbar 1 + title 3 + editor (min 4) + panel (min 10) + footer 1 = 19,
+    # so a 24-row terminal has spare rows but a 20-row one has not: below
+    # COMPACT_ROWS the mode bar is dropped (the keys still work). Columns: the
+    # five labelled buttons fill exactly 80 cells; below that, shorter labels.
+    COMPACT_ROWS: ClassVar[int] = 22
+    NARROW_COLUMNS: ClassVar[int] = 80
+
+    def _fit_to_size(self, width: int, height: int) -> None:
+        self.set_class(height < self.COMPACT_ROWS, "compact")
+        narrow = width < self.NARROW_COLUMNS
+        self.set_class(narrow, "narrow")
+        for mode, label, key in GENERATION_MODES:
+            self.query_one(f"#mode-{mode}", Button).label = (
+                label if narrow else f"{label} ({key.upper()})"
+            )
+        self.query_one("#use-suggestion", Button).label = (
+            "Use (Ctrl+U)" if narrow else "Use This Text (Ctrl+U)"
+        )
 
     # -- server state ----------------------------------------------------------
 
@@ -916,8 +973,9 @@ class EditorScreen(Screen[None]):
             self.metadata.get("model") or self.ai.get("model")
         ):
             self.notify(
-                "No AI source or model is configured yet. Press F3 → AI Settings "
-                "to choose one before asking for suggestions.",
+                "No AI source or model is chosen yet. Press F3 → AI Settings to "
+                "choose one (Test Connection tells you whether the server "
+                "already provides a default).",
                 title="First run",
                 timeout=15,
             )
@@ -966,9 +1024,28 @@ class EditorScreen(Screen[None]):
 
     def _set_filename(self, filename: str | None) -> None:
         self.filename = filename
+        if filename != self.session.last_filename:
+            self.session.last_cursor = None
         self.session.last_filename = filename
         self.session.save()
         self._refresh_header()
+
+    def remember_cursor(self) -> None:
+        """Store the cursor position so the next launch resumes there."""
+        if self.filename and self.filename == self.session.last_filename:
+            row, col = self.editor.cursor_location
+            self.session.last_cursor = [row, col]
+            self.session.save()
+
+    def _restore_cursor(self) -> None:
+        saved = self.session.last_cursor
+        if not saved or len(saved) != 2:
+            return
+        editor = self.editor
+        row = max(0, min(int(saved[0]), editor.document.line_count - 1))
+        col = max(0, min(int(saved[1]), len(editor.document.get_line(row))))
+        editor.move_cursor((row, col), center=True)
+        self._update_current_section()
 
     def _refresh_header(self) -> None:
         name = self.filename or "Unsaved Document"
@@ -1322,6 +1399,7 @@ class EditorScreen(Screen[None]):
             return
         self._set_filename(filename)
         self._mark_dirty(False)
+        self.remember_cursor()
         self.notify(f"{message}: {filename}")
 
     @work
@@ -1382,6 +1460,9 @@ class EditorScreen(Screen[None]):
             return
         self._set_filename(filename)
         self._load_document_data(data)
+        if quiet:
+            # Reopened on launch: pick up where the last session left off.
+            self._restore_cursor()
         self.editor.focus()
         if not quiet:
             self.notify(f'Opened "{filename}".')
@@ -1569,6 +1650,7 @@ class EditorScreen(Screen[None]):
     async def action_quit_app(self) -> None:
         if not await self._confirm_discard("Quit"):
             return
+        self.remember_cursor()
         self.app.exit()
 
     # -- settings ---------------------------------------------------------------
@@ -1814,6 +1896,12 @@ def main(argv: list[str] | None = None) -> None:
             "Terminal interface for the TalkPipe Writing Assistant. Connects to "
             "a running writing-assistant server (start one with "
             "`writing-assistant`) and offers the same features as the web UI."
+        ),
+        epilog=(
+            "The login token and the last-open document are remembered in "
+            "~/.writing_assistant/tui_session.json (mode 600); set "
+            "WRITING_ASSISTANT_TUI_HOME to keep that file elsewhere. Press F1 "
+            "inside the application for the keyboard reference."
         ),
     )
     parser.add_argument(

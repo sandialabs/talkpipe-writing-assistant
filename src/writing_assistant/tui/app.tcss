@@ -109,8 +109,10 @@ Screen {
     padding: 0 1;
 }
 
+/* No vertical margins anywhere in the workspace: every row saved here is
+   a row of document text at 80x24. */
 #title {
-    margin: 1 0 0 0;
+    margin: 0;
     border: tall $primary-darken-1;
 }
 
@@ -118,10 +120,12 @@ Screen {
     border: tall $primary;
 }
 
+/* The editor gets the larger share: nine rows of text at 80x24 (the
+   suggestion panel keeps its minimum below), 14 at 100x30, 21 at 132x43. */
 #editor {
-    height: 1fr;
-    min-height: 6;
-    margin-top: 1;
+    height: 5fr;
+    min-height: 4;
+    margin: 0;
     border: round $primary-darken-1;
     background: $panel;
 }
@@ -131,14 +135,29 @@ Screen {
 }
 
 #suggestion-panel {
-    /* An even split with the editor: the suggestion is what the user reads,
-       and the editor scrolls. The minimum (border + header + 4 text rows +
-       mode bar) is the most that still fits in 24 rows with the editor's. */
-    height: 1fr;
+    /* Minimum: border (2) + header (1) + 4 text rows + mode bar (3). Below
+       ~22 rows the screen gets the `compact` class (see EditorScreen) and
+       the mode bar is hidden — the keys still work and the footer lists
+       them — so the panel stays on screen down to 16 rows. */
+    height: 4fr;
     min-height: 10;
-    margin-top: 1;
+    margin: 0;
     border: round $secondary;
     background: $panel;
+}
+
+EditorScreen.compact #suggestion-panel {
+    min-height: 6;
+}
+
+EditorScreen.compact #mode-bar {
+    display: none;
+}
+
+/* Narrow terminals: shorter button labels are swapped in by the screen. */
+EditorScreen.narrow #mode-bar Button {
+    margin: 0;
+    min-width: 8;
 }
 
 #suggestion-header {
@@ -240,9 +259,19 @@ ModalScreen {
     padding: 0 1;
 }
 
+/* Four buttons in a row must fit a 70-column terminal. */
+.dialog-settings .dialog-buttons Button {
+    min-width: 8;
+}
+
 .dialog-title {
     text-style: bold;
     color: $primary;
+    margin-bottom: 1;
+}
+
+.dialog-hint {
+    color: $text-muted;
     margin-bottom: 1;
 }
 
@@ -264,7 +293,7 @@ ModalScreen {
 }
 
 .dialog-buttons Button {
-    margin-right: 2;
+    margin-right: 1;
 }
 
 /* Flexible so the dialog (and its buttons) still fit in 24 rows. */

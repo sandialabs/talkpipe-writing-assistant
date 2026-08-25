@@ -29,6 +29,8 @@ class Session:
     token: str | None = None
     email: str | None = None
     last_filename: str | None = None
+    # [row, column] in ``last_filename`` when the TUI was last quit or saved.
+    last_cursor: list[int] | None = None
 
     @classmethod
     def load(cls, path: Path | None = None) -> Session:

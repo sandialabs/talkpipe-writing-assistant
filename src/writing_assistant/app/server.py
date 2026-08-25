@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import ipaddress
 import os
 import socket
 import sys
@@ -58,6 +59,16 @@ async def init_db() -> None:
     print("Database initialized successfully.")
 
 
+def _binds_all_interfaces(host: str) -> bool:
+    """True for the wildcard addresses (IPv4 or IPv6) and an empty host."""
+    if not host:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_unspecified
+    except ValueError:
+        return False
+
+
 def main() -> None:
     """Main entry point for the writing assistant server."""
     parser = argparse.ArgumentParser(
@@ -107,7 +118,7 @@ def main() -> None:
     # Set custom environment variables flag (the CLI flag forces it off;
     # otherwise the ALLOW_CUSTOM_ENV_VARS environment variable applies)
     if args.disable_custom_env_vars:
-        import writing_assistant.app.main as main_module
+        from . import main as main_module
 
         main_module.ALLOW_CUSTOM_ENV_VARS = False
 
@@ -125,18 +136,33 @@ def main() -> None:
 
     db_path = get_database_url().replace("sqlite+aiosqlite:///", "")
 
+    # A wildcard bind address is not a URL anyone can open: show the
+    # machine's name in the URLs and say so.
+    display_host = args.host
+    if _binds_all_interfaces(args.host):
+        display_host = socket.gethostname()
+    base = f"http://{display_host}:{args.port}"
+
     print("\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
-    print(
-        f"📝 Access your writing assistant at: http://{args.host}:{args.port}/",
-        flush=True,
-    )
-    print(
-        f"🔑 Register a new account at: http://{args.host}:{args.port}/register",
-        flush=True,
-    )
-    print(f"🔐 Login at: http://{args.host}:{args.port}/login", flush=True)
-    print(f"📚 API documentation: http://{args.host}:{args.port}/docs", flush=True)
+    print(f"📝 Access your writing assistant at: {base}/", flush=True)
+    if display_host != args.host:
+        print(
+            f"🌐 Listening on all interfaces ({args.host}); from other machines "
+            f"use this machine's name or IP address in place of {display_host}",
+            flush=True,
+        )
+    print(f"🔑 Register a new account at: {base}/register", flush=True)
+    print(f"🔐 Login at: {base}/login", flush=True)
+    print(f"📚 API documentation: {base}/docs", flush=True)
     print(f"💾 Database: {db_path}", flush=True)
+    from . import main as main_module
+
+    if not main_module.ALLOW_CUSTOM_ENV_VARS:
+        print(
+            "🔒 Custom environment variables are disabled: connection settings "
+            "(server URL, API key) come from the server's environment",
+            flush=True,
+        )
     print("=" * 80, flush=True)
     sys.stdout.flush()
 
