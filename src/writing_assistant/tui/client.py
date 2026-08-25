@@ -44,12 +44,16 @@ def _detail_message(response: httpx.Response) -> str:
             return str(reason)
         return str(reason or code or detail)
     if isinstance(detail, list):
-        # Pydantic validation errors
-        return "; ".join(
-            f"{'.'.join(str(p) for p in e.get('loc', []))}: {e.get('msg')}"
-            for e in detail
-            if isinstance(e, dict)
-        )
+        # Pydantic validation errors: name the field, not the request part.
+        messages = []
+        for entry in detail:
+            if not isinstance(entry, dict):
+                continue
+            loc = [str(part) for part in entry.get("loc", [])]
+            if len(loc) > 1 and loc[0] == "body":
+                loc = loc[1:]
+            messages.append(f"{'.'.join(loc)}: {entry.get('msg')}")
+        return "; ".join(messages)
     if isinstance(detail, str):
         return {
             "LOGIN_BAD_CREDENTIALS": "Incorrect email or password.",

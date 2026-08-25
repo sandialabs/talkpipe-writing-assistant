@@ -421,3 +421,168 @@ def test_main_parses_server_and_logout(monkeypatch, tmp_path):
     main(["--logout"])
     assert captured["session"].token is None
     assert Session.load().token is None
+
+
+async def test_opening_a_document_does_not_mark_it_dirty(tui_app):
+    """TextArea.Changed arrives after the load; it must not count as an edit."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await editor.client.save_document(
+            "clean.json", {"title": "Clean", "content": "alpha\n\nbeta", "sections": []}
+        )
+        await editor._open_document("clean.json")
+        await _settle(pilot)
+        assert editor.filename == "clean.json"
+        assert not editor.dirty
+        assert "●" not in _text(editor.query_one("#filename", Static))
+
+        # Quit must not ask about unsaved changes when nothing changed.
+        await pilot.press("ctrl+q")
+        await _settle(pilot)
+        assert not app.is_running
+
+    app2 = WritingAssistantApp(Session.load(), client_factory=app._client_factory)
+    async with app2.run_test(size=SIZE) as pilot:
+        await _settle(pilot)
+        assert isinstance(app2.screen, EditorScreen)
+        assert app2.screen.filename == "clean.json"
+        assert not app2.screen.dirty
+        # A real edit still marks the document dirty.
+        app2.screen.query_one("#editor", TextArea).insert("x")
+        await pilot.pause()
+        assert app2.screen.dirty
+
+
+async def test_save_ai_settings_applies_model_to_open_document(tui_app):
+    """Like the web client, saving AI settings updates the document's source/model."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.metadata["source"] = "ollama"
+        editor.metadata["model"] = "old-model"
+        editor.query_one("#editor", TextArea).load_text("some text")
+        await pilot.pause()
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        settings.query_one("#tabs").active = "tab-ai"
+        settings.query_one("#source").value = "ollama"
+        settings.query_one("#model", Input).value = "new-model"
+        settings.query_one("#ai", Button).press()
+        await _settle(pilot)
+        assert editor.metadata["model"] == "new-model"
+        assert editor._generation_fields("ideas", 0)["model"] == "new-model"
+
+
+async def test_connection_status_is_visible_without_scrolling(tui_app, mocker):
+    mocker.patch(
+        "writing_assistant.app.main.ai_connection.test_connection",
+        return_value={"available": True, "source": "ollama", "model": "m"},
+    )
+    app = tui_app
+    # 40 rows: the AI form is taller than the dialog, so a status line at the
+    # bottom of the scrolling form would be out of sight.
+    async with app.run_test(size=(120, 40)) as pilot:
+        await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        settings.query_one("#tabs").active = "tab-ai"
+        await _settle(pilot)
+        settings.query_one("#test", Button).press()
+        await _settle(pilot)
+        status = settings.query_one("#connection-status", Static)
+        assert "Connected to ollama / m" in _text(status)
+        region = status.region
+        assert region.height >= 1
+        assert 0 <= region.y < app.size.height
+        # Not inside the scrolling form: the buttons follow it on screen.
+        assert region.y < settings.query_one("#ai", Button).region.y
+
+
+async def test_login_buttons_fit_in_24_rows(tui_app):
+    app = tui_app
+    async with app.run_test(size=(80, 24)) as pilot:
+        await _settle(pilot)
+        assert isinstance(app.screen, LoginScreen)
+        for button_id in ("#submit", "#toggle", "#quit"):
+            region = app.screen.query_one(button_id, Button).region
+            assert region.height == 3, button_id
+            assert region.y + region.height <= 24, button_id
+        # Register mode adds a field; the box scrolls rather than clipping.
+        await pilot.click("#toggle")
+        await _settle(pilot)
+        app.screen.query_one("#submit", Button).focus()
+        await _settle(pilot)
+        region = app.screen.query_one("#submit", Button).region
+        assert region.y >= 0
+        assert region.y + region.height <= 24
+
+
+async def test_help_dialog_fits_small_terminal(tui_app):
+    app = tui_app
+    async with app.run_test(size=(80, 24)) as pilot:
+        # Register with the keyboard: in register mode the login box scrolls.
+        await pilot.click("#toggle")
+        app.screen.query_one("#email", Input).value = EMAIL
+        app.screen.query_one("#password", Input).value = PASSWORD
+        confirm = app.screen.query_one("#confirm", Input)
+        confirm.value = PASSWORD
+        confirm.focus()
+        await pilot.press("enter")
+        await _settle(pilot)
+        editor = app.screen
+        assert isinstance(editor, EditorScreen), _login_message(app)
+        await pilot.press("f1")
+        await _settle(pilot)
+        dialog = app.screen
+        assert dialog is not editor
+        ok = dialog.query_one("#ok", Button)
+        assert ok.region.y + ok.region.height <= 24
+        assert ok.region.x + ok.region.width <= 80
+        body = dialog.query_one(".dialog-body")
+        assert body.region.x + body.region.width <= 80
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is editor
+
+
+async def test_tab_moves_focus_out_of_the_editor(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("one\n\ntwo")
+        await pilot.pause()
+        area.focus()
+        await pilot.pause()
+        await pilot.press("tab")
+        await pilot.pause()
+        assert app.focused is not area
+        assert area.text == "one\n\ntwo"
+
+
+async def test_login_footer_shows_quit(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _settle(pilot)
+        assert isinstance(app.screen, LoginScreen)
+        keys = {binding.key for _, binding, *_ in app.screen.active_bindings.values()}
+        assert "ctrl+q" in keys
+        shown = [
+            binding
+            for _, binding, *_ in app.screen.active_bindings.values()
+            if binding.key == "ctrl+q"
+        ]
+        assert any(b.show for b in shown)
+
+
+async def test_first_run_hint_when_no_ai_configured(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        assert not editor.ai["source"]
+        assert not editor.metadata.get("source")
+        notifications = [n.message for n in app._notifications]
+        assert any("F3" in message for message in notifications), notifications

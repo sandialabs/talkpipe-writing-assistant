@@ -91,16 +91,26 @@ HELP_TEXT = """\
 [b]Editing[/b]
   Type in the editor; leave a blank line between sections (paragraphs).
   The suggestion panel follows the section under the cursor.
+  Tab / Shift+Tab move between the title, the editor, the suggestion
+  panel (arrow keys scroll it) and the buttons.
 
-[b]AI suggestions[/b]   (for the section under the cursor)
-  F5  Ideas       F6  Rewrite       F7  Improve       F8  Proofread
-  Ctrl+G  Ideas (same as F5)        Ctrl+U  Use the suggestion as the section text
+[b]AI suggestions[/b] (for the section under the cursor)
+  F5      Ideas (also Ctrl+G)
+  F6      Rewrite
+  F7      Improve
+  F8      Proofread
+  Ctrl+U  Use the suggestion as the section text
 
 [b]Documents[/b]
-  F2      File menu (New, Save, Save As, Open, Delete, Snapshots, Import, Export, Copy, Log out)
-  Ctrl+S  Save        Ctrl+O  Open        Ctrl+N  New
-  F3      Settings (document metadata, AI source/model, connection, environment)
-  F1      This help   Ctrl+Q  Quit
+  F2      File menu: New, Save, Save As, Open, Delete, Create snapshot,
+          Revert to snapshot, Import, Export, Copy, Log out
+  Ctrl+S  Save
+  Ctrl+O  Open
+  Ctrl+N  New
+  F3      Settings: writing style, tone, audience, context, directive,
+          word limit; AI source/model, connection, environment variables
+  F1      This help
+  Ctrl+Q  Quit
 
 Documents are stored on the writing-assistant server, in the same per-user
 library the web interface uses, so you can switch between the two freely.
@@ -124,7 +134,7 @@ class MessageScreen(ModalScreen[None]):
         self._markup = markup
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog dialog-wide"):
+        with Vertical(classes="dialog dialog-wide dialog-message"):
             yield Label(self._title, classes="dialog-title")
             with VerticalScroll(classes="dialog-body"):
                 yield Static(self._body, markup=self._markup)
@@ -496,7 +506,9 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
                             "disabled on this server).",
                             classes="muted",
                         )
-                    yield Static("", id="connection-status", classes="status-line")
+            # Outside the scrolling form so a Test Connection result is
+            # always on screen, next to the button that produced it.
+            yield Static("", id="connection-status", classes="status-line hidden")
             with Horizontal(classes="dialog-buttons", id="document-buttons"):
                 yield Button("Save to Document", variant="primary", id="document")
                 yield Button("Save as Default", variant="success", id="default")
@@ -595,6 +607,7 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         ai_tab = event.pane.id == "tab-ai"
         self.query_one("#document-buttons").set_class(ai_tab, "hidden")
         self.query_one("#ai-buttons").set_class(not ai_tab, "hidden")
+        self.query_one("#connection-status").set_class(not ai_tab, "hidden")
 
     @on(Select.Changed, "#source")
     @on(Input.Changed, "#model")
@@ -610,7 +623,7 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         if values is None:
             return
         status = self.query_one("#connection-status", Static)
-        status.update("⏳ Testing connection...")
+        status.update("Testing connection...")
         status.set_classes("status-line")
         self._run_test(values["ai"])
 
@@ -630,15 +643,18 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         except ApiError as exc:
             status.update(f"✗ {exc.message}")
             status.set_classes("status-line error")
+            self.notify(exc.message, severity="error", timeout=10)
             return
         if report.get("available"):
-            status.update(
-                f"✓ Connected to {report.get('source')} / {report.get('model')}"
-            )
+            message = f"Connected to {report.get('source')} / {report.get('model')}"
+            status.update(f"✓ {message}")
             status.set_classes("status-line success")
+            self.notify(message)
         else:
-            status.update(f"✗ {report.get('reason') or 'Connection failed.'}")
+            reason = str(report.get("reason") or "Connection failed.")
+            status.update(f"✗ {reason}")
             status.set_classes("status-line error")
+            self.notify(reason, severity="error", timeout=10)
 
 
 # --------------------------------------------------------------------------
@@ -649,10 +665,6 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
 class LoginScreen(Screen[None]):
     """Sign in or create an account on the writing-assistant server."""
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("ctrl+q", "app.quit", "Quit"),
-    ]
-
     def __init__(self, session: Session, *, message: str = "") -> None:
         super().__init__()
         self._session = session
@@ -660,7 +672,7 @@ class LoginScreen(Screen[None]):
         self._register_mode = False
 
     def compose(self) -> ComposeResult:
-        with Container(id="login-wrapper"), Vertical(id="login-box"):
+        with Container(id="login-wrapper"), VerticalScroll(id="login-box"):
             yield Static("TalkPipe Writing Assistant", id="login-title")
             yield Static(
                 "Making the AI write [i]with[/i] you, not [i]for[/i] you.",
@@ -742,7 +754,7 @@ class LoginScreen(Screen[None]):
                 self._set_message("Passwords do not match.", error=True)
                 return
         self.query_one("#submit", Button).disabled = True
-        self._set_message("⏳ Contacting server...")
+        self._set_message("Contacting server...")
         self._authenticate(server, email, password, self._register_mode)
 
     @work(exclusive=True)
@@ -811,6 +823,11 @@ class EditorScreen(Screen[None]):
         self.defaults: dict[str, Any] = dict(DEFAULT_METADATA)
         self.allow_custom_env_vars = True
         self.dirty = False
+        # Title/text as of the last load or save. TextArea.Changed is
+        # delivered after load_text() returns, so the dirty flag is derived
+        # from a comparison with this rather than from the event alone.
+        self._clean_title = ""
+        self._clean_text = ""
         self._generating = False
         self._loading = False
 
@@ -823,11 +840,13 @@ class EditorScreen(Screen[None]):
             yield Static(self.session.email or "", id="user")
         with Vertical(id="workspace"):
             yield Input(placeholder="Enter document title...", id="title")
+            # tab_behavior="focus": prose needs no tab characters, and Tab is
+            # the only forward keyboard path to the suggestion panel/buttons.
             yield TextArea(
                 id="editor",
                 soft_wrap=True,
                 show_line_numbers=False,
-                tab_behavior="indent",
+                tab_behavior="focus",
             )
             with Vertical(id="suggestion-panel"):
                 with Horizontal(id="suggestion-header"):
@@ -884,6 +903,15 @@ class EditorScreen(Screen[None]):
         self._apply_preferences(prefs)
         if self.session.last_filename:
             await self._open_document(self.session.last_filename, quiet=True)
+        if not (self.metadata.get("source") or self.ai.get("source")) or not (
+            self.metadata.get("model") or self.ai.get("model")
+        ):
+            self.notify(
+                "No AI source or model is configured yet. Press F3 → AI Settings "
+                "to choose one before asking for suggestions.",
+                title="First run",
+                timeout=15,
+            )
 
     def _apply_preferences(self, prefs: dict[str, Any]) -> None:
         for key in DEFAULT_METADATA:
@@ -939,6 +967,9 @@ class EditorScreen(Screen[None]):
         self.query_one("#filename", Static).update(f"{name}{marker}")
 
     def _mark_dirty(self, dirty: bool = True) -> None:
+        if not dirty:
+            self._clean_title = self.title_input.value
+            self._clean_text = self.editor.text
         if self.dirty != dirty:
             self.dirty = dirty
             self._refresh_header()
@@ -982,7 +1013,8 @@ class EditorScreen(Screen[None]):
         if self._loading:
             return
         self.sections = parse_sections(self.editor.text, self.sections)
-        self._mark_dirty()
+        if self.editor.text != self._clean_text:
+            self._mark_dirty()
         self._update_current_section()
 
     @on(TextArea.SelectionChanged, "#editor")
@@ -993,7 +1025,7 @@ class EditorScreen(Screen[None]):
 
     @on(Input.Changed, "#title")
     def _title_changed(self) -> None:
-        if not self._loading:
+        if not self._loading and self.title_input.value != self._clean_title:
             self._mark_dirty()
 
     def _update_current_section(self) -> None:
@@ -1082,7 +1114,7 @@ class EditorScreen(Screen[None]):
         text = self.query_one("#suggestion-text", Static)
         for button in self.query(".mode").results(Button):
             button.disabled = True
-        status.update(f"⏳ {mode}…")
+        status.update(f"Generating {mode}…")
         text.update("Generating AI suggestion...")
         section = self.sections[index]
         try:
@@ -1548,10 +1580,15 @@ class EditorScreen(Screen[None]):
             else:
                 self.defaults["source"] = new_ai["source"]
                 self.defaults["model"] = new_ai["model"]
-                if not self.metadata.get("source"):
+                # The open document uses the new source/model from now on,
+                # as in the web client; it is saved with the next Save.
+                if (
+                    self.metadata.get("source") != new_ai["source"]
+                    or self.metadata.get("model") != new_ai["model"]
+                ):
                     self.metadata["source"] = new_ai["source"]
-                if not self.metadata.get("model"):
                     self.metadata["model"] = new_ai["model"]
+                    self._mark_dirty()
                 self.notify("AI settings saved.")
 
 
@@ -1589,7 +1626,7 @@ class WritingAssistantApp(App[None]):
     TITLE = "Writing Assistant"
     CSS_PATH = "app.tcss"
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("ctrl+q", "quit", "Quit", show=False, priority=True),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
     ]
 
     def __init__(
