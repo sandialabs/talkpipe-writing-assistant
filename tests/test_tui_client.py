@@ -206,7 +206,11 @@ def test_detail_message_shapes():
         _detail_message(
             response({"detail": [{"loc": ["body", "email"], "msg": "invalid"}]})
         )
-        == "body.email: invalid"
+        == "email: invalid"
+    )
+    assert (
+        _detail_message(response({"detail": [{"loc": ["query", "q"], "msg": "bad"}]}))
+        == "query.q: bad"
     )
     assert _detail_message(response({"message": "boom"})) == "boom"
     assert _detail_message(httpx.Response(500, text="oops")) == "oops"

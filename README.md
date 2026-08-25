@@ -181,7 +181,7 @@ Point the application at an LLM endpoint — OpenAI, Anthropic, and Ollama are s
    ```bash
    export OPENAI_API_KEY="sk-your-api-key-here"
    ```
-3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to your model of choice.
+3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to your model of choice (in the terminal interface: `F3` → AI Settings).
 
 **Option B: Anthropic (Cloud)**
 1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
@@ -189,13 +189,13 @@ Point the application at an LLM endpoint — OpenAI, Anthropic, and Ollama are s
    ```bash
    export ANTHROPIC_API_KEY="sk-ant-your-api-key-here"
    ```
-3. In the web interface: Settings → AI Settings → Set Source to `anthropic` and Model to your model of choice.
+3. In the web interface: Settings → AI Settings → Set Source to `anthropic` and Model to your model of choice (in the terminal interface: `F3` → AI Settings).
 
 **Option C: Ollama (Local, Free)**
 1. Install Ollama from [ollama.com](https://ollama.com)
 2. Pull a model: `ollama pull [model name]`
 3. Start Ollama: `ollama serve`
-4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name]
+4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name] (in the terminal interface: `F3` → AI Settings)
 
 If Ollama runs on a different machine (or a non-default port), set
 `TALKPIPE_OLLAMA_SERVER_URL` before starting the server (if the server is
@@ -254,10 +254,17 @@ writing-assistant-tui
 
 Log in (or choose **Create an account**) on the first screen — the server
 URL defaults to `http://localhost:8001`; pass `--server http://host:port` or
-set `WRITING_ASSISTANT_TUI_SERVER` for a remote server. The editor then
+set `WRITING_ASSISTANT_TUI_SERVER` if the server runs on another machine or
+port (for example after `writing-assistant --port 8080`). The editor then
 works like the web one: a title field, the document (leave a blank line
 between sections), and a suggestion panel that follows the section under
 the cursor.
+
+Before asking for suggestions, tell the TUI which model to use: press `F3`,
+open the **AI Settings** tab, choose the AI source and enter a model name
+(see [Configure AI Backend](#3-configure-ai-backend)), press **Test
+Connection**, then **Save AI Settings**. The choice is stored with your
+account, so the web interface uses it too.
 
 | Key | Action |
 |-----|--------|
@@ -267,6 +274,7 @@ the cursor.
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
+| `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Ctrl+Q` | Quit |
 
 The login token is remembered in `~/.writing_assistant/tui_session.json`
@@ -328,6 +336,8 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
 | `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
+| `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`) | last used, else `http://localhost:8001` |
+| `WRITING_ASSISTANT_TUI_HOME` | Directory for the TUI's saved session (`tui_session.json`) | `~/.writing_assistant` |
 
 
 **Security Options:**

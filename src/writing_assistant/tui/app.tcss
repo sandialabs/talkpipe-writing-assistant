@@ -42,10 +42,13 @@ Screen {
     height: 1fr;
 }
 
+/* A scrolling box that fits in 24 rows (register mode scrolls). */
 #login-box {
     width: 64;
+    max-width: 100%;
     height: auto;
-    padding: 1 3;
+    max-height: 100%;
+    padding: 0 3;
     border: round $primary;
     background: $panel;
 }
@@ -64,8 +67,12 @@ Screen {
 }
 
 #login-box Label {
-    margin-top: 1;
+    margin-top: 0;
     color: $text-muted;
+}
+
+#login-box .status-line {
+    margin: 0;
 }
 
 #login-box Input {
@@ -191,6 +198,7 @@ ModalScreen {
 
 .dialog {
     width: 66;
+    max-width: 100%;
     height: auto;
     max-height: 90%;
     padding: 1 2;
@@ -204,6 +212,16 @@ ModalScreen {
 
 .dialog-menu {
     width: 48;
+}
+
+/* Long text (Help): the body scrolls, the OK button stays on screen. */
+.dialog-message {
+    height: 90%;
+}
+
+.dialog-message .dialog-body {
+    height: 1fr;
+    max-height: 100%;
 }
 
 .dialog-settings {
