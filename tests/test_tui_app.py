@@ -5,20 +5,25 @@ so these cover the whole path from keystrokes to the database; only the LLM
 call is mocked.
 """
 
+import time
 from collections.abc import AsyncGenerator
 
 import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+from textual.command import CommandList
 from textual.widgets import Button, Input, Static, TextArea
+from textual.widgets._tabbed_content import ContentTabs
 
 from writing_assistant.app.database import get_async_session
 from writing_assistant.app.main import app as fastapi_app
 from writing_assistant.tui.app import (
+    ConfirmScreen,
     EditorScreen,
     LoginScreen,
     SettingsScreen,
     WritingAssistantApp,
+    _format_timestamp,
     _suggest_filename,
     main,
     parse_env_vars_text,
@@ -586,3 +591,175 @@ async def test_first_run_hint_when_no_ai_configured(tui_app):
         assert not editor.metadata.get("source")
         notifications = [n.message for n in app._notifications]
         assert any("F3" in message for message in notifications), notifications
+
+
+async def test_save_as_asks_before_overwriting_another_document(tui_app):
+    """Save As onto a name already in the library must not silently replace it."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await editor.client.save_document(
+            "essay.json", {"title": "Keep me", "content": "original", "sections": []}
+        )
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("something else")
+        await pilot.pause()
+
+        editor.action_save_as()
+        await _settle(pilot)
+        app.screen.query_one("#value", Input).value = "essay.json"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        confirm = app.screen
+        assert isinstance(confirm, ConfirmScreen), type(confirm).__name__
+        assert "essay.json" in " ".join(_text(w) for w in confirm.query(Static))
+        await pilot.click("#cancel")
+        await _settle(pilot)
+        assert editor.filename is None
+        assert (await editor.client.load_document("essay.json"))["content"] == (
+            "original"
+        )
+
+        # Confirming does overwrite.
+        editor.action_save_as()
+        await _settle(pilot)
+        app.screen.query_one("#value", Input).value = "essay.json"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert editor.filename == "essay.json"
+        assert (await editor.client.load_document("essay.json"))["content"] == (
+            "something else"
+        )
+
+        # Saving the open document under its own name never asks.
+        area.insert(" more")
+        await pilot.pause()
+        editor.action_save_as()
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert not editor.dirty
+
+
+def test_format_timestamp_renders_server_utc_in_local_time(monkeypatch):
+    if not hasattr(time, "tzset"):
+        pytest.skip("needs POSIX time zones")
+    monkeypatch.setenv("TZ", "America/Denver")
+    time.tzset()
+    try:
+        # The server stamps in UTC without an offset; the snapshot created at
+        # 07:48 Mountain time must not be listed as 13:48.
+        assert _format_timestamp("2026-08-25T13:48:12.509942") == "2026-08-25 07:48"
+        assert _format_timestamp("2026-08-25T13:48:12+00:00") == "2026-08-25 07:48"
+        assert _format_timestamp("") == ""
+        assert _format_timestamp("yesterday") == "yesterday"
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
+
+
+async def test_command_palette_finds_editor_commands(tui_app):
+    """Ctrl+P (advertised in the footer) lists the app's own actions."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await pilot.press("ctrl+p")
+        await _settle(pilot)
+        await pilot.press(*"snapshot")
+        await _settle(pilot, rounds=20)
+        options = app.screen.query_one(CommandList)
+        prompts = [
+            str(options.get_option_at_index(i).prompt)
+            for i in range(options.option_count)
+        ]
+        assert any("Create snapshot" in p for p in prompts), prompts
+        await pilot.press("enter")
+        await _settle(pilot)
+        # The command ran: an unsaved document has no snapshots to create.
+        assert isinstance(app.screen, EditorScreen)
+        assert editor.filename is None
+        assert any(
+            "before creating a snapshot" in str(n.message) for n in app._notifications
+        ), [n.message for n in app._notifications]
+
+
+async def test_settings_tab_order_has_no_invisible_stop(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings.focused, ContentTabs)
+        await pilot.press("tab")
+        await pilot.pause()
+        assert settings.focused is not None
+        assert settings.focused.id == "writing_style", settings.focused
+
+
+async def test_save_ai_settings_on_empty_document_is_not_an_unsaved_change(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        settings.query_one("#tabs").active = "tab-ai"
+        settings.query_one("#source").value = "ollama"
+        settings.query_one("#model", Input).value = "llama3.2"
+        settings.query_one("#ai", Button).press()
+        await _settle(pilot)
+        assert editor.metadata["model"] == "llama3.2"
+        assert not editor.dirty
+        # Quitting must not ask about changes that were never made.
+        await pilot.press("ctrl+q")
+        await _settle(pilot)
+        assert not app.is_running
+
+
+async def test_suggestion_panel_shows_several_lines_at_common_sizes(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+    for size, text_rows in (((80, 24), 4), ((100, 30), 5)):
+        # The saved token skips login, so each size starts in the editor.
+        app = WritingAssistantApp(
+            Session.load(), client_factory=tui_app._client_factory
+        )
+        async with app.run_test(size=size) as pilot:
+            await _settle(pilot)
+            editor = app.screen
+            assert isinstance(editor, EditorScreen)
+            scroll = editor.query_one("#suggestion-scroll")
+            assert scroll.region.height >= text_rows, (size, scroll.region.height)
+            assert editor.query_one("#editor", TextArea).region.height >= 6
+            # ...and nothing is pushed off the bottom of the terminal.
+            bar = editor.query_one("#mode-bar").region
+            assert bar.bottom <= size[1] - 1, (size, bar)
+
+
+async def test_new_document_dialog_fits_small_terminal(tui_app):
+    """At 80x24 the Create/Cancel buttons were below the bottom of the screen."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+    app = WritingAssistantApp(Session.load(), client_factory=tui_app._client_factory)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await _settle(pilot)
+        await pilot.press("ctrl+n")
+        await _settle(pilot)
+        dialog = app.screen
+        assert dialog.query("#create")
+        create = dialog.query_one("#create", Button).region
+        assert create.y >= 0, create
+        assert create.bottom <= 24, create
+        assert dialog.query_one("#outline", TextArea).region.height >= 3
+        # ...and it is still usable: type a title and click Create.
+        dialog.query_one("#title", Input).value = "Fits"
+        await pilot.click("#create")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert app.screen.title_input.value == "Fits"

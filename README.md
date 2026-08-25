@@ -28,7 +28,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
   - **Ideas**: Get specific suggestions for enhancement
 - **Real-time Editing**: Dynamic web interface for seamless writing and editing
 - **Terminal Interface**: `writing-assistant-tui` offers the same features in any terminal — an SSH session, a tmux window, a machine with no browser
-- **Document Management**: Save, load, and manage multiple documents with automatic snapshots
+- **Document Management**: Save, load, and manage multiple documents, with snapshots you can revert to
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
 - **Flexible AI Backend**: Works with LLM endpoints including OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
@@ -271,6 +271,7 @@ account, so the web interface uses it too.
 | `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section |
 | `Ctrl+U` | Use the suggestion as the section's text |
 | `Ctrl+S` | Save (asks for a filename the first time) |
+| `Ctrl+N` / `Ctrl+O` | New document / Open a document from your library |
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
@@ -365,7 +366,7 @@ Documents are stored in an SQLite database with multi-user isolation:
 
 **Features:**
 - Per-user document isolation (users only see their own documents)
-- Automatic snapshot management (keeps 10 most recent versions)
+- Snapshots on demand (File → Create snapshot); the 10 most recent are kept per document
 - User-specific preferences (AI settings, writing style, etc.)
 - Cascade deletion (removing a user deletes all their documents)
 
