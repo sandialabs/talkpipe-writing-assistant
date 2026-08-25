@@ -27,6 +27,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
   - **Proofread**: Fix grammar and spelling errors only
   - **Ideas**: Get specific suggestions for enhancement
 - **Real-time Editing**: Dynamic web interface for seamless writing and editing
+- **Terminal Interface**: `writing-assistant-tui` offers the same features in any terminal — an SSH session, a tmux window, a machine with no browser
 - **Document Management**: Save, load, and manage multiple documents with automatic snapshots
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
@@ -236,6 +237,44 @@ real round trip before generating — it reports exactly what is wrong
 
 That's it! You're ready to use the AI writing assistant.
 
+## Terminal interface (TUI)
+
+Everything the web interface does is also available from a terminal, for
+places where a browser is not an option (an SSH session, a tmux window, a
+headless box). The TUI is a client of the same server, so it shares your
+account, documents, snapshots, and settings with the web UI.
+
+```bash
+# 1. Start the server (in another terminal, tmux pane, or as a service)
+writing-assistant
+
+# 2. Open the terminal interface
+writing-assistant-tui
+```
+
+Log in (or choose **Create an account**) on the first screen — the server
+URL defaults to `http://localhost:8001`; pass `--server http://host:port` or
+set `WRITING_ASSISTANT_TUI_SERVER` for a remote server. The editor then
+works like the web one: a title field, the document (leave a blank line
+between sections), and a suggestion panel that follows the section under
+the cursor.
+
+| Key | Action |
+|-----|--------|
+| `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section |
+| `Ctrl+U` | Use the suggestion as the section's text |
+| `Ctrl+S` | Save (asks for a filename the first time) |
+| `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
+| `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
+| `F1` | Help |
+| `Ctrl+Q` | Quit |
+
+The login token is remembered in `~/.writing_assistant/tui_session.json`
+(mode 600; set `WRITING_ASSISTANT_TUI_HOME` to move it), so the next launch
+skips the login screen and reopens the last document. `writing-assistant-tui
+--logout` forgets the saved session. Import/Export use the same JSON
+document format as the web UI, so files move between the two freely.
+
 ## Usage
 
 ### Starting the Server
@@ -351,12 +390,18 @@ src/writing_assistant/
 │   ├── callbacks.py     # AI text generation functionality
 │   ├── definitions.py   # Data models (Metadata)
 │   └── segments.py      # TalkPipe segment registration
-└── app/                 # Web application
-    ├── __init__.py
-    ├── main.py          # FastAPI application and API endpoints
-    ├── server.py        # Application entry point
-    ├── static/          # CSS and JavaScript assets
-    └── templates/       # Jinja2 HTML templates
+├── app/                 # Web application
+│   ├── __init__.py
+│   ├── main.py          # FastAPI application and API endpoints
+│   ├── server.py        # Application entry point
+│   ├── static/          # CSS and JavaScript assets
+│   └── templates/       # Jinja2 HTML templates
+└── tui/                 # Terminal interface (Textual), a client of the REST API
+    ├── app.py           # Screens, dialogs, key bindings; `writing-assistant-tui`
+    ├── app.tcss         # Styling
+    ├── client.py        # Async HTTP client for the server's API
+    ├── sections.py      # Section parsing / suggestion tracking (mirrors script.js)
+    └── session.py       # Saved server URL, token, last document
 ```
 
 ### Core Components
@@ -375,7 +420,8 @@ prompts or swap in a different TalkPipe pipeline — edit that module and
 reinstall (`pip install -e .` from a checkout). To add a whole new mode you
 also need to add its button to the web UI: the mode buttons are defined in
 `src/writing_assistant/app/templates/index.html` (the `.mode-btn` elements)
-and sent by `src/writing_assistant/app/static/script.js`. Any backend with
+and sent by `src/writing_assistant/app/static/script.js` — and to the TUI,
+in `GENERATION_MODES` in `src/writing_assistant/tui/app.py`. Any backend with
 an OpenAI-, Anthropic-, or Ollama-compatible endpoint works; point the
 provider API key / base URL settings (or `TALKPIPE_OLLAMA_SERVER_URL` for
 Ollama) at your endpoint and select the source/model in Settings → AI

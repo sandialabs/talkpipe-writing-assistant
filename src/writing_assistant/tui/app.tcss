@@ -1,0 +1,279 @@
+/* Writing Assistant TUI — visual theme.
+   Palette echoes the web UI: an indigo primary, soft surfaces, a green
+   "use this text" action, and a clearly delineated suggestion panel. */
+
+Screen {
+    background: $surface;
+}
+
+.hidden {
+    display: none;
+}
+
+.muted {
+    color: $text-muted;
+}
+
+.section-heading {
+    margin-top: 1;
+    text-style: bold;
+    color: $primary;
+}
+
+.status-line {
+    height: auto;
+    min-height: 1;
+    margin: 1 0 0 0;
+    color: $text-muted;
+}
+
+.status-line.error {
+    color: $error;
+}
+
+.status-line.success {
+    color: $success;
+}
+
+/* ---- Login ------------------------------------------------------------- */
+
+#login-wrapper {
+    align: center middle;
+    height: 1fr;
+}
+
+#login-box {
+    width: 64;
+    height: auto;
+    padding: 1 3;
+    border: round $primary;
+    background: $panel;
+}
+
+#login-title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 0;
+}
+
+#login-tagline {
+    text-align: center;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#login-box Label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+#login-box Input {
+    margin-top: 0;
+}
+
+/* ---- Editor -------------------------------------------------------------- */
+
+#topbar {
+    height: 1;
+    background: $primary;
+    color: $text;
+    padding: 0 1;
+}
+
+#brand {
+    width: auto;
+    text-style: bold;
+}
+
+#filename {
+    width: 1fr;
+    text-align: center;
+    text-style: italic;
+}
+
+#user {
+    width: auto;
+    color: $text-muted;
+}
+
+#workspace {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#title {
+    margin: 1 0 0 0;
+    border: tall $primary-darken-1;
+}
+
+#title:focus {
+    border: tall $primary;
+}
+
+#editor {
+    height: 3fr;
+    min-height: 6;
+    margin-top: 1;
+    border: round $primary-darken-1;
+    background: $panel;
+}
+
+#editor:focus {
+    border: round $primary;
+}
+
+#suggestion-panel {
+    height: 2fr;
+    min-height: 9;
+    margin-top: 1;
+    border: round $secondary;
+    background: $panel;
+}
+
+#suggestion-header {
+    height: 1;
+    padding: 0 1;
+    background: $secondary-darken-2;
+}
+
+#section-info {
+    width: 1fr;
+    text-style: bold;
+}
+
+#section-status {
+    width: auto;
+    color: $warning;
+}
+
+#suggestion-scroll {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#suggestion-text {
+    width: 1fr;
+    padding: 1 0;
+}
+
+#mode-bar {
+    height: 3;
+    align: center middle;
+}
+
+#mode-bar Button {
+    margin: 0 1;
+    min-width: 12;
+}
+
+Button.mode {
+    background: $primary-darken-1;
+    color: $text;
+    border-top: tall $primary-lighten-1;
+    border-bottom: tall $primary-darken-3;
+}
+
+Button.mode:hover {
+    background: $primary;
+}
+
+#use-suggestion {
+    margin-left: 2;
+}
+
+/* ---- Dialogs ---------------------------------------------------------- */
+
+ModalScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+.dialog {
+    width: 66;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    border: round $primary;
+    background: $panel;
+}
+
+.dialog-wide {
+    width: 90;
+}
+
+.dialog-menu {
+    width: 48;
+}
+
+.dialog-settings {
+    width: 100;
+    height: 90%;
+}
+
+.dialog-settings TabbedContent {
+    height: 1fr;
+}
+
+.dialog-settings VerticalScroll {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.dialog-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+.dialog-body {
+    height: auto;
+    max-height: 30;
+    margin-bottom: 1;
+}
+
+.dialog Label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+.dialog-buttons {
+    height: auto;
+    margin-top: 1;
+    align: left middle;
+}
+
+.dialog-buttons Button {
+    margin-right: 2;
+}
+
+.dialog-textarea {
+    height: 10;
+    margin-top: 0;
+}
+
+.dialog-textarea.small {
+    height: 5;
+}
+
+.form-row {
+    height: auto;
+}
+
+.form-col {
+    width: 1fr;
+    height: auto;
+    margin-right: 2;
+}
+
+OptionList {
+    height: auto;
+    max-height: 20;
+    border: round $primary-darken-2;
+    background: $surface;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: $primary;
+    color: $text;
+}

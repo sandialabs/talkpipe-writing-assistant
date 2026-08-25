@@ -55,6 +55,12 @@ WRITING_ASSISTANT_RELOAD=true writing-assistant
 writing-assistant --init-db
 ```
 
+**Terminal interface:** `writing-assistant-tui` (or `python -m
+writing_assistant.tui`) is a Textual client of the running server's REST
+API with the same features as the web UI. `--server <url>` /
+`WRITING_ASSISTANT_TUI_SERVER` pick the server; the session token lives in
+`~/.writing_assistant/tui_session.json` (`WRITING_ASSISTANT_TUI_HOME`).
+
 **Important:** The application now uses FastAPI Users for multi-user authentication. Users must register and login to use the application.
 
 ### Testing
@@ -169,17 +175,32 @@ src/writing_assistant/
 │   ├── callbacks.py     # AI text generation functionality
 │   ├── definitions.py   # Data models (Metadata)
 │   └── segments.py      # TalkPipe segment registration
-└── app/                 # Web application
-    ├── __init__.py
-    ├── main.py          # FastAPI application and API endpoints
-    ├── server.py        # Application entry point
-    ├── models.py        # SQLAlchemy database models (User, Document, DocumentSnapshot)
-    ├── schemas.py       # Pydantic schemas for API validation
-    ├── database.py      # Database configuration and session management
-    ├── auth.py          # FastAPI Users authentication setup
-    ├── static/          # CSS and JavaScript assets
-    └── templates/       # Jinja2 HTML templates
+├── app/                 # Web application
+│   ├── __init__.py
+│   ├── main.py          # FastAPI application and API endpoints
+│   ├── server.py        # Application entry point
+│   ├── models.py        # SQLAlchemy database models (User, Document, DocumentSnapshot)
+│   ├── schemas.py       # Pydantic schemas for API validation
+│   ├── database.py      # Database configuration and session management
+│   ├── auth.py          # FastAPI Users authentication setup
+│   ├── static/          # CSS and JavaScript assets
+│   └── templates/       # Jinja2 HTML templates
+└── tui/                 # Terminal interface (Textual) — a client of the REST API above
+    ├── app.py           # Screens (login, editor), dialogs, bindings, `main()`
+    ├── app.tcss         # Textual CSS
+    ├── client.py        # httpx AsyncClient wrapper: auth, documents, snapshots, generation
+    ├── sections.py      # Blank-line section parsing and suggestion tracking (mirrors script.js)
+    └── session.py       # Persisted server URL / token / last document
 ```
+
+The TUI never touches the database or TalkPipe directly — every action goes
+through the HTTP API, so it can run on another machine and shares documents
+with the web UI. Keep it that way; a TUI feature that needs server logic gets
+an endpoint, not an import of `app.main`. Its tests (`tests/test_tui_*.py`)
+drive the real FastAPI app in-process via `httpx.ASGITransport` and Textual's
+`Pilot`. Labels are plain text on purpose (emoji width is unreliable in
+terminals), and editor bindings are `priority=True` because `TextArea` claims
+F6/F7/Ctrl+U itself.
 
 ### Core Components
 
@@ -218,6 +239,9 @@ src/writing_assistant/
 **src/writing_assistant/core/definitions.py**: Data models:
 - `Metadata` class defining writing style, audience, tone, and generation parameters
 
+**src/writing_assistant/tui/**: Terminal interface — `WritingAssistantApp`
+(login → editor screens), `WritingAssistantClient` (REST), section model.
+
 **src/writing_assistant/app/server.py**: Application entry point:
 - Configurable host, port, and reload settings via environment variables
 - Database initialization on startup
@@ -232,6 +256,7 @@ src/writing_assistant/
 - **Context-Aware Generation**: Takes into account previous/next paragraphs, document title, and metadata
 - **Document Snapshots**: Version history with automatic cleanup (keep 10 most recent)
 - **Web Interface**: HTML templates with JavaScript for dynamic interaction
+- **Terminal Interface**: Textual TUI (`writing-assistant-tui`) with the same features, over the REST API
 - **Pip Installable**: Proper Python package with console scripts
 - **Docker Support**: Multi-stage builds for development and production
 - **CI/CD**: GitHub Actions pipeline with testing, security scanning, and container builds
