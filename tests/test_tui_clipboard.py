@@ -23,10 +23,28 @@ def test_read_and_write_use_the_first_available_tool(mocker):
         return_value=subprocess.CompletedProcess([], 0, stdout=b"hello\nworld"),
     )
     assert clipboard.read_system_clipboard() == "hello\nworld"
-    assert run.call_args.args[0] == ["xclip", "-selection", "clipboard", "-o"]
+    # The resolved absolute path is run, not a bare name looked up on PATH again.
+    assert run.call_args.args[0] == ["/usr/bin/xclip", "-selection", "clipboard", "-o"]
+    assert run.call_args.kwargs["shell"] is False
     assert clipboard.write_system_clipboard("hi") is True
-    assert run.call_args.args[0] == ["xclip", "-selection", "clipboard"]
+    assert run.call_args.args[0] == ["/usr/bin/xclip", "-selection", "clipboard"]
     assert run.call_args.kwargs["input"] == b"hi"
+    assert run.call_args.kwargs["shell"] is False
+
+
+def test_wayland_writer_is_the_resolved_wl_copy_path(mocker):
+    def which(name):
+        return f"/opt/wl/{name}" if name in {"wl-paste", "wl-copy"} else None
+
+    mocker.patch("writing_assistant.tui.clipboard.shutil.which", side_effect=which)
+    run = mocker.patch(
+        "writing_assistant.tui.clipboard.subprocess.run",
+        return_value=subprocess.CompletedProcess([], 0, stdout=b"x"),
+    )
+    assert clipboard.read_system_clipboard() == "x"
+    assert run.call_args.args[0] == ["/opt/wl/wl-paste", "--no-newline"]
+    assert clipboard.write_system_clipboard("y") is True
+    assert run.call_args.args[0] == ["/opt/wl/wl-copy"]
 
 
 def test_wayland_reader_requires_its_writer(mocker):
@@ -40,7 +58,7 @@ def test_wayland_reader_requires_its_writer(mocker):
         return_value=subprocess.CompletedProcess([], 0, stdout=b"x"),
     )
     assert clipboard.read_system_clipboard() == "x"
-    assert run.call_args.args[0][0] == "xsel"
+    assert run.call_args.args[0][0] == "/usr/bin/xsel"
 
 
 def test_failures_degrade_to_none_and_false(mocker):

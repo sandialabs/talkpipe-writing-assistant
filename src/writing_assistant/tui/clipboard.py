@@ -14,7 +14,11 @@ a bracketed-paste sequence, not as a key.
 from __future__ import annotations
 
 import shutil
-import subprocess
+
+# Bandit B404: the only executables run are the fixed clipboard tools listed in
+# _TOOLS/_WRITERS, resolved to absolute paths, with shell=False; clipboard text
+# reaches them via stdin, never the command line.
+import subprocess  # nosec B404
 
 _TIMEOUT = 2.0
 
@@ -29,12 +33,17 @@ _WRITERS: dict[str, str] = {"wl-paste": "wl-copy", "pbpaste": "pbcopy"}
 
 
 def _find_tool() -> tuple[str, list[str], str, list[str]] | None:
-    """Return (reader, read args, writer, write args) for the first tool found."""
-    for reader, read_args, write_args in _TOOLS:
-        if shutil.which(reader) is None:
+    """Return (reader, read args, writer, write args) for the first tool found.
+
+    The reader and writer are the absolute paths ``shutil.which`` resolved, so
+    the process is started from that path rather than by a second PATH lookup.
+    """
+    for name, read_args, write_args in _TOOLS:
+        reader = shutil.which(name)
+        if reader is None:
             continue
-        writer = _WRITERS.get(reader, reader)
-        if shutil.which(writer) is None:
+        writer = shutil.which(_WRITERS.get(name, name))
+        if writer is None:
             continue
         return reader, read_args, writer, write_args
     return None
@@ -47,11 +56,13 @@ def read_system_clipboard() -> str | None:
         return None
     reader, read_args, _, _ = tool
     try:
-        result = subprocess.run(
+        # B603: argv is a resolved tool path plus fixed flags from _TOOLS.
+        result = subprocess.run(  # nosec B603
             [reader, *read_args],
             capture_output=True,
             timeout=_TIMEOUT,
             check=False,
+            shell=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -67,12 +78,14 @@ def write_system_clipboard(text: str) -> bool:
         return False
     _, _, writer, write_args = tool
     try:
-        result = subprocess.run(
+        # B603: argv is a resolved tool path plus fixed flags; text goes via stdin.
+        result = subprocess.run(  # nosec B603
             [writer, *write_args],
             input=text.encode("utf-8"),
             capture_output=True,
             timeout=_TIMEOUT,
             check=False,
+            shell=False,
         )
     except (OSError, subprocess.SubprocessError):
         return False
