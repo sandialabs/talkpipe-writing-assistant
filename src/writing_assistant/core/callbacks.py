@@ -55,7 +55,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
         - Match the specified tone and style requirements
         - If no draft is provided, create compelling new content that fits the context
 
-        Output only the rewritten paragraph.
+        Output only the rewritten paragraph: a single paragraph, with no heading, title, or commentary before or after it.
         """
     if generation_mode == "improve":
         return f"""
@@ -73,7 +73,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Keep the original organization and main ideas intact. Make targeted improvements that elevate the quality without fundamental restructuring.
 
-        Output only the improved paragraph.
+        Output only the improved paragraph: a single paragraph, with no heading, title, or commentary before or after it.
         """
     if generation_mode == "proofread":
         return f"""
@@ -95,7 +95,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Make the minimum changes necessary for correctness. Preserve the author's voice and intent.
 
-        Output only the corrected paragraph.
+        Output only the corrected paragraph itself, with no explanation, heading, or commentary before or after it.
         """
     # Default to rewrite
     return f"""
@@ -107,7 +107,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
 
         Focus on clarity, engagement, and strong communication.
 
-        Output only the final paragraph.
+        Output only the final paragraph: a single paragraph, with no heading, title, or commentary before or after it.
         """
 
 

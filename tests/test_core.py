@@ -34,6 +34,7 @@ def test_get_system_prompt_ideas():
     prompt = get_system_prompt("ideas")
     assert "bulleted list" in prompt
     assert "actionable improvement suggestions" in prompt
+    assert "single paragraph" not in prompt
 
 
 def test_get_system_prompt_rewrite():
@@ -41,6 +42,8 @@ def test_get_system_prompt_rewrite():
     prompt = get_system_prompt("rewrite")
     assert "Completely rewrite" in prompt
     assert "clarity, engagement, and impact" in prompt
+    assert "Output only the rewritten paragraph: a single paragraph" in prompt
+    assert "no heading, title, or commentary before or after it" in prompt
 
 
 def test_get_system_prompt_improve():
@@ -48,6 +51,8 @@ def test_get_system_prompt_improve():
     prompt = get_system_prompt("improve")
     assert "Enhance the provided" in prompt
     assert "Strengthening word choices" in prompt
+    assert "Output only the improved paragraph: a single paragraph" in prompt
+    assert "no heading, title, or commentary before or after it" in prompt
 
 
 def test_get_system_prompt_proofread():
@@ -55,6 +60,8 @@ def test_get_system_prompt_proofread():
     prompt = get_system_prompt("proofread")
     assert "Proofread the current paragraph" in prompt
     assert "Grammar errors" in prompt
+    assert "Output only the corrected paragraph itself" in prompt
+    assert "no explanation, heading, or commentary before or after it" in prompt
 
 
 def test_get_system_prompt_default():
@@ -62,6 +69,8 @@ def test_get_system_prompt_default():
     prompt = get_system_prompt("unknown_mode")
     assert "Rewrite or improve" in prompt
     assert "provided paragraph" in prompt
+    assert "Output only the final paragraph: a single paragraph" in prompt
+    assert "no heading, title, or commentary before or after it" in prompt
 
 
 @patch("writing_assistant.core.callbacks.fillTemplate")
