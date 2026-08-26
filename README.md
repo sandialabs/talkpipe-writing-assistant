@@ -300,6 +300,7 @@ a server default, leave the source on "Server default" and the model blank
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Esc` | Close a dialog or menu without changes |
 | `Ctrl+Q` | Quit (asks first if there are unsaved changes; `Ctrl+C` copies the editor selection and does not quit) |
+| `Ctrl+C` / `Ctrl+V` | Copy the selection / paste — in the editor, the title, and every dialog field. `Ctrl+V` reads the system clipboard when `wl-paste`, `xclip`, `xsel` or `pbpaste` is installed; without one (e.g. over SSH) use the terminal's own paste — `Ctrl+Shift+V`, `Shift+Insert`, or `Shift`+middle-click |
 
 The editor works down to 60x16. Below 22 rows the mode buttons are hidden so
 the suggestion panel stays on screen (F5–F8 and Ctrl+U still work), and

@@ -39,6 +39,7 @@ from textual.widgets import (
 from textual.widgets.option_list import Option
 
 from .client import ApiError, AuthError, WritingAssistantClient
+from .clipboard import read_system_clipboard, write_system_clipboard
 from .sections import (
     Section,
     parse_sections,
@@ -97,6 +98,10 @@ HELP_TEXT = """\
   The suggestion panel follows the section under the cursor.
   Tab / Shift+Tab move between the title, the editor, the suggestion
   panel (arrow keys scroll it) and the buttons.
+  Ctrl+C copies the selection; Ctrl+V pastes (from the system clipboard
+  when wl-paste, xclip, xsel or pbpaste is installed — otherwise, e.g.
+  over SSH, use the terminal's own paste: Ctrl+Shift+V, Shift+Insert, or
+  Shift+middle-click). The same works in every dialog field.
 
 [b]AI suggestions[/b] (for the section under the cursor)
   F5      Ideas (also Ctrl+G)
@@ -1828,6 +1833,22 @@ class WritingAssistantApp(App[None]):
         self.session = session or Session.load()
         self._client_factory = client_factory
         self._client: WritingAssistantClient | None = None
+
+    # Textual's Ctrl+V pastes from a clipboard internal to the app, so text
+    # copied in another program never arrived (the terminal's own paste,
+    # Ctrl+Shift+V, does work — it comes in as a bracketed paste, not a key).
+    # Prefer the system clipboard when a clipboard tool is available, and
+    # mirror in-app copies to it so the two never disagree.
+    @property
+    def clipboard(self) -> str:
+        system = read_system_clipboard()
+        if system:
+            return system
+        return self._clipboard
+
+    def copy_to_clipboard(self, text: str) -> None:
+        super().copy_to_clipboard(text)
+        write_system_clipboard(text)
 
     def make_client(self, server_url: str, token: str | None = None) -> Any:
         if self._client_factory is not None:
