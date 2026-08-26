@@ -906,3 +906,68 @@ def test_main_help_names_the_session_file(capsys):
     out = capsys.readouterr().out
     assert "tui_session.json" in out
     assert "WRITING_ASSISTANT_TUI_HOME" in out
+
+
+async def test_ctrl_v_pastes_from_the_system_clipboard(tui_app, mocker):
+    """Ctrl+V inserts text copied in another program, in the editor, the
+    title, and the Settings fields; a Ctrl+C copy inside the app wins over
+    the system clipboard until something else is copied."""
+    app = tui_app
+    clipboard = {"text": "from the desktop"}
+    mocker.patch(
+        "writing_assistant.tui.app.read_system_clipboard",
+        side_effect=lambda: clipboard["text"],
+    )
+    written = mocker.patch(
+        "writing_assistant.tui.app.write_system_clipboard", return_value=True
+    )
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        text_area = editor.query_one("#editor", TextArea)
+        text_area.focus()
+        await pilot.press("ctrl+v")
+        assert text_area.text == "from the desktop"
+
+        editor.query_one("#title", Input).focus()
+        await pilot.press("ctrl+v")
+        assert editor.query_one("#title", Input).value == "from the desktop"
+
+        # A copy made inside the app is mirrored to the system clipboard,
+        # so the next paste returns it whether or not the terminal honours
+        # OSC 52.
+        text_area.focus()
+        text_area.select_all()
+        await pilot.press("ctrl+c")
+        written.assert_called_with("from the desktop")
+
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings, SettingsScreen)
+        clipboard["text"] = "engineers"
+        settings.query_one("#target_audience", Input).focus()
+        await pilot.press("ctrl+v")
+        assert settings.query_one("#target_audience", Input).value == "engineers"
+        settings.query_one("#background_context", TextArea).focus()
+        await pilot.press("ctrl+v")
+        assert settings.query_one("#background_context", TextArea).text == "engineers"
+
+
+async def test_ctrl_v_without_a_system_clipboard_uses_the_app_clipboard(
+    tui_app, mocker
+):
+    app = tui_app
+    mocker.patch("writing_assistant.tui.app.read_system_clipboard", return_value=None)
+    mocker.patch("writing_assistant.tui.app.write_system_clipboard", return_value=False)
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        text_area = editor.query_one("#editor", TextArea)
+        text_area.focus()
+        await pilot.press("ctrl+v")  # nothing copied yet: no crash, no change
+        assert text_area.text == ""
+        text_area.load_text("copied inside")
+        text_area.select_all()
+        await pilot.press("ctrl+c")
+        editor.query_one("#title", Input).focus()
+        await pilot.press("ctrl+v")
+        assert editor.query_one("#title", Input).value == "copied inside"
