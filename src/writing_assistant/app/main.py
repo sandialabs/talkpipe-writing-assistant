@@ -6,7 +6,7 @@ import os
 import threading
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,7 @@ from ..core import callbacks as cb
 from ..core.definitions import Metadata
 from .auth import auth_backend, current_active_user, fastapi_users
 from .database import create_db_and_tables, get_async_session
-from .models import Document, DocumentSnapshot, User
+from .models import Document, DocumentSnapshot, User, iso_utc, utcnow
 from .schemas import UserCreate, UserRead, UserUpdate
 
 # Lock to prevent race conditions when setting environment variables
@@ -294,7 +294,7 @@ async def save_document(
             # Update existing document
             existing_doc.title = title
             existing_doc.content = document_data
-            existing_doc.updated_at = datetime.utcnow()
+            existing_doc.updated_at = utcnow()
             await db.commit()
             return {
                 "status": "success",
@@ -420,8 +420,8 @@ async def list_documents(
                 "filename": doc.filename,
                 "title": doc.title,
                 "size": len(doc.content),
-                "modified": doc.updated_at.isoformat(),
-                "created": doc.created_at.isoformat(),
+                "modified": iso_utc(doc.updated_at),
+                "created": iso_utc(doc.created_at),
             }
             for doc in documents
         ]
@@ -610,13 +610,18 @@ async def create_snapshot(
         if not doc:
             return {"status": "error", "message": "Document not found"}
 
-        # Generate snapshot name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Name (server-local time, for humans) and stored timestamp (UTC) are
+        # derived from one instant so the two can never disagree.
+        now = utcnow()
+        timestamp = now.replace(tzinfo=UTC).astimezone().strftime("%Y%m%d_%H%M%S")
         snapshot_name = f"{timestamp}_{filename}"
 
         # Create snapshot
         snapshot = DocumentSnapshot(
-            document_id=doc.id, snapshot_name=snapshot_name, content=doc.content
+            document_id=doc.id,
+            snapshot_name=snapshot_name,
+            content=doc.content,
+            created_at=now,
         )
         db.add(snapshot)
 
@@ -677,7 +682,7 @@ async def list_snapshots(
             {
                 "filename": snap.snapshot_name,
                 "size": len(snap.content),
-                "modified": snap.created_at.isoformat(),
+                "modified": iso_utc(snap.created_at),
             }
             for snap in snapshots
         ]

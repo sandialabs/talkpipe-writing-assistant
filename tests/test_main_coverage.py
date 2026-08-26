@@ -801,3 +801,55 @@ def test_generate_text_reloads_talkpipe_config_for_env_vars(authenticated_client
     assert response.status_code == 200
     # Reloaded once to pick up the request's env vars and once to restore.
     assert mock_reset.call_count == 2
+
+
+def test_document_timestamps_carry_utc_offset(authenticated_client):
+    """`modified`/`created` must be unambiguous ISO 8601 (explicit UTC offset).
+
+    Browsers parse an offset-less date-time string as local time, so a bare
+    UTC value was shown shifted by the user's timezone.
+    """
+    from datetime import datetime, timedelta
+
+    authenticated_client.post(
+        "/documents/save",
+        data={
+            "filename": "tz.json",
+            "document_data": json.dumps({"title": "TZ", "sections": []}),
+        },
+    )
+    files = authenticated_client.get("/documents/list").json()["files"]
+    entry = next(f for f in files if f["filename"] == "tz.json")
+    for key in ("modified", "created"):
+        moment = datetime.fromisoformat(entry[key])
+        assert moment.tzinfo is not None, f"{key} has no offset: {entry[key]}"
+        assert moment.utcoffset() == timedelta(0)
+
+
+def test_snapshot_timestamp_carries_utc_offset_and_matches_name(
+    authenticated_client,
+):
+    """A snapshot's `modified` (UTC, with offset) and its local-time name agree."""
+    from datetime import datetime, timedelta
+
+    authenticated_client.post(
+        "/documents/save",
+        data={
+            "filename": "snaptz.json",
+            "document_data": json.dumps({"title": "TZ", "sections": []}),
+        },
+    )
+    created = authenticated_client.post("/documents/snapshot/snaptz.json").json()
+    snapshots = authenticated_client.get("/documents/snapshots/snaptz.json").json()[
+        "snapshots"
+    ]
+    snap = next(s for s in snapshots if s["filename"] == created["snapshot_filename"])
+
+    modified = datetime.fromisoformat(snap["modified"])
+    assert modified.tzinfo is not None, f"modified has no offset: {snap['modified']}"
+    assert modified.utcoffset() == timedelta(0)
+
+    # Name is stamped in local time; converting it to UTC must give the same
+    # instant as `modified` (to the second the name was truncated at).
+    named = datetime.strptime(snap["filename"][:15], "%Y%m%d_%H%M%S").astimezone()
+    assert abs(named - modified) < timedelta(seconds=2)

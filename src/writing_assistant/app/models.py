@@ -1,7 +1,7 @@
 """Database models for multi-user support."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi_users.db import SQLAlchemyBaseUserTable
@@ -10,6 +10,28 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import CHAR, TypeDecorator, TypeEngine
+
+
+def utcnow() -> datetime:
+    """Current UTC time as a naive datetime, the form the timestamp columns store.
+
+    The columns are ``DateTime`` without ``timezone=True``, so SQLite hands
+    back naive values regardless of what was written; keeping writes naive
+    (and UTC) means every stored row means the same thing. Attach the offset
+    when serialising — see ``iso_utc``.
+    """
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def iso_utc(value: datetime) -> str:
+    """Serialise a stored (naive UTC) timestamp with an explicit ``+00:00``.
+
+    Without the offset, ``new Date(...)`` in a browser reads the string as
+    local time and shows the UTC wall-clock shifted by the user's zone.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
 
 
 class GUID(TypeDecorator[uuid.UUID]):
@@ -67,7 +89,7 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
 
     # Additional user fields
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, nullable=False
     )
 
     # User preferences (JSON stored as text)
@@ -100,10 +122,10 @@ class Document(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
     )
 
     # Relationships
@@ -139,7 +161,7 @@ class DocumentSnapshot(Base):
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, nullable=False
     )
 
     # Relationships

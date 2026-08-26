@@ -1732,9 +1732,8 @@ def _suggest_filename(title: str) -> str:
 def _format_timestamp(value: Any) -> str:
     """Render a server timestamp in local time.
 
-    The server stamps documents and snapshots in UTC without an offset;
-    shown as-is they contradict the user's clock (and the local-time stamp
-    in snapshot names), so naive values are treated as UTC.
+    Current servers send an explicit ``+00:00`` offset. Servers from before
+    that sent bare UTC, so a value with no offset is still treated as UTC.
     """
     if not value:
         return ""
