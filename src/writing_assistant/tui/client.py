@@ -269,4 +269,18 @@ class WritingAssistantClient:
         """POST /ai/test-connection; returns the availability report."""
         form = {k: v for k, v in fields.items() if v is not None and v != ""}
         form.setdefault("environment_variables", "{}")
-        return await self._json("POST", "/ai/test-connection", data=form)
+        try:
+            return await self._json("POST", "/ai/test-connection", data=form)
+        except ApiError as exc:
+            if exc.status_code != 404:
+                raise
+            # Servers older than 1.0.0b1 have no /ai/test-connection route;
+            # the bare "Not Found" that FastAPI returns reads like a failed
+            # probe rather than a version mismatch.
+            raise ApiError(
+                f"The server at {self.base_url} does not support Test Connection "
+                "(it needs writing-assistant 1.0.0b1 or newer). Upgrade the "
+                "server — or pull a newer container image — to use it. "
+                "Generation may still work with these settings.",
+                404,
+            ) from exc

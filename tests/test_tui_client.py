@@ -215,3 +215,24 @@ def test_detail_message_shapes():
     assert _detail_message(response({"message": "boom"})) == "boom"
     assert _detail_message(httpx.Response(500, text="oops")) == "oops"
     assert _detail_message(httpx.Response(502, text="")) == "HTTP 502"
+
+
+async def test_test_connection_explains_server_without_endpoint():
+    """An older server has no /ai/test-connection; say so instead of 'Not Found'."""
+
+    async def old_server(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "Not Found"})
+
+    client = WritingAssistantClient(
+        "http://old-server:8001", token="t", transport=httpx.MockTransport(old_server)
+    )
+    try:
+        with pytest.raises(ApiError) as excinfo:
+            await client.test_connection({"source": "ollama", "model": "m"})
+    finally:
+        await client.aclose()
+    message = excinfo.value.message
+    assert message != "Not Found"
+    assert "http://old-server:8001" in message
+    assert "1.0.0b1" in message
+    assert "upgrade" in message.lower()
