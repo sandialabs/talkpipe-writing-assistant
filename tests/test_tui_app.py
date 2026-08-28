@@ -971,3 +971,118 @@ async def test_ctrl_v_without_a_system_clipboard_uses_the_app_clipboard(
         editor.query_one("#title", Input).focus()
         await pilot.press("ctrl+v")
         assert editor.query_one("#title", Input).value == "copied inside"
+
+
+async def test_toggle_to_register_focuses_the_confirm_field(tui_app):
+    """Switching to 'Create an account' must move focus to the new field, not
+    leave it on the toggled button where a stray Enter flips the mode back."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        login = app.screen
+        assert isinstance(login, LoginScreen)
+        await pilot.click("#toggle")
+        await _settle(pilot)
+        assert app.focused is login.query_one("#confirm", Input)
+        await pilot.click("#toggle")
+        await _settle(pilot)
+        assert app.focused is login.query_one("#password", Input)
+
+
+async def test_login_f1_opens_help(tui_app):
+    from writing_assistant.tui.app import MessageScreen
+
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        assert isinstance(app.screen, LoginScreen)
+        await pilot.press("f1")
+        await _settle(pilot)
+        assert isinstance(app.screen, MessageScreen)
+
+
+def test_all_generation_modes_have_a_key_binding():
+    """The README says adding a GENERATION_MODES entry gives the mode a key;
+    the bindings are derived from that list so the two cannot drift."""
+    from textual.binding import Binding
+
+    from writing_assistant.tui.app import GENERATION_MODES
+
+    bound = {b.key: b.action for b in EditorScreen.BINDINGS if isinstance(b, Binding)}
+    for mode, _label, key in GENERATION_MODES:
+        assert bound.get(key) == f"generate('{mode}')", mode
+
+
+async def test_ai_settings_rejects_a_bad_server_url(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings, SettingsScreen)
+        settings.query_one("#tabs").active = "tab-ai"
+        await _settle(pilot)
+        settings.query_one("#server_url", Input).value = "not-a-url"
+        settings.query_one("#ai", Button).press()
+        await _settle(pilot)
+        # Validation failed: the dialog stays open on the AI tab.
+        assert isinstance(app.screen, SettingsScreen)
+        assert app.screen.query_one("#tabs").active == "tab-ai"
+        # A proper URL saves and closes the dialog.
+        settings.query_one("#server_url", Input).value = "http://localhost:11434"
+        settings.query_one("#ai", Button).press()
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+
+
+async def test_export_asks_before_overwriting_an_existing_file(tui_app, tmp_path):
+    app = tui_app
+    target = tmp_path / "out.json"
+    target.write_text("OLD")
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.query_one("#editor", TextArea).load_text("fresh content")
+        await pilot.pause()
+        editor.action_export()
+        await _settle(pilot)
+        app.screen.query_one("#value", Input).value = str(target)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.click("#cancel")  # decline the overwrite
+        await _settle(pilot)
+        assert target.read_text() == "OLD"
+        # Export again and accept the overwrite this time.
+        editor.action_export()
+        await _settle(pilot)
+        app.screen.query_one("#value", Input).value = str(target)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert "fresh content" in target.read_text()
+
+
+async def test_copy_message_reflects_whether_a_clipboard_tool_exists(
+    tui_app, monkeypatch
+):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.query_one("#editor", TextArea).load_text("body")
+        await pilot.pause()
+        notes: list[str] = []
+        monkeypatch.setattr(editor, "notify", lambda msg, **k: notes.append(msg))
+        monkeypatch.setattr(
+            "writing_assistant.tui.app.system_clipboard_available", lambda: False
+        )
+        editor.action_copy()
+        await pilot.pause()
+        assert any("No clipboard tool" in m for m in notes)
+        notes.clear()
+        monkeypatch.setattr(
+            "writing_assistant.tui.app.system_clipboard_available", lambda: True
+        )
+        editor.action_copy()
+        await pilot.pause()
+        assert any("copied to the clipboard" in m for m in notes)

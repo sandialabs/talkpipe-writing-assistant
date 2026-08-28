@@ -49,6 +49,11 @@ def _find_tool() -> tuple[str, list[str], str, list[str]] | None:
     return None
 
 
+def system_clipboard_available() -> bool:
+    """True when a clipboard tool (wl-copy/xclip/xsel/pbcopy) is installed."""
+    return _find_tool() is not None
+
+
 def read_system_clipboard() -> str | None:
     """Return the system clipboard text, or None when it cannot be read."""
     tool = _find_tool()

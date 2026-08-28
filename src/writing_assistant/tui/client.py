@@ -30,12 +30,34 @@ class AuthError(ApiError):
     """The session token is missing, expired, or rejected."""
 
 
+def _non_json_message(response: httpx.Response) -> str:
+    """A concise message for an error body that is not JSON.
+
+    A wrong Server URL often points at some other HTTP service (a proxy, a
+    static site, a captive portal) whose error page is a whole HTML
+    document. Returning that verbatim floods the small login/settings error
+    line with markup; say what happened instead, and cap any other text.
+    """
+    text = response.text.strip()
+    content_type = response.headers.get("content-type", "")
+    if "html" in content_type.lower() or text.startswith("<"):
+        return (
+            "The server returned an HTML page rather than a writing-assistant "
+            f"API response (HTTP {response.status_code}). Check that the Server "
+            "URL points at a writing-assistant server."
+        )
+    if not text:
+        return f"HTTP {response.status_code}"
+    snippet = text if len(text) <= 200 else text[:200] + "…"
+    return f"HTTP {response.status_code}: {snippet}"
+
+
 def _detail_message(response: httpx.Response) -> str:
     """Turn a FastAPI error body into text a person can act on."""
     try:
         body = response.json()
     except ValueError:
-        return response.text.strip() or f"HTTP {response.status_code}"
+        return _non_json_message(response)
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict):
         code = detail.get("code")

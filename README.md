@@ -276,7 +276,8 @@ set `WRITING_ASSISTANT_TUI_SERVER` if the server runs on another machine or
 port (for example after `writing-assistant --port 8080`). The editor then
 works like the web one: a title field, the document (leave a blank line
 between sections), and a suggestion panel that follows the section under
-the cursor.
+the cursor. The cursor starts in the document body, so type your text
+straight away; press `Shift+Tab` to reach the title field above it.
 
 Before asking for suggestions, tell the TUI which model to use: press `F3`,
 press `F3` again to switch to the **AI Settings** tab (or `Left`/`Right`
@@ -290,9 +291,9 @@ a server default, leave the source on "Server default" and the model blank
 
 | Key | Action |
 |-----|--------|
-| `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section |
+| `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section (`Ctrl+G` also runs Ideas) |
 | `Ctrl+U` | Use the suggestion as the section's text |
-| `Ctrl+S` | Save (asks for a filename the first time) |
+| `Ctrl+S` | Save (asks for a library name the first time — the document is stored on the server, shared with the web UI, not written to a file here; use File → Export for a file) |
 | `Ctrl+N` / `Ctrl+O` | New document / Open a document from your library |
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
@@ -300,7 +301,7 @@ a server default, leave the source on "Server default" and the model blank
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Esc` | Close a dialog or menu without changes |
 | `Ctrl+Q` | Quit (asks first if there are unsaved changes; `Ctrl+C` copies the editor selection and does not quit) |
-| `Ctrl+C` / `Ctrl+V` | Copy the selection / paste — in the editor, the title, and every dialog field. `Ctrl+V` reads the system clipboard when `wl-paste`, `xclip`, `xsel` or `pbpaste` is installed; without one (e.g. over SSH) use the terminal's own paste — `Ctrl+Shift+V`, `Shift+Insert`, or `Shift`+middle-click |
+| `Ctrl+C` / `Ctrl+V` | Copy the selection / paste — always work within the app (editor, title, and every dialog field). They also use the *system* clipboard when `wl-paste`, `xclip`, `xsel` or `pbpaste` is installed; to paste text from another program without one of those (e.g. over SSH) use the terminal's own paste — `Ctrl+Shift+V`, `Shift+Insert`, or `Shift`+middle-click |
 
 The editor works down to 60x16. Below 22 rows the mode buttons are hidden so
 the suggestion panel stays on screen (F5–F8 and Ctrl+U still work), and

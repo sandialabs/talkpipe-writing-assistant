@@ -39,7 +39,11 @@ from textual.widgets import (
 from textual.widgets.option_list import Option
 
 from .client import ApiError, AuthError, WritingAssistantClient
-from .clipboard import read_system_clipboard, write_system_clipboard
+from .clipboard import (
+    read_system_clipboard,
+    system_clipboard_available,
+    write_system_clipboard,
+)
 from .sections import (
     Section,
     parse_sections,
@@ -594,12 +598,18 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
 
     def collect_ai(self) -> dict[str, Any]:
         env_vars: dict[str, str] = {}
+        server_url = self._value("server_url")
         if self._allow_custom_env_vars:
             env_vars = parse_env_vars_text(self._value("environment_variables"))
+            if server_url and not server_url.startswith(("http://", "https://")):
+                raise ValueError(
+                    "Server URL must start with http:// or https:// "
+                    f"(got {server_url!r})."
+                )
         return {
             "source": self._value("source"),
             "model": self._value("model"),
-            "server_url": self._value("server_url"),
+            "server_url": server_url,
             "api_key": self._value("api_key"),
             "environment_variables": env_vars,
         }
@@ -707,8 +717,32 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
 # --------------------------------------------------------------------------
 
 
+LOGIN_HELP_TEXT = """\
+[b]Signing in[/b]
+
+  Server URL   The writing-assistant server to connect to. Start one with
+               `writing-assistant`; the default is http://localhost:8001.
+               Pass --server <url> or set WRITING_ASSISTANT_TUI_SERVER for a
+               server on another machine or port.
+  Email        Your account's email address.
+  Password     Your password (at least 8 characters for a new account).
+
+  Login              Sign in with the details above.
+  Create an account  Switch to registration (adds a Confirm password field);
+                     press it again ("Back to login") to switch back.
+
+[b]Keys[/b]
+  Tab / Shift+Tab   Move between the fields and buttons.
+  Enter             Submit the form.
+  Ctrl+C / Ctrl+V   Copy / paste in a field.
+  F1                This help · Ctrl+Q or the Quit button to leave.
+"""
+
+
 class LoginScreen(Screen[None]):
     """Sign in or create an account on the writing-assistant server."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("f1", "help", "Help")]
 
     def __init__(self, session: Session, *, message: str = "") -> None:
         super().__init__()
@@ -762,6 +796,9 @@ class LoginScreen(Screen[None]):
         widget.update(text)
         widget.set_classes("status-line error" if error else "status-line")
 
+    def action_help(self) -> None:
+        self.app.push_screen(MessageScreen("Help", LOGIN_HELP_TEXT))
+
     @on(Button.Pressed, "#quit")
     def _quit(self) -> None:
         self.app.exit()
@@ -781,6 +818,12 @@ class LoginScreen(Screen[None]):
             "password (at least 8 characters)" if self._register_mode else "password"
         )
         self._set_message("")
+        # Move focus to the field the user types in next, rather than leaving
+        # it on the toggled button (where a stray Enter flips the mode back and
+        # typed text is dropped).
+        self.query_one(
+            "#confirm" if self._register_mode else "#password", Input
+        ).focus()
 
     @on(Input.Submitted)
     @on(Button.Pressed, "#submit")
@@ -844,10 +887,12 @@ class EditorScreen(Screen[None]):
         Binding("ctrl+s", "save", "Save", priority=True),
         Binding("ctrl+o", "open", "Open", show=False, priority=True),
         Binding("ctrl+n", "new", "New", show=False, priority=True),
-        Binding("f5", "generate('ideas')", "Ideas", show=False, priority=True),
-        Binding("f6", "generate('rewrite')", "Rewrite", show=False, priority=True),
-        Binding("f7", "generate('improve')", "Improve", show=False, priority=True),
-        Binding("f8", "generate('proofread')", "Proofread", show=False, priority=True),
+        # Derived from GENERATION_MODES so adding a mode there (as the README
+        # says) gives it a working key, not only a button.
+        *[
+            Binding(key, f"generate('{mode}')", label, show=False, priority=True)
+            for mode, label, key in GENERATION_MODES
+        ],
         Binding("ctrl+g", "generate('ideas')", "Ideas", show=False, priority=True),
         Binding("ctrl+u", "use_suggestion", "Use text", priority=True),
         Binding("ctrl+q", "quit_app", "Quit", priority=True),
@@ -1216,7 +1261,8 @@ class EditorScreen(Screen[None]):
             await self._session_expired()
             return
         except ApiError as exc:
-            self.notify(exc.message, severity="error", timeout=10)
+            # The message is shown in the suggestion panel below; a second
+            # copy as a toast only stacks over the mode buttons.
             generated = ""
             error = exc.message
         else:
@@ -1355,7 +1401,8 @@ class EditorScreen(Screen[None]):
         filename = await self.app.push_screen_wait(
             PromptScreen(
                 "Save As",
-                "Filename",
+                "Name in your library (kept on the server, shared with the web "
+                "UI — not a file on this machine; use File → Export for that)",
                 default=suggested,
                 placeholder="my-document.json",
                 confirm_label="Save",
@@ -1627,6 +1674,16 @@ class EditorScreen(Screen[None]):
         if not path_text:
             return
         path = Path(path_text).expanduser()
+        if path.exists():
+            confirmed = await self.app.push_screen_wait(
+                ConfirmScreen(
+                    "Overwrite file",
+                    f"{path} already exists. Overwrite it?",
+                    confirm_label="Overwrite",
+                )
+            )
+            if not confirmed:
+                return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(self._document_payload(), indent=2))
@@ -1640,7 +1697,19 @@ class EditorScreen(Screen[None]):
         body = self.editor.text
         text = f"{title}\n\n{body}" if title else body
         self.app.copy_to_clipboard(text)
-        self.notify("Document copied to the clipboard.")
+        if system_clipboard_available():
+            self.notify("Document copied to the clipboard.")
+        else:
+            # e.g. over SSH: no wl-copy/xclip/xsel/pbcopy, so the copy only
+            # reached the app's own clipboard and the terminal's OSC 52 (which
+            # not every terminal honours). Say so rather than imply success.
+            self.notify(
+                "Document copied. No clipboard tool (wl-copy/xclip/xsel/"
+                "pbcopy) was found, so if pasting elsewhere fails, use "
+                "File → Export to write it to a file.",
+                severity="warning",
+                timeout=10,
+            )
 
     @work
     async def action_logout(self) -> None:

@@ -154,6 +154,11 @@ def main() -> None:
     print(f"🔑 Register a new account at: {base}/register", flush=True)
     print(f"🔐 Login at: {base}/login", flush=True)
     print(f"📚 API documentation: {base}/docs", flush=True)
+    print(
+        "💻 Terminal interface (no browser needed): run `writing-assistant-tui` "
+        "in another terminal",
+        flush=True,
+    )
     print(f"💾 Database: {db_path}", flush=True)
     from . import main as main_module
 

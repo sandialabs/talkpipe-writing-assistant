@@ -213,8 +213,27 @@ def test_detail_message_shapes():
         == "query.q: bad"
     )
     assert _detail_message(response({"message": "boom"})) == "boom"
-    assert _detail_message(httpx.Response(500, text="oops")) == "oops"
+    # A short plain-text body is kept but tagged with its status.
+    assert _detail_message(httpx.Response(500, text="oops")) == "HTTP 500: oops"
     assert _detail_message(httpx.Response(502, text="")) == "HTTP 502"
+
+
+def test_detail_message_does_not_dump_html_error_pages():
+    """A wrong Server URL often points at some other HTTP service whose error
+    page is a whole HTML document; the message must summarise, not dump it."""
+    page = "<!doctype html><html><head><title>Example</title></head>" + "x" * 500
+    by_body = _detail_message(httpx.Response(404, text="<html>nope</html>"))
+    assert "<html>" not in by_body
+    assert "writing-assistant server" in by_body
+    by_type = _detail_message(
+        httpx.Response(200, text=page, headers={"content-type": "text/html"})
+    )
+    assert "<!doctype" not in by_type.lower()
+    assert "HTML page" in by_type
+    # An over-long non-HTML body is capped rather than flooding the UI.
+    capped = _detail_message(httpx.Response(500, text="z" * 5000))
+    assert len(capped) < 260
+    assert capped.endswith("…")
 
 
 async def test_test_connection_explains_server_without_endpoint():

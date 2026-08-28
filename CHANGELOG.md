@@ -1,6 +1,47 @@
 # Changelog
 
 ## Unreleased
+- The server startup banner now points at the terminal interface
+  (`writing-assistant-tui`), so someone who started the server without a
+  browser learns the terminal client exists.
+- More terminal-interface fixes from a first-use review, driven over a pty
+  (SSH/tmux) at several terminal sizes:
+  - A wrong Server URL that points at some other HTTP service (a proxy, a
+    static site, a captive portal) no longer dumps that service's entire HTML
+    error page into the login/settings error line. The client summarises it
+    ("The server returned an HTML page rather than a writing-assistant API
+    response (HTTP 405). Check that the Server URL points at a
+    writing-assistant server.") and caps any other non-JSON body to a short
+    snippet.
+  - **Create an account** now moves focus to the new Confirm password field
+    (and **Back to login** to the password field) instead of leaving it on the
+    toggled button, where a second Enter flipped the mode back and the text
+    typed next was dropped.
+  - F1 opens a help screen on the login screen too — it worked only in the
+    editor before — and the login footer lists it.
+  - The generation-mode key bindings (F5–F8) are derived from the same
+    `GENERATION_MODES` list as the mode buttons, so adding a mode there gives
+    it a working key rather than a button whose key does nothing — matching the
+    README's "Customizing Generation" note.
+  - AI Settings rejects a Server URL that does not begin with `http://` or
+    `https://` when saving, instead of storing it and only revealing the
+    mistake later at Test Connection (which reports the source/model, not the
+    URL).
+  - **File → Export** asks before overwriting an existing file, as **Save As**
+    already does before replacing a document in the library; a repeated export
+    to the same default path silently overwrote the earlier file.
+  - **File → Copy document to clipboard** now says when no clipboard tool
+    (`wl-copy`/`xclip`/`xsel`/`pbcopy`) is available, so an SSH user is not
+    told the document reached the system clipboard when it only reached the
+    app's own clipboard; it points at File → Export as the way out.
+  - A failed suggestion is shown once, in the suggestion panel, rather than
+    also as a toast notification stacked over the mode buttons.
+- README terminal-interface docs: the key table notes that Ctrl+G also runs
+  Ideas and that Save stores the document in the server library rather than
+  writing a file (Export writes a file), clarifies that Ctrl+C / Ctrl+V always
+  work within the app and only the *system*-clipboard bridge needs
+  `wl-paste`/`xclip`/`xsel`/`pbpaste`, and notes that the cursor starts in the
+  document body (Shift+Tab reaches the title).
 - The terminal interface's system-clipboard bridge now runs the clipboard tool (`wl-paste`/`wl-copy`, `xclip`, `xsel`, `pbpaste`/`pbcopy`) from the absolute path `shutil.which` resolved instead of a bare name looked up on `PATH` a second time at launch, and passes `shell=False` explicitly. The Bandit advisories on that module (B404 `import subprocess`, B603 subprocess without shell) were reviewed — the command line is a fixed allow-list of tools and flags, and clipboard text reaches the tool via stdin only — and are marked as such on the specific lines, so the `security-scan` job passes while any new subprocess use elsewhere in `src/` is still reported.
 - Generation prompts for the **rewrite**, **improve**, **proofread** and default modes now ask the model for a single bare paragraph — no heading, title, explanation, or commentary before or after it. Some models (seen with Ollama `llama3.2` on a long section) returned a title line plus several paragraphs, or for proofread a note such as `The sentence should read: "..."`; because "Use This Text" replaces the section verbatim and sections are split at blank lines, one section became three, or the commentary was pasted into the document. Only the closing instruction of each prompt changed (the `ideas` list is unaffected); the prompt template and the output handling are untouched, so well-behaved models produce the same results as before. Applies to both the web and terminal interfaces, which share the endpoint.
 - Document and snapshot timestamps in the API (`modified` / `created` in `GET /documents/list` and `GET /documents/snapshots/{filename}`) now carry an explicit `+00:00` offset. They were UTC without any offset, which browsers parse as *local* time, so the web UI's Open dialog and Revert to Snapshot list showed the UTC wall-clock as if it were local (13:48 for a document saved at 07:48 in UTC-6) and contradicted the local-time stamp in the snapshot's own name. Storage is unchanged (still UTC; no migration); the deprecated `datetime.utcnow` is gone; and a snapshot's name and its stored time are now derived from one instant so they always agree. The terminal interface already converted bare values to local time and keeps doing so for older servers.
