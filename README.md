@@ -223,6 +223,14 @@ real round trip before generating — it reports exactly what is wrong
 > `ollama`, plus "Server default", which defers to the source configured on
 > the server (TalkPipe configuration).
 
+**Other OpenAI-compatible servers** (LM Studio, vLLM, llama.cpp's server,
+a corporate gateway): choose `openai` as the source, put the server's base
+URL in **Server URL** (usually ending in `/v1`, e.g.
+`http://localhost:1234/v1`), and set **API Key** to whatever it expects —
+any non-empty value if it does not check one. Nothing in the application
+is specific to Ollama beyond its address; the same document works against
+any of these once the source and model are switched in AI Settings.
+
 **Server default (administrators):** to give every account a working model
 without each user visiting AI Settings, set TalkPipe's default source and
 model in the server's environment before starting it — users who leave AI
@@ -270,6 +278,31 @@ writing-assistant
 writing-assistant-tui
 ```
 
+**Keeping the server running.** The server must outlive the terminal you
+started it in. On a headless or SSH-only machine the simplest way is a tmux
+session (`tmux new -d -s writing-assistant writing-assistant`; reattach with
+`tmux attach -t writing-assistant`). To have it start at login and restart
+on failure, install it as a systemd user service — put the following in
+`~/.config/systemd/user/writing-assistant.service` (adjust the venv path and
+add any `Environment=` lines you need, e.g. `TALKPIPE_OLLAMA_SERVER_URL`),
+then `systemctl --user enable --now writing-assistant`:
+
+```ini
+[Unit]
+Description=TalkPipe Writing Assistant server
+
+[Service]
+ExecStart=%h/.venv/bin/writing-assistant
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Run `loginctl enable-linger $USER` once if the service should also run while
+you are not logged in. The container images in
+[CONTAINER_DEPLOYMENT.md](CONTAINER_DEPLOYMENT.md) are the other option.
+
 Log in (or choose **Create an account**) on the first screen — the server
 URL defaults to `http://localhost:8001`; pass `--server http://host:port` or
 set `WRITING_ASSISTANT_TUI_SERVER` if the server runs on another machine or
@@ -296,10 +329,11 @@ a server default, leave the source on "Server default" and the model blank
 | `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section (`Ctrl+G` also runs Ideas). A request made while another is still generating is queued and runs next |
 | `Ctrl+U` | Use the suggestion as the section's text (for Ideas, which are advice rather than prose, it asks first) |
 | `Ctrl+S` | Save (asks for a library name the first time — the document is stored on the server, shared with the web UI, not written to a file here; use File → Export for a file) |
-| `Ctrl+N` / `Ctrl+O` | New document (a title and optional outline; `Ctrl+S` then stores it in your library) / Open a document from your library |
+| `Ctrl+N` / `Ctrl+O` | New document (a title and optional outline; `Ctrl+S` then stores it in your library) / Open a document from your library (type to filter the list by name or title; `Up`/`Down` and `Enter` pick one) |
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
+| `Ctrl+P` | Command palette: type part of a command's name (Save As, Create snapshot, Export, Log out, …) and press `Enter` |
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Esc` | Close a dialog or menu without changes |
 | `Ctrl+Q` | Quit (asks first if there are unsaved changes — **Save**, **Discard changes** or **Cancel**; the same prompt guards Open, New, Import, Revert and Log out. `Ctrl+C` copies the editor selection and does not quit) |
@@ -316,8 +350,12 @@ The login token is remembered in `~/.writing_assistant/tui_session.json`
 (mode 600; set `WRITING_ASSISTANT_TUI_HOME` to move it), so the next launch
 skips the login screen and reopens the last document at the section you
 were working on. `writing-assistant-tui --logout` forgets the saved
-session. Import/Export use the same JSON
-document format as the web UI, so files move between the two freely.
+session and starts at the login screen. Import/Export use the same JSON
+document format as the web UI, so files move between the two freely:
+Export writes that JSON to the path you give (the default is the document's
+library name in the directory you started the TUI from), and the text
+itself is the file's `content` field — for plain text, use **Copy document
+to clipboard** in the File menu.
 
 ## Usage
 
@@ -470,7 +508,10 @@ reinstall (`pip install -e .` from a checkout). To add a whole new mode you
 also need to add its button to the web UI: the mode buttons are defined in
 `src/writing_assistant/app/templates/index.html` (the `.mode-btn` elements)
 and sent by `src/writing_assistant/app/static/script.js` — and to the TUI,
-in `GENERATION_MODES` in `src/writing_assistant/tui/app.py`. Any backend with
+in `GENERATION_MODES` in `src/writing_assistant/tui/app.py`. Register the
+mode's name in `GENERATION_MODES` in `callbacks.py` and give it a branch in
+`get_system_prompt()`: the server rejects a mode it does not know with a
+400 rather than quietly answering with another mode's prompt. Any backend with
 an OpenAI-, Anthropic-, or Ollama-compatible endpoint works; point the
 provider API key / base URL settings (or `TALKPIPE_OLLAMA_SERVER_URL` for
 Ollama) at your endpoint and select the source/model in Settings → AI

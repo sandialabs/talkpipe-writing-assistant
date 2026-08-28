@@ -454,6 +454,18 @@ async def generate_text(
     user: User = Depends(current_active_user),
 ) -> dict[str, str]:
     """Generate text for a section - requires authentication."""
+    if generation_mode not in cb.GENERATION_MODES:
+        # An unregistered mode used to fall back to another mode's prompt
+        # silently, which hid a half-finished custom mode (README:
+        # "Customizing Generation") behind plausible-looking output.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown generation mode '{generation_mode}'. Known modes: "
+                f"{', '.join(cb.GENERATION_MODES)}. A new mode needs its prompt "
+                "added to get_system_prompt() in core/callbacks.py."
+            ),
+        )
     try:
         env_vars = _request_env_vars(environment_variables, source, server_url, api_key)
 
@@ -544,7 +556,7 @@ async def generate_text(
             ) from e
 
         category = ai_connection.classify_failure(e)
-        if category in ("credentials", "missing_model", "connection"):
+        if category in ("credentials", "missing_model", "timeout", "connection"):
             # A configuration/backend problem the user can act on: describe
             # it the same way the Test Connection button would, pointing at
             # the dialog fields that were actually in play for this request.

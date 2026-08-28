@@ -145,6 +145,11 @@ _CONNECTION_ERROR_TYPE_NAMES = (
     "ResponseError",
 )
 
+# Exception class names that mean "reached the server, but it did not
+# answer in time" (httpx / the OpenAI and Anthropic SDKs). A connect
+# timeout stays a connection failure: nothing answered at all.
+_TIMEOUT_TYPE_NAMES = ("ReadTimeout", "APITimeoutError")
+
 _SOURCE_DISPLAY_NAMES = {
     "ollama": "Ollama",
     "openai": "OpenAI",
@@ -158,7 +163,7 @@ def _display_name(source: str) -> str:
 
 def classify_failure(exc: BaseException) -> str:
     """Bucket a probe failure into ``credentials``, ``missing_model``,
-    ``connection`` or ``unknown``.
+    ``timeout``, ``connection`` or ``unknown``.
 
     The exception's type and message are consulted only to choose the
     bucket - nothing from the message is returned - so the user-facing
@@ -171,10 +176,18 @@ def classify_failure(exc: BaseException) -> str:
         return "credentials"
     if any(marker in msg for marker in _MISSING_MODEL_MARKERS):
         return "missing_model"
-    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+    if type(exc).__name__ in _TIMEOUT_TYPE_NAMES:
+        return "timeout"
+    if isinstance(exc, ConnectionError) or (
+        type(exc).__name__ in _CONNECTION_ERROR_TYPE_NAMES
+    ):
         return "connection"
-    if type(exc).__name__ in _CONNECTION_ERROR_TYPE_NAMES:
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    if isinstance(exc, OSError):
         return "connection"
+    if "timed out" in msg or "timeout" in msg:
+        return "timeout"
     if any(marker in msg for marker in _CONNECTION_ERROR_MARKERS):
         return "connection"
     return "unknown"
@@ -218,7 +231,16 @@ def failure_reason(
             reason += " Check the Model name in AI Settings."
         return reason
 
-    if category == "connection":
+    if category == "timeout":
+        # Distinct from a wrong address: the host was reached but did not
+        # answer in time - an Ollama server loading a large model, say.
+        # "Try again" is the right first advice, not "check the URL".
+        reason = (
+            f"The {name} server did not answer in time (timed out). It may be "
+            "busy loading a model - try again in a moment; if it keeps "
+            "happening, check the Server URL."
+        )
+    elif category == "connection":
         reason = (
             f"Could not connect to the {name} server (connection refused, "
             "host not found, or timed out)."
@@ -288,19 +310,26 @@ def test_connection(
     model = model or cfg.get(TALKPIPE_MODEL_NAME, None)
 
     if not source or not model:
-        missing = []
-        if not source:
-            missing.append("AI Source")
-        if not model:
-            missing.append("Model name")
-        return _result(
-            False,
-            source,
-            model,
-            f"No {' or '.join(missing)} configured. Choose them in Settings "
-            "→ AI Settings, or ask the server administrator to configure a "
-            "server default.",
-        )
+        # The user is reading this inside AI Settings, so point at the
+        # field rather than at the dialog.
+        if not source and not model:
+            reason = (
+                "No AI Source or Model name configured. Choose a source and "
+                "enter a model name in AI Settings, or ask the server "
+                "administrator to configure a server default."
+            )
+        elif not model:
+            reason = (
+                "No Model name configured. Enter one in the Model field "
+                "(e.g. llama3.1:8b or gpt-4o), or ask the server "
+                "administrator to configure a server default."
+            )
+        else:
+            reason = (
+                "No AI Source configured. Choose one in the AI source field, "
+                "or ask the server administrator to configure a server default."
+            )
+        return _result(False, source, model, reason)
 
     known_sources = getPromptSources()
     if source not in known_sources:

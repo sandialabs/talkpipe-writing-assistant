@@ -1,6 +1,52 @@
 # Changelog
 
 ## Unreleased
+- Terminal interface, a third first-use review (small terminals, long
+  documents, large libraries, the command palette):
+  - The Settings dialog is usable on short terminals: below 24 rows it drops
+    its hint line and vertical padding and takes the whole height, so the
+    form still has rows to scroll in and the buttons stay on screen. At 60x16
+    (the documented minimum) it showed only its title and tab bar — the model
+    could not be configured at all.
+  - The File menu and the Open / Revert pickers scroll on short terminals
+    instead of being clipped by the dialog. At 60x16 the menu's last entries
+    (Import, Export, Copy, Log out) were invisible while the highlight kept
+    moving into them, so Enter ran "Log out" without it ever being shown.
+  - The Open dialog has a filter field: typing narrows the list by name or
+    title, Up/Down move through the matches and Enter opens the highlighted
+    one. A library of a few dozen documents could only be paged through.
+  - Less work per keystroke on long documents: the cursor offset is read
+    from the editor's document instead of re-splitting the whole text on
+    every cursor move, and the suggestion panel is only redrawn when the
+    section under the cursor (or its state) actually changes — most cursor
+    moves stay within one section.
+  - Test Connection reports its result once, in the dialog's status line;
+    the toast copy it also raised covered the Test Connection / Save AI
+    Settings buttons.
+  - A "could not connect" error left in the suggestion panel is cleared by
+    the next successful save instead of lingering after the server is back.
+  - The command palette (Ctrl+P) is documented in the README key table and
+    F1 help, and no longer offers Textual's Theme, Maximize and Screenshot
+    entries — only Quit, Keys and the application's own commands.
+  - The Save As caption says why library names end in `.json`, since the
+    same dialog explains that the name is not a file.
+- Test Connection and generation errors distinguish a server that did not
+  answer in time from one that could not be reached: a read timeout (an
+  Ollama host still loading a model, say) now says so and suggests trying
+  again, rather than "connection refused, host not found, or timed out —
+  double-check the Server URL". The missing-source / missing-model reasons
+  point at the field to fill in ("Enter one in the Model field") instead of
+  telling a user who is already in AI Settings to open AI Settings.
+- `/generate-text` rejects an unknown generation mode with a 400 that lists
+  the known ones (`GENERATION_MODES` in `core/callbacks.py`). It used to fall
+  back to another mode's prompt silently, which hid a half-finished custom
+  mode behind plausible output; the README's "Customizing Generation" note
+  now names that registration step.
+- README: how to keep the server running for a terminal-only setup (a tmux
+  one-liner and a systemd user unit), that `--logout` starts at the login
+  screen rather than exiting, what Export writes and where the file lands,
+  and how to point the assistant at an OpenAI-compatible local server such
+  as LM Studio or vLLM.
 - Terminal interface, a further first-use review (multi-section documents,
   queued suggestions, dialogs, small terminals):
   - A suggestion requested while another section's is still generating is now

@@ -250,6 +250,28 @@ ModalScreen {
     height: 90%;
 }
 
+/* Short terminals (fewer than 24 rows): the hint line and the vertical
+   padding go, and the dialog takes the whole height, so the form keeps a
+   few rows to scroll in and the buttons stay on screen (at 60x16 nothing
+   but the title and tab bar was visible). */
+.dialog-settings.compact {
+    height: 100%;
+    max-height: 100%;
+    padding: 0 2;
+}
+
+.dialog-settings.compact .dialog-hint {
+    display: none;
+}
+
+.dialog-settings.compact .dialog-title {
+    margin-bottom: 0;
+}
+
+.dialog-settings.compact .dialog-buttons {
+    margin-top: 0;
+}
+
 .dialog-settings TabbedContent {
     height: 1fr;
 }
@@ -262,6 +284,11 @@ ModalScreen {
 /* Four buttons in a row must fit a 70-column terminal. */
 .dialog-settings .dialog-buttons Button {
     min-width: 8;
+}
+
+/* The picker's filter field sits directly above the list. */
+.picker-filter {
+    margin: 0 0 1 0;
 }
 
 .dialog-title {
@@ -325,6 +352,9 @@ ModalScreen {
     margin-right: 2;
 }
 
+/* The menu and picker lists: `max-height` is lowered from the screen's
+   height on resize (see _fit_option_list) so the list scrolls inside the
+   dialog instead of the dialog clipping it. */
 OptionList {
     height: auto;
     max-height: 20;

@@ -9,6 +9,12 @@ from .definitions import Metadata
 _paragraph_lock = threading.Lock()
 
 
+# The generation modes with a prompt below. The web UI's buttons and the
+# TUI's GENERATION_MODES must name modes from this list; /generate-text
+# rejects any other with a 400.
+GENERATION_MODES: tuple[str, ...] = ("ideas", "rewrite", "improve", "proofread")
+
+
 def get_system_prompt(generation_mode: str) -> str:
     """Get system prompt based on generation mode"""
     base_context = """You are an expert writing assistant. Your role is to help improve written content with precision and skill.

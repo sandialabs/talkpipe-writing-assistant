@@ -332,3 +332,16 @@ def test_register_accepts_valid_password(client):
     )
     assert response.status_code == 201
     assert response.json()["email"] == "longpass@example.com"
+
+
+def test_generate_text_rejects_an_unknown_mode(authenticated_client):
+    """An unregistered mode used to fall back to another prompt silently."""
+    response = authenticated_client.post(
+        "/generate-text",
+        data={"user_text": "Cats are nice.", "generation_mode": "summarize"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Unknown generation mode 'summarize'" in detail
+    for mode in ("ideas", "rewrite", "improve", "proofread"):
+        assert mode in detail

@@ -540,3 +540,44 @@ def test_connection_env_overrides_resolves_default_source():
         "OPENAI_BASE_URL": "http://proxy.example/v1",
         "OPENAI_API_KEY": "sk-test",
     }
+
+
+class ReadTimeout(Exception):
+    """Stands in for httpx.ReadTimeout (matched by class name)."""
+
+
+class ConnectTimeout(Exception):
+    """Stands in for httpx.ConnectTimeout (matched by class name)."""
+
+
+def test_classify_read_timeouts_apart_from_connection_failures():
+    from writing_assistant.core import ai_connection
+
+    assert ai_connection.classify_failure(ReadTimeout("read")) == "timeout"
+    assert ai_connection.classify_failure(TimeoutError()) == "timeout"
+    assert ai_connection.classify_failure(RuntimeError("request timed out")) == (
+        "timeout"
+    )
+    # Nothing answered at all: still a connection problem.
+    assert ai_connection.classify_failure(ConnectTimeout("connect")) == "connection"
+    assert ai_connection.classify_failure(ConnectionRefusedError()) == "connection"
+
+
+def test_timeout_reason_says_to_try_again_not_to_check_the_url_first():
+    from writing_assistant.core import ai_connection
+
+    reason = ai_connection.failure_reason(ReadTimeout(), "ollama", "m", "", False)
+    assert "did not answer in time" in reason
+    assert "try again" in reason
+    assert "connection refused" not in reason
+
+
+def test_connection_missing_model_points_at_the_model_field():
+    from writing_assistant.core import ai_connection
+
+    with patch.object(ai_connection, "get_config", return_value={}):
+        result = ai_connection.test_connection("ollama", "")
+
+    assert result["available"] is False
+    assert "Model field" in result["reason"]
+    assert "Choose them" not in result["reason"]

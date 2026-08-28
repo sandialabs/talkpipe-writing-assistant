@@ -1372,3 +1372,178 @@ async def test_settings_and_delete_messages_explain_the_editor_state(tui_app):
 def test_help_text_covers_editing_keys_and_the_save_choice():
     for needle in ("Ctrl+X", "Ctrl+Z", "Shift+Arrows", "Queued", "Save (save"):
         assert needle in HELP_TEXT, needle
+
+
+# -- third first-use review: small terminals, long documents, big libraries --
+
+
+async def _register_and_login_small(pilot, app: WritingAssistantApp) -> EditorScreen:
+    """Register from the keyboard: on a short terminal the login box scrolls."""
+    app.screen.query_one("#toggle", Button).press()
+    await _settle(pilot)
+    app.screen.query_one("#email", Input).value = EMAIL
+    app.screen.query_one("#password", Input).value = PASSWORD
+    confirm = app.screen.query_one("#confirm", Input)
+    confirm.value = PASSWORD
+    confirm.focus()
+    await pilot.press("enter")
+    await _settle(pilot)
+    assert isinstance(app.screen, EditorScreen), _login_message(app)
+    return app.screen
+
+
+async def test_settings_dialog_is_usable_at_the_minimum_terminal_size(tui_app):
+    """At 60x16 the dialog showed only its title and tab bar: no fields."""
+    app = tui_app
+    async with app.run_test(size=(60, 16)) as pilot:
+        await _register_and_login_small(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings, SettingsScreen)
+        await pilot.press("f3")  # AI Settings tab
+        await _settle(pilot)
+        source = settings.query_one("#source")
+        assert source.region.height > 0, "the AI source field is not on screen"
+        assert source.region.y >= 0
+        assert source.region.bottom <= 16, source.region
+        test_button = settings.query_one("#test", Button)
+        assert test_button.region.height > 0
+        assert test_button.region.bottom <= 16, test_button.region
+        # Tabbing reaches the fields below the fold too.
+        settings.query_one("#model", Input).focus()
+        await pilot.press("tab")
+        await _settle(pilot)
+        url = settings.query_one("#server_url", Input)
+        assert app.focused is url
+        assert url.region.height > 0
+        assert url.region.bottom <= 16, url.region
+
+
+async def test_file_menu_scrolls_on_a_short_terminal(tui_app):
+    """The menu was clipped at 60x16: Enter ran a hidden 'Log out'."""
+    app = tui_app
+    async with app.run_test(size=(60, 16)) as pilot:
+        await _register_and_login_small(pilot, app)
+        await pilot.press("f2")
+        await _settle(pilot)
+        menu = app.screen.query_one("#menu")
+        assert menu.region.bottom <= 16, menu.region
+        await pilot.press("end")
+        await _settle(pilot)
+        last = menu.get_option_at_index(menu.option_count - 1)
+        assert menu.highlighted == menu.option_count - 1
+        assert last.id == "logout"
+        # The list scrolled so the highlighted entry is within its viewport.
+        assert menu.scroll_offset.y > 0
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+
+
+async def test_open_picker_filters_as_you_type(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        for name, title in (("one", "Alpha notes"), ("two", "Beta draft")):
+            await editor.client.save_document(
+                f"{name}.json", {"title": title, "content": "x", "sections": []}
+            )
+        await pilot.press("ctrl+o")
+        await _settle(pilot)
+        picker = app.screen
+        assert isinstance(picker, PickerScreen)
+        options = picker.query_one("#entries")
+        assert options.option_count == 2
+        picker.query_one("#filter", Input).focus()
+        await pilot.press(*"beta")
+        await _settle(pilot)
+        assert options.option_count == 1
+        assert options.get_option_at_index(0).id == "two.json"
+        # Down/Up from the filter field move the list; Enter opens.
+        await pilot.press("down", "up", "enter")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert editor.filename == "two.json"
+        assert editor.title_input.value == "Beta draft"
+
+
+async def test_cursor_offset_and_panel_redraw_on_long_documents(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        area = editor.query_one("#editor", TextArea)
+        text = "\n\n".join(f"Paragraph {i} with some words." for i in range(40))
+        area.load_text(text)
+        area.focus()
+        await pilot.pause()
+        area.move_cursor((6, 4))  # inside "Paragraph 3"
+        await _settle(pilot)
+        expected = sum(len(line) + 1 for line in text.split("\n")[:6]) + 4
+        assert editor._cursor_offset() == expected
+        assert editor.current_index == 3
+        assert _text(editor.query_one("#section-info", Static)) == "Section 4 of 40"
+        # Moving within the same section leaves the panel alone.
+        shown = editor._panel_shown
+        area.move_cursor((6, 10))
+        await _settle(pilot)
+        assert editor._panel_shown is shown
+        # Moving to another section redraws it.
+        area.move_cursor((8, 0))
+        await _settle(pilot)
+        assert editor._panel_shown is not shown
+        assert _text(editor.query_one("#section-info", Static)) == "Section 5 of 40"
+
+
+async def test_test_connection_result_is_not_also_a_toast(tui_app, mocker):
+    mocker.patch(
+        "writing_assistant.app.main.ai_connection.test_connection",
+        return_value={
+            "available": False,
+            "source": "ollama",
+            "model": "m",
+            "reason": "Could not connect to the Ollama server.",
+        },
+    )
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        settings.query_one("#tabs").active = "tab-ai"
+        settings.query_one("#test", Button).press()
+        await _settle(pilot)
+        assert "Could not connect" in _text(
+            settings.query_one("#connection-status", Static)
+        )
+        assert not any(
+            "Could not connect" in str(n.message) for n in app._notifications
+        )
+
+
+async def test_successful_save_clears_a_stale_connection_error(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.query_one("#editor", TextArea).load_text("Some text.")
+        await pilot.pause()
+        panel = editor.query_one("#suggestion-text", Static)
+        panel.update("Error: Could not connect to the writing-assistant server")
+        editor._panel_shown = None
+        assert await editor._save_document("back.json", save_as=True)
+        await _settle(pilot)
+        assert "Error:" not in _text(panel)
+
+
+async def test_command_palette_offers_only_relevant_system_commands(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+        titles = {c.title for c in app.get_system_commands(app.screen)}
+        assert titles == {"Quit", "Keys"}
+
+
+def test_help_text_covers_the_palette_and_the_open_filter():
+    for needle in ("Ctrl+P", "filter"):
+        assert needle in HELP_TEXT, needle

@@ -11,18 +11,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding, BindingType
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
-from textual.events import Resize
+from textual.document._document import Document
+from textual.events import Key, Resize
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
@@ -133,6 +134,8 @@ HELP_TEXT = """\
   F3      Settings: writing style, tone, audience, context, directive,
           word limit; AI source/model, connection, environment variables
   F1      This help
+  Ctrl+P  Command palette: type part of a command's name (Save As, Create
+          snapshot, Export, Log out, …) and press Enter to run it
   Ctrl+Q  Quit (asks first if there are unsaved changes)
   Ctrl+C  Copies the selection in the editor; it does not quit
 
@@ -144,6 +147,8 @@ HELP_TEXT = """\
   Tab         Next field; Shift+Tab previous
   In Settings, F3 switches between the Document and AI Settings tabs
   (so do Left/Right while the tab bar is focused).
+  In the Open dialog, type to filter the list by name or title; Up/Down
+  move through the matches and Enter opens the highlighted one.
   Long dialogs such as this one scroll: Up/Down, PageUp/PageDown.
 
 On a short terminal (fewer than 22 rows) the mode buttons are hidden to
@@ -157,6 +162,18 @@ library the web interface uses, so you can switch between the two freely.
 # --------------------------------------------------------------------------
 # Small reusable modals
 # --------------------------------------------------------------------------
+
+
+def _fit_option_list(options: OptionList, screen_height: int, overhead: int) -> None:
+    """Cap ``options`` so the dialog around it fits in ``screen_height`` rows.
+
+    The dialog is ``height: auto`` and clips whatever does not fit, so on a
+    short terminal a list longer than the screen lost its last entries —
+    the highlight moved into the clipped part and Enter ran an item the
+    user never saw. Capped, the list scrolls to keep the highlight visible.
+    ``overhead`` is the number of rows the dialog uses around the list.
+    """
+    options.styles.max_height = max(3, screen_height - overhead)
 
 
 class MessageScreen(ModalScreen[None]):
@@ -316,6 +333,10 @@ class MenuScreen(ModalScreen[str | None]):
     def on_mount(self) -> None:
         self.query_one("#menu", OptionList).focus()
 
+    def on_resize(self, event: Resize) -> None:
+        # Border + padding (4), title and its margin (2), a spare row.
+        _fit_option_list(self.query_one("#menu", OptionList), event.size.height, 7)
+
     @on(OptionList.OptionSelected, "#menu")
     def _selected(self, event: OptionList.OptionSelected) -> None:
         self.dismiss(event.option.id)
@@ -353,6 +374,13 @@ class PickerScreen(ModalScreen[tuple[str, str] | None]):
         with Vertical(classes="dialog dialog-wide"):
             yield Label(self._title, classes="dialog-title")
             if self._entries:
+                # Typing narrows a long library down; Up/Down and Enter
+                # still work from the filter field (see on_key).
+                yield Input(
+                    placeholder="Type to filter…",
+                    id="filter",
+                    classes="picker-filter",
+                )
                 yield OptionList(
                     *[Option(label, id=entry_id) for entry_id, label in self._entries],
                     id="entries",
@@ -369,6 +397,52 @@ class PickerScreen(ModalScreen[tuple[str, str] | None]):
     def on_mount(self) -> None:
         if self._entries:
             self.query_one("#entries", OptionList).focus()
+
+    def on_resize(self, event: Resize) -> None:
+        if self._entries:
+            # Border + padding (4), title (2), filter (4), buttons (4).
+            _fit_option_list(
+                self.query_one("#entries", OptionList), event.size.height, 14
+            )
+
+    @on(Input.Changed, "#filter")
+    def _filter_changed(self, event: Input.Changed) -> None:
+        needle = event.value.strip().lower()
+        options = self.query_one("#entries", OptionList)
+        options.clear_options()
+        options.add_options(
+            [
+                Option(label, id=entry_id)
+                for entry_id, label in self._entries
+                if needle in label.lower()
+            ]
+        )
+        if options.option_count:
+            options.highlighted = 0
+
+    @on(Input.Submitted, "#filter")
+    def _filter_submitted(self) -> None:
+        entry_id = self._highlighted_id()
+        if entry_id is not None:
+            self.dismiss(("open", entry_id))
+
+    def on_key(self, event: Key) -> None:
+        # Arrow keys in the filter field move the list's highlight, so a
+        # user need not Tab to the list after narrowing it down.
+        if not isinstance(self.focused, Input) or self.focused.id != "filter":
+            return
+        options = self.query_one("#entries", OptionList)
+        actions = {
+            "up": options.action_cursor_up,
+            "down": options.action_cursor_down,
+            "pageup": options.action_page_up,
+            "pagedown": options.action_page_down,
+        }
+        action = actions.get(event.key)
+        if action is not None:
+            event.stop()
+            event.prevent_default()
+            action()
 
     def _highlighted_id(self) -> str | None:
         options = self.query_one("#entries", OptionList)
@@ -620,6 +694,13 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
 
     # -- collecting values -----------------------------------------------------
 
+    COMPACT_ROWS: ClassVar[int] = 24
+
+    def on_resize(self, event: Resize) -> None:
+        self.query_one(".dialog-settings").set_class(
+            event.size.height < self.COMPACT_ROWS, "compact"
+        )
+
     def _value(self, widget_id: str) -> str:
         try:
             widget = self.query_one(f"#{widget_id}")
@@ -755,18 +836,17 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         except ApiError as exc:
             status.update(f"✗ {exc.message}")
             status.set_classes("status-line error")
-            self.notify(exc.message, severity="error", timeout=10)
             return
+        # The status line below the form is the one place the result is
+        # shown: a toast copy of it only covered the dialog's buttons.
         if report.get("available"):
             message = f"Connected to {report.get('source')} / {report.get('model')}"
             status.update(f"✓ {message}")
             status.set_classes("status-line success")
-            self.notify(message)
         else:
             reason = str(report.get("reason") or "Connection failed.")
             status.update(f"✗ {reason}")
             status.set_classes("status-line error")
-            self.notify(reason, severity="error", timeout=10)
 
 
 # --------------------------------------------------------------------------
@@ -985,6 +1065,7 @@ class EditorScreen(Screen[None]):
         self._queue: list[tuple[str, Section]] = []
         self._loading = False
         self._too_small_notified = False
+        self._panel_shown: tuple[Any, ...] | None = None
 
     # -- layout ----------------------------------------------------------------
 
@@ -1138,10 +1219,14 @@ class EditorScreen(Screen[None]):
         return self.query_one("#title", Input)
 
     def _cursor_offset(self) -> int:
+        # The document keeps line offsets; splitting the whole text on every
+        # cursor move did work proportional to the document's length.
         editor = self.editor
-        row, col = editor.cursor_location
-        lines = editor.text.split("\n")
-        return sum(len(line) + 1 for line in lines[:row]) + col
+        document = editor.document
+        if isinstance(document, Document):
+            return document.get_index_from_location(editor.cursor_location)
+        row, col = editor.cursor_location  # pragma: no cover - other backends
+        return sum(len(document.get_line(i)) + 1 for i in range(row)) + col
 
     def _location_from_offset(self, offset: int) -> tuple[int, int]:
         text = self.editor.text[:offset]
@@ -1252,6 +1337,29 @@ class EditorScreen(Screen[None]):
 
     def _update_current_section(self) -> None:
         self.current_index = section_index_at(self.sections, self._cursor_offset())
+        self._render_panel()
+
+    def _panel_state(self) -> tuple[Any, ...]:
+        """What the suggestion panel shows, for skipping redundant redraws."""
+        count = len(self.sections)
+        if self.current_index == -1 or count == 0:
+            return (count, None)
+        section = self.sections[self.current_index]
+        return (
+            count,
+            self.current_index,
+            section.generated_text,
+            self._generation_state(section),
+        )
+
+    def _render_panel(self) -> None:
+        # Most cursor moves stay within one section; redrawing the panel's
+        # widgets (and relaying out the screen) for each of them was most of
+        # the application's own per-keystroke work.
+        shown = self._panel_state()
+        if shown == self._panel_shown:
+            return
+        self._panel_shown = shown
         info = self.query_one("#section-info", Static)
         status = self.query_one("#section-status", Static)
         text = self.query_one("#suggestion-text", Static)
@@ -1401,8 +1509,10 @@ class EditorScreen(Screen[None]):
                 self._mark_dirty()
         self._update_current_section()
         if error and self._section_index(section) == self.current_index:
-            # Leave the error in the panel until the cursor moves on.
+            # Leave the error in the panel until the cursor moves on (or a
+            # later request to the server succeeds).
             text.update(f"Error: {error}")
+            self._panel_shown = None
         self._start_next_generation()
 
     def _start_next_generation(self) -> None:
@@ -1578,7 +1688,8 @@ class EditorScreen(Screen[None]):
             PromptScreen(
                 "Save As",
                 "Name in your library (kept on the server, shared with the web "
-                "UI — not a file on this machine; use File → Export for that)",
+                "UI — not a file on this machine; use File → Export for that). "
+                "Library names end in .json, as the web UI shows them.",
                 default=suggested,
                 placeholder="my-document.json",
                 confirm_label="Save",
@@ -1631,6 +1742,8 @@ class EditorScreen(Screen[None]):
         self._set_filename(filename)
         self._mark_dirty(False)
         self.remember_cursor()
+        # A "could not connect" error left in the panel is stale now.
+        self._update_current_section()
         self.notify(f"{message}: {filename}")
         return True
 
@@ -2095,6 +2208,14 @@ class WritingAssistantApp(App[None]):
         self.session = session or Session.load()
         self._client_factory = client_factory
         self._client: WritingAssistantClient | None = None
+
+    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
+        # Only the built-ins that mean something here: Textual's Theme,
+        # Maximize and Screenshot entries are not part of the documented
+        # interface and confused a first-time user of the palette.
+        for command in super().get_system_commands(screen):
+            if command.title in ("Quit", "Keys"):
+                yield command
 
     # Textual's Ctrl+V pastes from a clipboard internal to the app, so text
     # copied in another program never arrived (the terminal's own paste,
