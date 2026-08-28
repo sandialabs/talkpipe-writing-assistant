@@ -286,6 +286,13 @@ ModalScreen {
     color: $text-muted;
 }
 
+/* A prompt's caption: wraps when longer than the dialog. */
+.dialog .prompt-label {
+    height: auto;
+    margin-top: 1;
+    color: $text-muted;
+}
+
 .dialog-buttons {
     height: auto;
     margin-top: 1;

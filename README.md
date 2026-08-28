@@ -195,7 +195,7 @@ Point the application at an LLM endpoint — OpenAI, Anthropic, and Ollama are s
 1. Install Ollama from [ollama.com](https://ollama.com)
 2. Pull a model: `ollama pull [model name]`
 3. Start Ollama: `ollama serve`
-4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name] (in the terminal interface: `F3` → AI Settings)
+4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name] (in the terminal interface: `F3` → AI Settings). The name must match one Ollama has pulled: `ollama list` shows them on the Ollama machine, or `curl http://your-ollama-host:11434/api/tags` from anywhere; Test Connection reports a name Ollama does not have.
 
 If Ollama runs on a different machine (or a non-default port), set
 `TALKPIPE_OLLAMA_SERVER_URL` before starting the server (if the server is
@@ -283,30 +283,34 @@ Before asking for suggestions, tell the TUI which model to use: press `F3`,
 press `F3` again to switch to the **AI Settings** tab (or `Left`/`Right`
 with the tab bar focused), choose the AI source (`Enter` opens the
 dropdown) and enter a model name (see
-[Configure AI Backend](#3-configure-ai-backend)), press **Test
-Connection**, then **Save AI Settings**. The choice is stored with your
+[Configure AI Backend](#3-configure-ai-backend); if Ollama runs on another
+machine, put its address in **Server URL** on the same tab, or start the
+server with `TALKPIPE_OLLAMA_SERVER_URL`), press **Test Connection**, then
+**Save AI Settings**. The choice is stored with your
 account, so the web interface uses it too. If the administrator configured
 a server default, leave the source on "Server default" and the model blank
 — Test Connection shows which model the server resolves.
 
 | Key | Action |
 |-----|--------|
-| `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section (`Ctrl+G` also runs Ideas) |
-| `Ctrl+U` | Use the suggestion as the section's text |
+| `F5` / `F6` / `F7` / `F8` | Ideas / Rewrite / Improve / Proofread the current section (`Ctrl+G` also runs Ideas). A request made while another is still generating is queued and runs next |
+| `Ctrl+U` | Use the suggestion as the section's text (for Ideas, which are advice rather than prose, it asks first) |
 | `Ctrl+S` | Save (asks for a library name the first time — the document is stored on the server, shared with the web UI, not written to a file here; use File → Export for a file) |
-| `Ctrl+N` / `Ctrl+O` | New document / Open a document from your library |
+| `Ctrl+N` / `Ctrl+O` | New document (a title and optional outline; `Ctrl+S` then stores it in your library) / Open a document from your library |
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Esc` | Close a dialog or menu without changes |
-| `Ctrl+Q` | Quit (asks first if there are unsaved changes; `Ctrl+C` copies the editor selection and does not quit) |
+| `Ctrl+Q` | Quit (asks first if there are unsaved changes — **Save**, **Discard changes** or **Cancel**; the same prompt guards Open, New, Import, Revert and Log out. `Ctrl+C` copies the editor selection and does not quit) |
+| `Shift+Arrows`, `Ctrl+X`, `Ctrl+Z` / `Ctrl+Y` | Select text, cut it, undo / redo. To move a section: select it, `Ctrl+X`, put the cursor on the blank line where it belongs, `Ctrl+V`; to delete one, select it and press `Delete` |
 | `Ctrl+C` / `Ctrl+V` | Copy the selection / paste — always work within the app (editor, title, and every dialog field). They also use the *system* clipboard when `wl-paste`, `xclip`, `xsel` or `pbpaste` is installed; to paste text from another program without one of those (e.g. over SSH) use the terminal's own paste — `Ctrl+Shift+V`, `Shift+Insert`, or `Shift`+middle-click |
 
-The editor works down to 60x16. Below 22 rows the mode buttons are hidden so
-the suggestion panel stays on screen (F5–F8 and Ctrl+U still work), and
-below 80 columns the buttons use short labels. If a suggestion comes back
-as several paragraphs, **Use This Text** inserts them as several sections.
+The editor works down to 60x16 (smaller than that, it says so). Below 22
+rows the mode buttons are hidden so the suggestion panel stays on screen
+(F5–F8 and Ctrl+U still work), and below 90 columns the buttons use short
+labels. If a suggestion comes back as several paragraphs, **Use This Text**
+inserts them as several sections and puts the cursor on the first.
 
 The login token is remembered in `~/.writing_assistant/tui_session.json`
 (mode 600; set `WRITING_ASSISTANT_TUI_HOME` to move it), so the next launch

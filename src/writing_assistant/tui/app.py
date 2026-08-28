@@ -102,6 +102,10 @@ HELP_TEXT = """\
   The suggestion panel follows the section under the cursor.
   Tab / Shift+Tab move between the title, the editor, the suggestion
   panel (arrow keys scroll it) and the buttons.
+  Shift+Arrows select text; Ctrl+X cuts it; Ctrl+Z / Ctrl+Y undo / redo.
+  To move a section: select it (Shift+Down from its first line), Ctrl+X,
+  put the cursor on the blank line where it should go, Ctrl+V. To delete
+  one, select it and press Delete.
   Ctrl+C copies the selection; Ctrl+V pastes (from the system clipboard
   when wl-paste, xclip, xsel or pbpaste is installed — otherwise, e.g.
   over SSH, use the terminal's own paste: Ctrl+Shift+V, Shift+Insert, or
@@ -113,14 +117,19 @@ HELP_TEXT = """\
   F7      Improve
   F8      Proofread
   Ctrl+U  Use the suggestion as the section text
-  (A suggestion with several paragraphs becomes several sections.)
+  (A suggestion with several paragraphs becomes several sections; the
+  cursor lands on the first of them. Ideas are advice rather than prose,
+  so using them as text asks first.)
+  A suggestion requested while another is still generating is queued and
+  runs next; the panel says "Queued" for that section meanwhile.
 
 [b]Documents[/b]
   F2      File menu: New, Save, Save As, Open, Delete, Create snapshot,
           Revert to snapshot, Import, Export, Copy, Log out
   Ctrl+S  Save
   Ctrl+O  Open
-  Ctrl+N  New
+  Ctrl+N  New (a title and optional outline; Ctrl+S then stores it in
+          your library)
   F3      Settings: writing style, tone, audience, context, directive,
           word limit; AI source/model, connection, environment variables
   F1      This help
@@ -130,6 +139,8 @@ HELP_TEXT = """\
 [b]Dialogs[/b]
   Esc         Close any dialog or menu without changes
   Enter       Confirm (or open a dropdown, then Up/Down and Enter)
+  "Unsaved changes" prompts offer Save (save, then continue), Discard
+  changes, and Cancel.
   Tab         Next field; Shift+Tab previous
   In Settings, F3 switches between the Document and AI Settings tabs
   (so do Left/Right while the tab bar is focused).
@@ -200,6 +211,44 @@ class ConfirmScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class UnsavedChangesScreen(ModalScreen[str]):
+    """Save / discard / cancel before an action that would drop the editor text.
+
+    Dismisses with ``"save"``, ``"discard"`` or ``"cancel"``. The Discard
+    button keeps the ``confirm`` id so it sits where ConfirmScreen's does.
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, what: str) -> None:
+        super().__init__()
+        self._what = what
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield Label("Unsaved changes", classes="dialog-title")
+            yield Static(
+                f"The current document has unsaved changes. {self._what} anyway?",
+                classes="dialog-body",
+            )
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Save", variant="primary", id="save")
+                yield Button("Discard changes", variant="error", id="confirm")
+                yield Button("Cancel", id="cancel")
+
+    @on(Button.Pressed, "#save")
+    def _save(self) -> None:
+        self.dismiss("save")
+
+    @on(Button.Pressed, "#confirm")
+    def _discard(self) -> None:
+        self.dismiss("discard")
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss("cancel")
+
+
 class PromptScreen(ModalScreen[str | None]):
     """Ask for a single line of text (filename, path)."""
 
@@ -224,7 +273,9 @@ class PromptScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label(self._title, classes="dialog-title")
-            yield Label(self._label)
+            # Static rather than Label: a caption longer than the dialog is
+            # wrapped instead of cut off at the border.
+            yield Static(self._label, classes="prompt-label")
             yield Input(value=self._default, placeholder=self._placeholder, id="value")
             with Horizontal(classes="dialog-buttons"):
                 yield Button(self._confirm_label, variant="primary", id="confirm")
@@ -360,13 +411,19 @@ class NewDocumentScreen(ModalScreen[tuple[str, str] | None]):
             yield Input(placeholder="Enter document title...", id="title")
             yield Label("Initial content (optional — blank lines separate sections)")
             yield TextArea(id="outline", classes="dialog-textarea")
+            yield Static(
+                "The document is stored in your library when you press Ctrl+S.",
+                classes="muted",
+            )
             with Horizontal(classes="dialog-buttons"):
-                yield Button("Create Document", variant="success", id="create")
+                yield Button("Start Document", variant="success", id="create")
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
         self.query_one("#title", Input).focus()
 
+    # Enter in the title field submits, as it does in the other dialogs.
+    @on(Input.Submitted, "#title")
     @on(Button.Pressed, "#create")
     def _create(self) -> None:
         title = self.query_one("#title", Input).value.strip()
@@ -921,8 +978,13 @@ class EditorScreen(Screen[None]):
         # from a comparison with this rather than from the event alone.
         self._clean_title = ""
         self._clean_text = ""
-        self._generating = False
+        # The generation in flight, if any, and the ones waiting behind it,
+        # each as (mode, section). One request runs at a time; the rest wait
+        # rather than being dropped.
+        self._active: tuple[str, Section] | None = None
+        self._queue: list[tuple[str, Section]] = []
         self._loading = False
+        self._too_small_notified = False
 
     # -- layout ----------------------------------------------------------------
 
@@ -982,11 +1044,26 @@ class EditorScreen(Screen[None]):
     # Rows: topbar 1 + title 3 + editor (min 4) + panel (min 10) + footer 1 = 19,
     # so a 24-row terminal has spare rows but a 20-row one has not: below
     # COMPACT_ROWS the mode bar is dropped (the keys still work). Columns: the
-    # five labelled buttons fill exactly 80 cells; below that, shorter labels.
+    # five labelled buttons and their margins take 86 cells inside the panel,
+    # which has 4 cells of border and padding, so full labels need 90 columns;
+    # below that, shorter labels.
     COMPACT_ROWS: ClassVar[int] = 22
-    NARROW_COLUMNS: ClassVar[int] = 80
+    NARROW_COLUMNS: ClassVar[int] = 90
+    MIN_COLUMNS: ClassVar[int] = 60
+    MIN_ROWS: ClassVar[int] = 16
 
     def _fit_to_size(self, width: int, height: int) -> None:
+        too_small = width < self.MIN_COLUMNS or height < self.MIN_ROWS
+        if too_small and not self._too_small_notified:
+            self.notify(
+                f"The terminal is {width}x{height}; the editor needs at least "
+                f"{self.MIN_COLUMNS}x{self.MIN_ROWS}. Enlarge the window to see "
+                "the suggestion panel and buttons.",
+                title="Terminal too small",
+                severity="warning",
+                timeout=15,
+            )
+        self._too_small_notified = too_small
         self.set_class(height < self.COMPACT_ROWS, "compact")
         narrow = width < self.NARROW_COLUMNS
         self.set_class(narrow, "narrow")
@@ -1164,9 +1241,19 @@ class EditorScreen(Screen[None]):
         if not self._loading and self.title_input.value != self._clean_title:
             self._mark_dirty()
 
+    def _generation_state(self, section: Section) -> tuple[str, str] | None:
+        """``("generating", mode)`` or ``("queued", mode)`` for ``section``."""
+        if self._active is not None and self._active[1] is section:
+            return "generating", self._active[0]
+        for mode, queued in self._queue:
+            if queued is section:
+                return "queued", mode
+        return None
+
     def _update_current_section(self) -> None:
         self.current_index = section_index_at(self.sections, self._cursor_offset())
         info = self.query_one("#section-info", Static)
+        status = self.query_one("#section-status", Static)
         text = self.query_one("#suggestion-text", Static)
         use_button = self.query_one("#use-suggestion", Button)
         count = len(self.sections)
@@ -1176,17 +1263,32 @@ class EditorScreen(Screen[None]):
                 if count == 0
                 else f"{count} section{'s' if count != 1 else ''} · place the cursor in one"
             )
-            if not self._generating:
-                text.update(
-                    "Position your cursor in a section above, then choose a mode "
-                    "below (or press F5-F8) to get AI suggestions for that section."
-                )
+            status.update("")
+            text.update(
+                "Position your cursor in a section above, then choose a mode "
+                "below (or press F5-F8) to get AI suggestions for that section."
+            )
             use_button.disabled = True
             return
         section = self.sections[self.current_index]
         info.update(f"Section {self.current_index + 1} of {count}")
-        if self._generating:
+        # The status belongs to the section under the cursor, not to whatever
+        # request happens to be running for some other section.
+        state = self._generation_state(section)
+        if state is not None:
+            kind, mode = state
+            use_button.disabled = True
+            if kind == "generating":
+                status.update(f"Generating {mode}…")
+                text.update("Generating AI suggestion...")
+            else:
+                status.update(f"Queued: {mode}")
+                text.update(
+                    f"Waiting for the current suggestion to finish; {mode} for "
+                    "this section runs next."
+                )
             return
+        status.update("")
         if section.generated_text:
             text.update(section.generated_text)
             use_button.disabled = False
@@ -1203,9 +1305,6 @@ class EditorScreen(Screen[None]):
         self.action_generate(mode)
 
     def action_generate(self, mode: str) -> None:
-        if self._generating:
-            self.notify("A suggestion is already being generated.", severity="warning")
-            return
         self._update_current_section()
         if self.current_index == -1:
             self.notify(
@@ -1213,7 +1312,27 @@ class EditorScreen(Screen[None]):
                 severity="warning",
             )
             return
-        self._run_generation(mode, self.current_index)
+        section = self.sections[self.current_index]
+        state = self._generation_state(section)
+        if state is not None:
+            self.notify(
+                f"A suggestion for this section is already "
+                f"{'being generated' if state[0] == 'generating' else 'queued'}.",
+                severity="warning",
+            )
+            return
+        if self._active is not None:
+            # Another section's request is in flight: run this one after it
+            # rather than dropping it (the previous behaviour, which looked
+            # like the key had done nothing).
+            self._queue.append((mode, section))
+            self.notify(
+                f"Queued {mode} for section {self.current_index + 1}; it runs "
+                "when the current suggestion finishes."
+            )
+            self._update_current_section()
+            return
+        self._run_generation(mode, section)
 
     def _generation_fields(self, mode: str, index: int) -> dict[str, Any]:
         section = self.sections[index]
@@ -1243,21 +1362,23 @@ class EditorScreen(Screen[None]):
             fields["environment_variables"] = "{}"
         return fields
 
-    @work(exclusive=True, group="generate")
-    async def _run_generation(self, mode: str, index: int) -> None:
-        self._generating = True
-        status = self.query_one("#section-status", Static)
+    @work(group="generate")
+    async def _run_generation(self, mode: str, section: Section) -> None:
         text = self.query_one("#suggestion-text", Static)
-        for button in self.query(".mode").results(Button):
-            button.disabled = True
-        status.update(f"Generating {mode}…")
-        text.update("Generating AI suggestion...")
-        section = self.sections[index]
+        index = self._section_index(section)
+        if index is None:
+            # The section was removed while its request waited in the queue.
+            self._start_next_generation()
+            return
+        self._active = (mode, section)
+        self._update_current_section()
         try:
             generated = await self.client.generate_text(
                 self._generation_fields(mode, index)
             )
         except AuthError:
+            self._active = None
+            self._queue.clear()
             await self._session_expired()
             return
         except ApiError as exc:
@@ -1268,14 +1389,7 @@ class EditorScreen(Screen[None]):
         else:
             error = ""
         finally:
-            self._generating = False
-            status.update("")
-            for button in self.query(".mode").results(Button):
-                button.disabled = False
-        if error:
-            # Leave the error in the panel until the cursor moves on.
-            text.update(f"Error: {error}")
-            return
+            self._active = None
         if generated:
             # Attach to whichever current section corresponds to the one the
             # request was made for (the text may have been edited meanwhile).
@@ -1283,8 +1397,25 @@ class EditorScreen(Screen[None]):
             if target is not None:
                 target.generated_text = generated
                 target.original_text = target.text
+                target.mode = mode
                 self._mark_dirty()
         self._update_current_section()
+        if error and self._section_index(section) == self.current_index:
+            # Leave the error in the panel until the cursor moves on.
+            text.update(f"Error: {error}")
+        self._start_next_generation()
+
+    def _start_next_generation(self) -> None:
+        if self._queue:
+            mode, section = self._queue.pop(0)
+            self._run_generation(mode, section)
+
+    def _section_index(self, section: Section) -> int | None:
+        """Current index of ``section`` (sections are re-created on every edit)."""
+        target = self._find_section(section)
+        if target is None:
+            return None
+        return self.sections.index(target)
 
     def _find_section(self, original: Section) -> Section | None:
         for candidate in self.sections:
@@ -1294,7 +1425,8 @@ class EditorScreen(Screen[None]):
             return self.sections[self.current_index]
         return None
 
-    def action_use_suggestion(self) -> None:
+    @work
+    async def action_use_suggestion(self) -> None:
         self._update_current_section()
         section = (
             self.sections[self.current_index] if self.current_index != -1 else None
@@ -1302,6 +1434,26 @@ class EditorScreen(Screen[None]):
         if section is None or not section.generated_text:
             self.notify("No suggestion to use for this section.", severity="warning")
             return
+        if section.mode == "ideas":
+            # Ideas are advice about the section, not a rewrite of it, so
+            # replacing the text with them is rarely what was meant.
+            confirmed = await self.app.push_screen_wait(
+                ConfirmScreen(
+                    "Use ideas as text?",
+                    "This suggestion is a list of ideas about the section, not "
+                    "replacement text. Replace the section with it anyway? "
+                    "(Ctrl+Z undoes it.)",
+                    confirm_label="Replace",
+                )
+            )
+            if not confirmed:
+                return
+            self._update_current_section()
+            if (
+                self.current_index == -1
+                or self.sections[self.current_index] is not section
+            ):
+                return
         new_text = section.generated_text.strip()
         editor = self.editor
         start = self._location_from_offset(section.start)
@@ -1314,10 +1466,24 @@ class EditorScreen(Screen[None]):
         # Keep the suggestion attached to the replaced section.
         section.original_text = new_text
         self.sections = parse_sections(editor.text, self.sections)
-        editor.move_cursor(self._location_from_offset(section.start + len(new_text)))
+        inserted = len(parse_sections(new_text))
+        if inserted > 1:
+            # Several sections went in: start at the first so they can be
+            # read in order, rather than at the end of the last one.
+            editor.move_cursor(self._location_from_offset(section.start))
+        else:
+            editor.move_cursor(
+                self._location_from_offset(section.start + len(new_text))
+            )
         self._mark_dirty()
         self._update_current_section()
-        self.notify("Suggestion applied to the section.")
+        if inserted > 1:
+            self.notify(
+                f"Suggestion applied as {inserted} sections; the cursor is on "
+                "the first."
+            )
+        else:
+            self.notify("Suggestion applied to the section.")
 
     @on(Button.Pressed, "#use-suggestion")
     def _use_pressed(self) -> None:
@@ -1363,16 +1529,22 @@ class EditorScreen(Screen[None]):
         handler()
 
     async def _confirm_discard(self, what: str) -> bool:
+        """Ask what to do about unsaved changes; True means go ahead.
+
+        "Save" saves first (asking for a name if the document has none) and
+        goes ahead only when that succeeded.
+        """
         if not self.dirty:
             return True
-        result = await self.app.push_screen_wait(
-            ConfirmScreen(
-                "Unsaved changes",
-                f"The current document has unsaved changes. {what} anyway?",
-                confirm_label="Discard changes",
-            )
-        )
-        return bool(result)
+        choice = await self.app.push_screen_wait(UnsavedChangesScreen(what))
+        if choice == "save":
+            return await self._save_now()
+        return choice == "discard"
+
+    async def _save_now(self) -> bool:
+        if self.filename:
+            return await self._save_document(self.filename, save_as=False)
+        return await self._ask_save_as()
 
     @work
     async def action_new(self) -> None:
@@ -1388,6 +1560,7 @@ class EditorScreen(Screen[None]):
         )
         self._mark_dirty(bool(title or outline))
         self.editor.focus()
+        self.notify("New document started — Ctrl+S stores it in your library.")
 
     def action_save(self) -> None:
         if self.filename:
@@ -1397,6 +1570,9 @@ class EditorScreen(Screen[None]):
 
     @work
     async def action_save_as(self) -> None:
+        await self._ask_save_as()
+
+    async def _ask_save_as(self) -> bool:
         suggested = self.filename or _suggest_filename(self.title_input.value)
         filename = await self.app.push_screen_wait(
             PromptScreen(
@@ -1409,12 +1585,12 @@ class EditorScreen(Screen[None]):
             )
         )
         if not filename:
-            return
+            return False
         if not filename.endswith(".json"):
             filename += ".json"
         if filename != self.filename and not await self._confirm_overwrite(filename):
-            return
-        self._save_as(filename, save_as=True)
+            return False
+        return await self._save_document(filename, save_as=True)
 
     async def _confirm_overwrite(self, filename: str) -> bool:
         """Ask before Save As replaces a different document in the library."""
@@ -1439,20 +1615,24 @@ class EditorScreen(Screen[None]):
 
     @work
     async def _save_as(self, filename: str, *, save_as: bool) -> None:
+        await self._save_document(filename, save_as=save_as)
+
+    async def _save_document(self, filename: str, *, save_as: bool) -> bool:
         try:
             message = await self.client.save_document(
                 filename, self._document_payload(), save_as=save_as
             )
         except AuthError:
             await self._session_expired()
-            return
+            return False
         except ApiError as exc:
             self.notify(exc.message, severity="error", timeout=10)
-            return
+            return False
         self._set_filename(filename)
         self._mark_dirty(False)
         self.remember_cursor()
         self.notify(f"{message}: {filename}")
+        return True
 
     @work
     async def action_open(self) -> None:
@@ -1537,10 +1717,18 @@ class EditorScreen(Screen[None]):
         except ApiError as exc:
             self.notify(exc.message, severity="error", timeout=10)
             return False
-        self.notify(message)
         if self.filename == filename:
             self._set_filename(None)
             self._mark_dirty(True)
+            # The text is deliberately left in the editor as a way back;
+            # say so, or it looks as if the delete failed.
+            self.notify(
+                f"{message}. Its text stays in the editor: Save As keeps it, "
+                "Ctrl+N starts fresh.",
+                timeout=10,
+            )
+        else:
+            self.notify(message)
         return True
 
     @work
@@ -1731,6 +1919,9 @@ class EditorScreen(Screen[None]):
 
     @work
     async def action_settings(self) -> None:
+        # A lingering toast (the first-run hint, say) would sit over the
+        # dialog's buttons.
+        self.app.clear_notifications()
         metadata = dict(self.metadata)
         result = await self.app.push_screen_wait(
             SettingsScreen(
@@ -1748,7 +1939,8 @@ class EditorScreen(Screen[None]):
         if action in ("document", "default"):
             self.metadata = new_metadata
             self._mark_dirty()
-            self.notify("Settings saved to this document.")
+            if action == "document":
+                self.notify("Settings saved to this document.")
         if action in ("default", "ai"):
             self.ai = new_ai
             preferences = {
@@ -1765,7 +1957,9 @@ class EditorScreen(Screen[None]):
                 return
             if action == "default":
                 self.defaults = {k: new_metadata[k] for k in DEFAULT_METADATA}
-                self.notify("Saved as your default settings.")
+                self.notify(
+                    "Saved as your default settings and applied to this document."
+                )
             else:
                 self.defaults["source"] = new_ai["source"]
                 self.defaults["model"] = new_ai["model"]

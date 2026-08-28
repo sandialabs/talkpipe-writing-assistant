@@ -34,6 +34,10 @@ class Section:
     end: int
     generated_text: str = ""
     original_text: str | None = None
+    # The generation mode that produced ``generated_text`` ("ideas",
+    # "rewrite", ...). Known only for suggestions made in this session; not
+    # part of the saved format.
+    mode: str = ""
 
     def to_document_dict(self) -> dict[str, Any]:
         """The JSON shape the web client stores in a saved document."""
@@ -43,6 +47,7 @@ class Section:
         data["endPos"] = data.pop("end")
         if data["original_text"] is None:
             del data["original_text"]
+        del data["mode"]
         return data
 
 
@@ -163,6 +168,7 @@ def parse_sections(text: str, previous: list[Section] | None = None) -> list[Sec
         if match != -1:
             section.generated_text = old[match].generated_text
             section.original_text = old[match].original_text or old[match].text
+            section.mode = old[match].mode
             matched.add(match)
         sections.append(section)
     return sections

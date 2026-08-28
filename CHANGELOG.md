@@ -1,6 +1,41 @@
 # Changelog
 
 ## Unreleased
+- Terminal interface, a further first-use review (multi-section documents,
+  queued suggestions, dialogs, small terminals):
+  - A suggestion requested while another section's is still generating is now
+    queued and runs next, instead of being silently dropped with no status or
+    error. The panel shows "Queued" for that section, and the
+    "Generating…" status belongs to the section under the cursor rather than
+    to whichever request happens to be running.
+  - The "Unsaved changes" prompt (Quit, Open, New, Import, Revert, Log out)
+    gained a **Save** button that saves — asking for a library name if the
+    document has none — and then continues, alongside Discard changes and
+    Cancel.
+  - The New Document dialog: Enter in the title field submits it, as in the
+    other dialogs; its button reads "Start Document" and the dialog says the
+    document is stored in the library on the next Ctrl+S, since nothing was
+    created on the server despite the old "Create Document" label.
+  - **Use This Text** with a multi-paragraph suggestion now leaves the cursor
+    on the first inserted section (it was on the last) and says how many
+    sections went in; using an Ideas suggestion — advice about the section,
+    not replacement text — asks first.
+  - Full-length mode-button labels now switch to the short ones below 90
+    columns rather than 80: at 80–89 columns the row was clipped ("Use This
+    Text" lost its key). A terminal smaller than 60x16 gets a notice saying
+    so instead of silently losing the suggestion panel and buttons.
+  - Save As / Import / Export captions wrap inside the dialog instead of being
+    cut off at its border.
+  - Toast messages: the first-run hint and other notifications are cleared
+    when Settings opens so they no longer cover its buttons; Save as Default
+    reports once that it was also applied to the open document (it used to
+    show two toasts and leave the dirty marker unexplained); deleting the open
+    document says its text stays in the editor as a way back.
+  - F1 Help and the README key table list the editor keys needed to move or
+    delete a section (Shift+Arrows, Ctrl+X, Ctrl+Z / Ctrl+Y) and the new
+    Save choice in the unsaved-changes prompt.
+- README: how to find the model names an Ollama server offers (`ollama list`
+  or `/api/tags`), and where the TUI takes a remote Ollama address.
 - The server startup banner now points at the terminal interface
   (`writing-assistant-tui`), so someone who started the server without a
   browser learns the terminal client exists.

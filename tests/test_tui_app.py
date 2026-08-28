@@ -5,6 +5,7 @@ so these cover the whole path from keystrokes to the database; only the LLM
 call is mocked.
 """
 
+import asyncio
 import time
 from collections.abc import AsyncGenerator
 
@@ -22,7 +23,11 @@ from writing_assistant.tui.app import (
     ConfirmScreen,
     EditorScreen,
     LoginScreen,
+    NewDocumentScreen,
+    PickerScreen,
+    PromptScreen,
     SettingsScreen,
+    UnsavedChangesScreen,
     WritingAssistantApp,
     _format_timestamp,
     _suggest_filename,
@@ -786,26 +791,57 @@ async def test_short_terminal_keeps_suggestion_panel_on_screen(tui_app):
             assert editor.query_one("#editor", TextArea).region.height >= 4
             # The mode bar is hidden; the keys still generate.
             assert not editor.query_one("#mode-bar").display
-            # Narrow (below 80 columns): shorter labels so the row fits.
-            label = str(editor.query_one("#mode-ideas", Button).label)
-            if size[0] < 80:
-                assert editor.has_class("narrow")
-                assert label == "Ideas"
-            else:
-                assert not editor.has_class("narrow")
-                assert label == "Ideas (F5)"
-    # Back at 80x24 the full labels and the mode bar are back.
+            # Narrow (below 90 columns): shorter labels so the row fits.
+            assert editor.has_class("narrow"), size
+            assert str(editor.query_one("#mode-ideas", Button).label) == "Ideas"
+    # Back at 80x24 the mode bar is back (with short labels: the full ones
+    # need 90 columns, see test_mode_bar_fits_from_ninety_columns).
     app = WritingAssistantApp(Session.load(), client_factory=tui_app._client_factory)
     async with app.run_test(size=(80, 24)) as pilot:
         await _settle(pilot)
         editor = app.screen
         assert not editor.has_class("compact")
-        assert not editor.has_class("narrow")
-        assert str(editor.query_one("#mode-ideas", Button).label) == "Ideas (F5)"
+        assert editor.has_class("narrow")
+        assert str(editor.query_one("#mode-ideas", Button).label) == "Ideas"
         bar = editor.query_one("#mode-bar").region
         assert bar.height == 3, bar
         assert bar.bottom <= 23, bar
         assert editor.query_one("#editor", TextArea).region.height >= 9
+
+
+async def test_mode_bar_fits_from_ninety_columns(tui_app):
+    """At 80 columns the full labels were clipped ("Use This Text" lost its key)."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+    for width, narrow in ((89, True), (90, False), (100, False)):
+        app = WritingAssistantApp(
+            Session.load(), client_factory=tui_app._client_factory
+        )
+        async with app.run_test(size=(width, 30)) as pilot:
+            await _settle(pilot)
+            editor = app.screen
+            assert isinstance(editor, EditorScreen)
+            assert editor.has_class("narrow") is narrow, width
+            expected = "Use (Ctrl+U)" if narrow else "Use This Text (Ctrl+U)"
+            use = editor.query_one("#use-suggestion", Button)
+            assert str(use.label) == expected
+            bar = editor.query_one("#mode-bar").region
+            for button in editor.query("#mode-bar Button").results(Button):
+                region = button.region
+                assert region.width >= len(str(button.label)) + 2, (width, button)
+                assert region.right <= bar.right, (width, button.label, region, bar)
+
+
+async def test_too_small_terminal_is_announced(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _register_and_login(pilot, app)
+    app = WritingAssistantApp(Session.load(), client_factory=tui_app._client_factory)
+    async with app.run_test(size=(50, 14)) as pilot:
+        await _settle(pilot)
+        messages = [str(n.message) for n in app._notifications]
+        assert any("50x14" in m and "60x16" in m for m in messages), messages
 
 
 async def test_settings_f3_switches_tabs_and_fits_narrow_terminal(tui_app):
@@ -1086,3 +1122,253 @@ async def test_copy_message_reflects_whether_a_clipboard_tool_exists(
         editor.action_copy()
         await pilot.pause()
         assert any("copied to the clipboard" in m for m in notes)
+
+
+async def test_generation_requested_while_another_runs_is_queued(tui_app, mocker):
+    """A second F-key during a generation used to be dropped without a word."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        release = asyncio.Event()
+        calls: list[str] = []
+
+        async def slow_generate(fields):
+            calls.append(fields["generation_mode"])
+            if len(calls) == 1:
+                await release.wait()
+            return f"{fields['generation_mode']} of {fields['user_text']}"
+
+        mocker.patch.object(editor.client, "generate_text", side_effect=slow_generate)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("First one.\n\nSecond one.")
+        await pilot.pause()
+        area.move_cursor((0, 2))
+        await pilot.pause()
+        await pilot.press("f5")
+        await pilot.pause()
+        status = editor.query_one("#section-status", Static)
+        assert _text(status) == "Generating ideas…"
+
+        # Move to the second section and ask for a rewrite while the first
+        # request is still in flight.
+        area.move_cursor((2, 2))
+        await pilot.pause()
+        assert _text(status) == "", "status must not leak from another section"
+        await pilot.press("f6")
+        await pilot.pause()
+        assert _text(status) == "Queued: rewrite"
+        assert "runs next" in _text(editor.query_one("#suggestion-text", Static))
+        assert any("Queued rewrite" in str(n.message) for n in app._notifications)
+        # Asking again for the same section does not queue it twice.
+        await pilot.press("f7")
+        await pilot.pause()
+        assert len(editor._queue) == 1
+
+        release.set()
+        await _settle(pilot)
+        assert calls == ["ideas", "rewrite"]
+        assert editor.sections[0].generated_text == "ideas of First one."
+        assert editor.sections[1].generated_text == "rewrite of Second one."
+        assert _text(status) == ""
+        assert "rewrite of Second one." in _text(
+            editor.query_one("#suggestion-text", Static)
+        )
+        assert editor._active is None
+        assert not editor._queue
+
+
+async def test_unsaved_changes_prompt_can_save_and_continue(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.query_one("#editor", TextArea).load_text("keep me")
+        await pilot.pause()
+        assert editor.dirty
+        assert editor.filename is None
+        editor.action_open()
+        await _settle(pilot)
+        assert isinstance(app.screen, UnsavedChangesScreen)
+        await pilot.click("#save")
+        await _settle(pilot)
+        # Never saved: Save As asks for a name, then the Open picker follows.
+        assert isinstance(app.screen, PromptScreen)
+        app.screen.query_one("#value", Input).value = "kept"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert editor.filename == "kept.json"
+        assert not editor.dirty
+        assert isinstance(app.screen, PickerScreen)
+        await pilot.press("escape")
+        await _settle(pilot)
+
+        # Saved before: Save stores it under the same name, no prompt.
+        editor.query_one("#editor", TextArea).load_text("keep me too")
+        await pilot.pause()
+        editor.action_new()
+        await _settle(pilot)
+        assert isinstance(app.screen, UnsavedChangesScreen)
+        await pilot.click("#save")
+        await _settle(pilot)
+        assert isinstance(app.screen, NewDocumentScreen)
+        await pilot.press("escape")
+        await _settle(pilot)
+        data = await editor.client.load_document("kept.json")
+        assert data["content"] == "keep me too"
+        assert not editor.dirty
+
+        # Cancel leaves everything as it was; Discard still discards.
+        editor.query_one("#editor", TextArea).load_text("changed again")
+        await pilot.pause()
+        editor.action_open()
+        await _settle(pilot)
+        await pilot.click("#cancel")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert editor.dirty
+        editor.action_open()
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert isinstance(app.screen, PickerScreen)
+
+
+async def test_new_document_dialog_submits_on_enter_and_says_when_it_is_stored(
+    tui_app,
+):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.action_new()
+        await _settle(pilot)
+        dialog = app.screen
+        assert isinstance(dialog, NewDocumentScreen)
+        assert str(dialog.query_one("#create", Button).label) == "Start Document"
+        assert app.focused is dialog.query_one("#title", Input)
+        await pilot.press(*"Notes", "enter")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert editor.title_input.value == "Notes"
+        assert editor.filename is None
+        assert any("Ctrl+S stores it" in str(n.message) for n in app._notifications), [
+            n.message for n in app._notifications
+        ]
+
+
+async def test_use_suggestion_with_several_paragraphs_starts_at_the_first(
+    tui_app, mocker
+):
+    mocker.patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        return_value="Alpha part.\n\nBeta part.\n\nGamma part.",
+    )
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("Intro.\n\nMiddle.\n\nEnd.")
+        await pilot.pause()
+        area.move_cursor((2, 1))
+        await pilot.pause()
+        await pilot.press("f6")
+        await _settle(pilot)
+        await pilot.press("ctrl+u")
+        await _settle(pilot)
+        assert area.text == (
+            "Intro.\n\nAlpha part.\n\nBeta part.\n\nGamma part.\n\nEnd."
+        )
+        assert len(editor.sections) == 5
+        assert area.cursor_location == (2, 0)
+        assert editor.current_index == 1
+        assert "Section 2 of 5" in _text(editor.query_one("#section-info", Static))
+        assert any("3 sections" in str(n.message) for n in app._notifications), [
+            n.message for n in app._notifications
+        ]
+
+
+async def test_use_ideas_as_text_asks_first(tui_app, mocker):
+    mocker.patch(
+        "writing_assistant.app.main.cb.new_paragraph",
+        return_value="- Say more.\n\n- Cite a source.",
+    )
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("Some draft text.")
+        await pilot.pause()
+        await pilot.press("f5")
+        await _settle(pilot)
+        assert editor.sections[0].mode == "ideas"
+        await pilot.press("ctrl+u")
+        await _settle(pilot)
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.click("#cancel")
+        await _settle(pilot)
+        assert area.text == "Some draft text."
+        await pilot.press("ctrl+u")
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert area.text == "- Say more.\n\n- Cite a source."
+        # A rewrite of the same section replaces it without asking.
+        await pilot.press("f6")
+        await _settle(pilot)
+        assert editor.sections[0].mode == "rewrite"
+        await pilot.press("ctrl+u")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+
+
+async def test_prompt_captions_wrap_inside_the_dialog(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.action_save_as()
+        await _settle(pilot)
+        dialog = app.screen
+        assert isinstance(dialog, PromptScreen)
+        caption = dialog.query_one(".prompt-label", Static)
+        assert "Export for that)" in str(caption.content)
+        assert caption.region.height >= 2, caption.region
+        assert caption.region.width <= dialog.query_one(".dialog").region.width
+
+
+async def test_settings_and_delete_messages_explain_the_editor_state(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        editor.query_one("#editor", TextArea).load_text("text")
+        await pilot.pause()
+        editor._save_as("doc.json", save_as=True)
+        await _settle(pilot)
+        assert not editor.dirty
+        await pilot.press("f3")
+        await _settle(pilot)
+        # Opening Settings clears lingering toasts (the first-run hint).
+        assert not list(app._notifications)
+        settings = app.screen
+        settings.query_one("#target_audience", Input).value = "students"
+        settings.query_one("#default", Button).press()
+        await _settle(pilot)
+        messages = [str(n.message) for n in app._notifications]
+        assert messages == [
+            "Saved as your default settings and applied to this document."
+        ], messages
+        assert editor.dirty
+
+        editor._mark_dirty(False)
+        editor.action_delete()
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert editor.filename is None
+        assert editor.dirty
+        assert editor.query_one("#editor", TextArea).text == "text"
+        assert any(
+            "stays in the editor" in str(n.message) for n in app._notifications
+        ), [n.message for n in app._notifications]
+
+
+def test_help_text_covers_editing_keys_and_the_save_choice():
+    for needle in ("Ctrl+X", "Ctrl+Z", "Shift+Arrows", "Queued", "Save (save"):
+        assert needle in HELP_TEXT, needle
