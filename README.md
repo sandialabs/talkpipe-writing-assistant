@@ -543,6 +543,12 @@ Settings.
 - Try initializing a new database: `writing-assistant --db-path /tmp/new.db --init-db`
 
 
+## Releasing
+
+The release process — tag conventions, the manual application test that
+must pass before tagging, and the publish steps — is in
+[RELEASING.md](RELEASING.md).
+
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/sandialabs/talkpipe-writing-assistant/blob/master/LICENSE) file for details.
