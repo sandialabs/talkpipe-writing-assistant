@@ -1,246 +1,428 @@
 # Changelog
 
+Notable changes to the TalkPipe Writing Assistant. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); entries within a
+release are grouped by kind rather than listed in the order they landed.
+
 ## Unreleased
 
 ## 1.0.0 (2026-08-29)
-- Terminal interface, a third first-use review (small terminals, long
-  documents, large libraries, the command palette):
-  - The Settings dialog is usable on short terminals: below 24 rows it drops
-    its hint line and vertical padding and takes the whole height, so the
-    form still has rows to scroll in and the buttons stay on screen. At 60x16
-    (the documented minimum) it showed only its title and tab bar — the model
-    could not be configured at all.
-  - The File menu and the Open / Revert pickers scroll on short terminals
-    instead of being clipped by the dialog. At 60x16 the menu's last entries
-    (Import, Export, Copy, Log out) were invisible while the highlight kept
-    moving into them, so Enter ran "Log out" without it ever being shown.
-  - The Open dialog has a filter field: typing narrows the list by name or
-    title, Up/Down move through the matches and Enter opens the highlighted
-    one. A library of a few dozen documents could only be paged through.
-  - Less work per keystroke on long documents: the cursor offset is read
-    from the editor's document instead of re-splitting the whole text on
-    every cursor move, and the suggestion panel is only redrawn when the
-    section under the cursor (or its state) actually changes — most cursor
-    moves stay within one section.
-  - Test Connection reports its result once, in the dialog's status line;
-    the toast copy it also raised covered the Test Connection / Save AI
-    Settings buttons.
-  - A "could not connect" error left in the suggestion panel is cleared by
-    the next successful save instead of lingering after the server is back.
-  - The command palette (Ctrl+P) is documented in the README key table and
-    F1 help, and no longer offers Textual's Theme, Maximize and Screenshot
-    entries — only Quit, Keys and the application's own commands.
-  - The Save As caption says why library names end in `.json`, since the
-    same dialog explains that the name is not a file.
-- Test Connection and generation errors distinguish a server that did not
-  answer in time from one that could not be reached: a read timeout (an
-  Ollama host still loading a model, say) now says so and suggests trying
-  again, rather than "connection refused, host not found, or timed out —
-  double-check the Server URL". The missing-source / missing-model reasons
-  point at the field to fill in ("Enter one in the Model field") instead of
-  telling a user who is already in AI Settings to open AI Settings.
-- `/generate-text` rejects an unknown generation mode with a 400 that lists
-  the known ones (`GENERATION_MODES` in `core/callbacks.py`). It used to fall
-  back to another mode's prompt silently, which hid a half-finished custom
-  mode behind plausible output; the README's "Customizing Generation" note
-  now names that registration step.
-- README: how to keep the server running for a terminal-only setup (a tmux
-  one-liner and a systemd user unit), that `--logout` starts at the login
-  screen rather than exiting, what Export writes and where the file lands,
-  and how to point the assistant at an OpenAI-compatible local server such
-  as LM Studio or vLLM.
-- Terminal interface, a further first-use review (multi-section documents,
-  queued suggestions, dialogs, small terminals):
-  - A suggestion requested while another section's is still generating is now
-    queued and runs next, instead of being silently dropped with no status or
-    error. The panel shows "Queued" for that section, and the
-    "Generating…" status belongs to the section under the cursor rather than
-    to whichever request happens to be running.
-  - The "Unsaved changes" prompt (Quit, Open, New, Import, Revert, Log out)
-    gained a **Save** button that saves — asking for a library name if the
-    document has none — and then continues, alongside Discard changes and
-    Cancel.
-  - The New Document dialog: Enter in the title field submits it, as in the
-    other dialogs; its button reads "Start Document" and the dialog says the
-    document is stored in the library on the next Ctrl+S, since nothing was
-    created on the server despite the old "Create Document" label.
-  - **Use This Text** with a multi-paragraph suggestion now leaves the cursor
-    on the first inserted section (it was on the last) and says how many
-    sections went in; using an Ideas suggestion — advice about the section,
-    not replacement text — asks first.
-  - Full-length mode-button labels now switch to the short ones below 90
-    columns rather than 80: at 80–89 columns the row was clipped ("Use This
-    Text" lost its key). A terminal smaller than 60x16 gets a notice saying
-    so instead of silently losing the suggestion panel and buttons.
-  - Save As / Import / Export captions wrap inside the dialog instead of being
-    cut off at its border.
-  - Toast messages: the first-run hint and other notifications are cleared
-    when Settings opens so they no longer cover its buttons; Save as Default
-    reports once that it was also applied to the open document (it used to
-    show two toasts and leave the dirty marker unexplained); deleting the open
-    document says its text stays in the editor as a way back.
-  - F1 Help and the README key table list the editor keys needed to move or
-    delete a section (Shift+Arrows, Ctrl+X, Ctrl+Z / Ctrl+Y) and the new
-    Save choice in the unsaved-changes prompt.
-- README: how to find the model names an Ollama server offers (`ollama list`
-  or `/api/tags`), and where the TUI takes a remote Ollama address.
-- The server startup banner now points at the terminal interface
-  (`writing-assistant-tui`), so someone who started the server without a
-  browser learns the terminal client exists.
-- More terminal-interface fixes from a first-use review, driven over a pty
-  (SSH/tmux) at several terminal sizes:
-  - A wrong Server URL that points at some other HTTP service (a proxy, a
-    static site, a captive portal) no longer dumps that service's entire HTML
-    error page into the login/settings error line. The client summarises it
-    ("The server returned an HTML page rather than a writing-assistant API
-    response (HTTP 405). Check that the Server URL points at a
-    writing-assistant server.") and caps any other non-JSON body to a short
-    snippet.
-  - **Create an account** now moves focus to the new Confirm password field
-    (and **Back to login** to the password field) instead of leaving it on the
-    toggled button, where a second Enter flipped the mode back and the text
-    typed next was dropped.
-  - F1 opens a help screen on the login screen too — it worked only in the
-    editor before — and the login footer lists it.
-  - The generation-mode key bindings (F5–F8) are derived from the same
-    `GENERATION_MODES` list as the mode buttons, so adding a mode there gives
-    it a working key rather than a button whose key does nothing — matching the
-    README's "Customizing Generation" note.
-  - AI Settings rejects a Server URL that does not begin with `http://` or
-    `https://` when saving, instead of storing it and only revealing the
-    mistake later at Test Connection (which reports the source/model, not the
-    URL).
-  - **File → Export** asks before overwriting an existing file, as **Save As**
-    already does before replacing a document in the library; a repeated export
-    to the same default path silently overwrote the earlier file.
-  - **File → Copy document to clipboard** now says when no clipboard tool
-    (`wl-copy`/`xclip`/`xsel`/`pbcopy`) is available, so an SSH user is not
-    told the document reached the system clipboard when it only reached the
-    app's own clipboard; it points at File → Export as the way out.
-  - A failed suggestion is shown once, in the suggestion panel, rather than
-    also as a toast notification stacked over the mode buttons.
-- README terminal-interface docs: the key table notes that Ctrl+G also runs
-  Ideas and that Save stores the document in the server library rather than
-  writing a file (Export writes a file), clarifies that Ctrl+C / Ctrl+V always
-  work within the app and only the *system*-clipboard bridge needs
-  `wl-paste`/`xclip`/`xsel`/`pbpaste`, and notes that the cursor starts in the
-  document body (Shift+Tab reaches the title).
-- The terminal interface's system-clipboard bridge now runs the clipboard tool (`wl-paste`/`wl-copy`, `xclip`, `xsel`, `pbpaste`/`pbcopy`) from the absolute path `shutil.which` resolved instead of a bare name looked up on `PATH` a second time at launch, and passes `shell=False` explicitly. The Bandit advisories on that module (B404 `import subprocess`, B603 subprocess without shell) were reviewed — the command line is a fixed allow-list of tools and flags, and clipboard text reaches the tool via stdin only — and are marked as such on the specific lines, so the `security-scan` job passes while any new subprocess use elsewhere in `src/` is still reported.
-- Generation prompts for the **rewrite**, **improve**, **proofread** and default modes now ask the model for a single bare paragraph — no heading, title, explanation, or commentary before or after it. Some models (seen with Ollama `llama3.2` on a long section) returned a title line plus several paragraphs, or for proofread a note such as `The sentence should read: "..."`; because "Use This Text" replaces the section verbatim and sections are split at blank lines, one section became three, or the commentary was pasted into the document. Only the closing instruction of each prompt changed (the `ideas` list is unaffected); the prompt template and the output handling are untouched, so well-behaved models produce the same results as before. Applies to both the web and terminal interfaces, which share the endpoint.
-- Document and snapshot timestamps in the API (`modified` / `created` in `GET /documents/list` and `GET /documents/snapshots/{filename}`) now carry an explicit `+00:00` offset. They were UTC without any offset, which browsers parse as *local* time, so the web UI's Open dialog and Revert to Snapshot list showed the UTC wall-clock as if it were local (13:48 for a document saved at 07:48 in UTC-6) and contradicted the local-time stamp in the snapshot's own name. Storage is unchanged (still UTC; no migration); the deprecated `datetime.utcnow` is gone; and a snapshot's name and its stored time are now derived from one instant so they always agree. The terminal interface already converted bare values to local time and keeps doing so for older servers.
-- New **terminal interface**: `writing-assistant-tui` (also `python -m writing_assistant.tui`) is a Textual application with the same functionality as the web UI, for places without a browser — an SSH session, a tmux window, a headless machine. It is a client of the running server's REST API (nothing in the web application changed), so it shares accounts, documents, snapshots, and per-user settings with the web interface. Login/registration screen; editor with title, blank-line sections, and a suggestion panel that follows the cursor; the four generation modes (F5–F8) and "Use This Text" (Ctrl+U); File menu (F2) with New, Save/Save As, Open, Delete, Create/Revert snapshot, Import/Export (same JSON format as the web UI), Copy to clipboard, Log out; Settings (F3) with document metadata, AI source/model, Server URL / API key / environment variables (hidden when the server disables custom env vars), and Test Connection. The session token is kept in `~/.writing_assistant/tui_session.json` (mode 600) so relaunching skips login and reopens the last document; `--server`, `WRITING_ASSISTANT_TUI_SERVER`, `--logout`, and `WRITING_ASSISTANT_TUI_HOME` are the knobs. New dependencies: `textual`, `httpx`. Tests drive the TUI end-to-end against the in-process FastAPI app. Fixes from a first-use review of the TUI: opening, reopening, reverting or importing a document no longer marks it as modified straight away (the editor's change event arrived after the load), so Quit, Open and Log out no longer ask to discard changes that were never made; **Save AI Settings** now applies the chosen source/model to the open document as well (as the web client does) instead of keeping the document's previous model without saying so; the Test Connection result sits next to the AI Settings buttons and is also shown as a notification, rather than at the bottom of the scrolling form where it was off screen at common terminal heights; the login screen fits in 24 rows (its buttons were cut off at 80x24) and scrolls when the confirm-password field is shown; dialogs never exceed the terminal width and the Help dialog scrolls with its OK button on screen; Tab moves focus out of the editor to the suggestion panel and buttons (it inserted a tab character before, leaving them unreachable from the keyboard); the footer shows Ctrl+Q on the login screen too; a first-run notification points at F3 → AI Settings when no source/model is configured; validation errors no longer carry the `body.` request prefix ("email: …" instead of "body.email: …"); and the progress indicators use plain text instead of the ⏳ emoji, whose width breaks layout in some terminals. Fixes from a second first-use review: **Save As** onto a name that already exists in your library now asks before replacing that document (it silently overwrote it); the suggestion panel gets an even share of the height with the editor, so a multi-bullet Ideas answer shows four to six lines at 80x24 / 100x30 instead of two; the New Document dialog fits in 24 rows (its Create/Cancel buttons were off the bottom of the screen, and Tab focused them without scrolling them into view); document and snapshot times in the Open and Revert pickers are shown in local time (the server stamps them in UTC, and the pickers showed that as-is, contradicting the local-time stamp in snapshot names); the command palette (Ctrl+P, advertised in the footer) lists the app's own commands — the File menu, Settings, Help, Use suggestion and the four generation modes — instead of only Textual's built-ins; Tab in the Settings dialog no longer stops on an invisible scroll container between the tab bar and the first field; Save AI Settings on an empty, never-saved document no longer marks it as having unsaved changes (Quit then asked to discard changes that were never made); and `--help` states the real precedence for the server URL (`WRITING_ASSISTANT_TUI_SERVER`, then the last one used, then the default). Fixes from a third first-use review (a keyboard-only writer on a server deployed for remote use): the editor now gets the larger share of the height — nine rows of text at 80x24 instead of four, 14 at 100x30 — with the title field and panel no longer separated by blank rows; on terminals shorter than 22 rows the mode buttons are hidden so the suggestion panel stays on screen (it was laid out below the bottom edge at 80x20, invisible, with F5 still running), and below 80 columns the buttons use short labels so the row fits; in Settings, **F3** switches between the Document and AI Settings tabs (Tab cycled through the fields without ever reaching the tab; Textual's Left/Right on the focused tab bar still works) and a hint line says so, and the Document tab's four buttons fit in 70 columns (Close was clipped); the Help lists the dialog keys — Esc closes, Enter confirms/opens a dropdown, F3 switches Settings tabs, PageUp/PageDown scroll — notes that Ctrl+C copies the editor selection rather than quitting, and that a multi-paragraph suggestion becomes several sections when used; relaunching reopens the last document at the cursor position it was saved or quit with (`last_cursor` in `tui_session.json`) instead of at the top; the create-account form states the 8-character password minimum in the field instead of only after submitting; the first-run notification no longer implies a source must be chosen when the server provides a default (Test Connection reports the resolved model); and `--help` names the session file and `WRITING_ASSISTANT_TUI_HOME`. Test Connection against a server older than 1.0.0b1 (which has no `/ai/test-connection` route — for example an older container image) now explains that the server does not support the check and needs upgrading, instead of showing the server's bare "Not Found" as if the probe itself had failed. **Ctrl+V now pastes text copied in other programs** — into the editor, the title, and every Settings/dialog field. Textual's Ctrl+V only read a clipboard internal to the app (filled by Ctrl+C in the editor), so a paste from elsewhere did nothing; it now reads the system clipboard through `wl-paste`, `xclip`, `xsel` or `pbpaste`, whichever is installed, and Ctrl+C / File → Copy mirror the copied text to the system clipboard as well, so the two never disagree in terminals that ignore the OSC 52 copy escape. Without a clipboard tool (e.g. over SSH) the app's own clipboard is used and the terminal's paste (Ctrl+Shift+V, Shift+Insert, Shift+middle-click), which always worked, remains available; the Help and README now say so.
-- Documented how to configure a **server-wide default AI source and model** (`TALKPIPE_DEFAULT_MODEL_SOURCE` / `TALKPIPE_DEFAULT_MODEL_NAME`, or `default_model_source` / `default_model_name` in `~/.talkpipe.toml`) in the README (Configure AI Backend, environment-variable table), ADMIN_GUIDE (new "Server-Wide AI Defaults" section) and CONTAINER_DEPLOYMENT. The "Server default" source option and the "ask the server administrator to configure a server default" messages pointed at a setting that was described nowhere. The README's security-options note now also says the Connection and Environment Variables fields are hidden in both the web and terminal interfaces.
-- The startup banner no longer prints `http://0.0.0.0:<port>/` (not a URL a browser or `--server` can use) when the server is bound to all interfaces: the URLs use the machine's host name, a line says it listens on all interfaces, and another line notes when custom environment variables are disabled.
-- README: the AI-backend setup steps now say how to reach AI Settings in the terminal interface (`F3`), the TUI section walks through choosing a source/model and Test Connection before the first suggestion, `--server` is documented for a local server on a non-default port (not only remote servers), Tab/Shift+Tab navigation is in the key table, and `WRITING_ASSISTANT_TUI_SERVER` / `WRITING_ASSISTANT_TUI_HOME` are listed in the environment-variable table. The key table also lists Ctrl+N / Ctrl+O, and the feature list no longer calls snapshots "automatic" — they are created on demand (File → Create snapshot) and the 10 most recent are kept.
-- Tests: `test_main_disable_custom_env_vars` flipped the module-level `ALLOW_CUSTOM_ENV_VARS` flag permanently, which made later tests order-dependent; it now restores the flag.
-- CI: every job's project venv is now created with `python -m venv --upgrade-deps`. On Python 3.11 a fresh venv seeds setuptools from the interpreter's bundled wheel (79.0.1 on the CI runners); nothing in the project depends on setuptools at runtime, but that copy sits in the scanned environment and the Safety dependency scan failed on it (CVE-2026-59890, fixed in setuptools 83.0.0). The seeded pip and setuptools are now upgraded to current releases before the project is installed — the previous step only upgraded pip. The build backend's requirement is also raised to `setuptools>=83` so builds from source never run a vulnerable setuptools either.
-- Dependencies: talkpipe floor raised from 0.11.1a1 to 1.0.0b2, the first release that ships a `py.typed` marker and typed `@segment`/`@source` decorators. mypy no longer treats `talkpipe.*` as a missing-import module (the `ignore_missing_imports` override for it was removed), so talkpipe's real types are now checked at the call sites, and `disallow_untyped_decorators` remains enabled with no errors. Locked dependencies refreshed accordingly.
-- Dockerfile: the runtime image no longer ships pip. It was only used to install the application wheel, and pip ≥ 25 bundles an SBOM of its own vendored code (`pip/_vendor/bom.cdx.json`) that Trivy reported as installed packages — the GitHub Security tab flagged setuptools 70.3.0 (CVE-2025-47273, HIGH) and msgpack 1.1.2 even though neither is actually installed in the image. pip is now removed (`dnf remove python3-pip`) after the wheel is installed; a local Trivy scan of the rebuilt image reports zero Python findings.
-- README and CONTAINER_DEPLOYMENT.md no longer read as Ollama-centric: provider wording now says the app works with LLM endpoints including OpenAI, Anthropic, or Ollama — Ollama-first phrasings were reordered, and the Connection-fields and "Customizing Generation" notes were reframed to be source-neutral.
-- New **Test Connection** button in Settings → AI Settings (modeled on the TalkPipe workbench settings dialog): a new authenticated `POST /ai/test-connection` endpoint runs a real, token-capped probe through the same TalkPipe adapter generation uses — for any registered source (openai, anthropic, ollama, ...) — and reports whether the source/model is reachable, with an actionable reason on failure (missing key, unknown source, unreachable server, model not pulled). Empty source/model fall back to the server defaults, mirroring generation. When Ollama is unreachable at a localhost URL, the message explains that inside a container "localhost" is the container itself and suggests `http://host.containers.internal:11434`. Failure hints are field-aware: when the failing Server URL or API Key was entered in the dialog itself, the message says to double-check that field (instead of steering the user toward server-side environment variables they were not using), and a missing cloud key points at the API Key field right above the button as the one-click fix alongside the server-side variable. A stale test result no longer lingers: the status is cleared as soon as the Source, Model, Server URL, or API Key field changes (a previous "✓ Connected" only vouched for the values it was run with). Failure reasons never echo the raw exception text (which can carry internal hostnames, paths, or SDK internals — code scanning alert 117): the exception is only *classified* — credentials problem, model not found on the server, server unreachable, or unexpected — and the message for that category is written by the app from safe inputs (source, model name, and for unexpected errors the exception class name plus a pointer to the server log, where the full traceback is recorded). A missing Ollama model now suggests `ollama pull <model>` rather than the container/URL advice, which only applies when the server itself is unreachable.
-- New source-aware **Connection** fields in Settings → AI Settings — **Server URL** and **API Key** — as a friendlier alternative to hand-crafting environment variables. They apply to whichever AI source is selected and map server-side to the variable that source's client actually reads (`TALKPIPE_OLLAMA_SERVER_URL` for Ollama; `OPENAI_API_KEY`/`OPENAI_BASE_URL` for OpenAI; `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` for Anthropic). Applied per-request and restored afterwards, like custom environment variables, and gated behind the same `ALLOW_CUSTOM_ENV_VARS` switch (the raw environment-variables editor remains for anything else). Fixed the settings dialog's Environment Variables section lookup to survive the new section (it previously keyed off the first `.settings-section h4` in the document). When the server disables custom environment variables, the Connection section's help text now explains that connection settings are managed by the server administrator instead of keeping the default "Leave blank to use the server's configuration" wording, which referred to input fields that are hidden in that mode.
-- `writing-assistant-create-superuser` now builds its closing "You can now login at:" hint from `WRITING_ASSISTANT_HOST`/`WRITING_ASSISTANT_PORT` (the same variables and defaults the server uses) instead of always printing `http://localhost:8001/login`.
-- README "Customizing Generation" now explains that adding a new generation mode also requires adding its button to the web UI (`app/templates/index.html` / `app/static/script.js`) — the previous wording implied editing `core/callbacks.py` alone was enough, but the mode buttons are defined in the templates.
-- CONTAINER_DEPLOYMENT.md: noted that the Connection section / Test Connection button are recent additions, so images published before the feature (including older `latest` tags) will not show them — pull a newer tag or build from source.
-- CONTAINER_DEPLOYMENT.md: new "Connecting the Container to an LLM" section covering cloud keys (server-wide via `-e`/`.env` or per-user via the UI) and the Ollama-on-the-host case; the standalone `podman run` examples now include `--add-host=host.containers.internal:host-gateway` (previously only compose mapped the host gateway, so the documented GHCR run could not reach an Ollama server on the host); documented `OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL` and the need to bind Ollama to a non-loopback address (`OLLAMA_HOST=0.0.0.0`); new troubleshooting entry pointing at Test Connection. `.env.example` updated to match.
-- CI: the Safety dependency scan step passed a filename to `--output`, which safety 3.x rejects (it expects a format like `json`), so `safety-report.json` was never generated for the artifact upload; it now uses `--save-json`. Also upgraded the locked `nltk` from 3.9.4 to 3.10.0 to clear CVE-2026-54293 (a path-traversal advisory in nltk, pulled in as a dependency of safety itself), which was failing the `safety check` gate in CI.
-- When a generation request has no AI source/model and the server has no default, the error now tells the user exactly what to do in the app ("Open Settings → AI Settings and choose an AI Source / enter a Model name", distinguishing a missing model from a missing source) instead of surfacing the library's "specified in the configuration file, or in environment variables" message, which means nothing to a web-UI user.
-- The login page now shows "Incorrect email or password." instead of the raw `LOGIN_BAD_CREDENTIALS` code; the registration page likewise maps `REGISTER_USER_ALREADY_EXISTS` (in both string and object forms) and displays the human-readable reason for password-validation failures.
-- The login and register pages validate a stored token with `/auth/check` before auto-redirecting, and clear it if it is stale (e.g. after a database reset). Previously a stale token bounced visitors from `/register` or `/login` to the editor and straight back, making the register page appear broken.
-- Starting the server on a port that is already in use now fails immediately with a clear error and a `--port` hint, instead of printing the full success banner (URLs, database path) before uvicorn's bind error. The check probes every address the host resolves to, so a conflict on 127.0.0.1 is caught even on systems where `localhost` resolves to `::1` first. The server startup tests also no longer depend on the default port 8001 being free on the machine running the test suite (they previously failed if another instance of the app was running).
-- CONTAINER_DEPLOYMENT.md: documented that the development container (`writing-assistant-dev`) does not have the console scripts on `PATH` — use `python -m writing_assistant.admin_users` / `python -m writing_assistant.create_superuser` there.
-- README: new "Customizing Generation" note pointing at `core/callbacks.py` (prompt templates and generation modes) and explaining that any Ollama/OpenAI/Anthropic-compatible endpoint can be used.
-- The editor now restores the last-open document when the page is reloaded or reopened (tracked per browser via localStorage; cleared on New, Import, or when the document is deleted). Previously a reload always presented an empty editor and the previous document had to be re-opened via File → Open.
-- The "Unknown source" generation error now lists the accepted values (`openai`, `anthropic`, `ollama`) instead of only naming the rejected one.
-- The AI Source field in Settings → AI Settings is now a dropdown (Server default / OpenAI / Anthropic / Ollama) instead of a free-text input, so typos like `olama` can no longer be entered. "Server default" (the initial selection) sends an empty source, deferring to the server's TalkPipe configuration — the same behavior as the previous empty field. Saved or per-document source values outside the valid set fall back to Server default; the server-side "Unknown source" error remains as a backstop for direct API clients.
-- Dockerfile: the builder stage no longer runs the test suite during image builds — it added minutes to every `podman-compose up`/`podman build` and its result was ignored (`|| true`). Tests run in CI.
-- Documentation fixes from an onboarding review:
-  - README Installation now says Python 3.11.4+ (matching `requires-python`) and explains creating a virtual environment first, since `pip install` fails or is blocked on the system Python of most modern distros.
-  - README Quick Start step 4 was rewritten to match the actual UI (the editor opens directly after login; generation via the Ideas/Rewrite/Improve/Proofread buttons and "← Use This Text"; saving via File → Save) — the previous text referenced "Create New Document", "Generate", and "Save Document" buttons that no longer exist. Step 2 now says "Create Account" (the register button's real label).
-  - README remote-Ollama instructions note that an already-running server must be restarted for `TALKPIPE_OLLAMA_SERVER_URL` to take effect, and document the alternative of setting it per-user under Settings → AI Settings → Environment Variables (no restart needed).
-  - CONTAINER_DEPLOYMENT.md: removed `-it` from all `podman-compose exec` examples — podman-compose rejects the flag (`error: unrecognized arguments: -it`), so every documented interactive admin command failed verbatim; `exec` is interactive by default.
-  - CONTAINER_DEPLOYMENT.md: backup, restore, and volume-removal examples now use the real compose-created volume name (`talkpipe-writing-assistant_writing_assistant_db`) and tell readers to confirm it with `podman volume ls`. The previous examples used the unprefixed name, which silently creates a new empty volume — the documented backup backed up nothing.
-  - CONTAINER_DEPLOYMENT.md: the `.env` heredoc example no longer puts a comment on the same line as a value (inline `#` becomes part of the value in .env files) and no longer sets a bogus placeholder `OPENAI_API_KEY`.
-  - `ANTHROPIC_API_KEY` is now listed alongside `OPENAI_API_KEY` in `.env.example` and the container guide's optional variables (Anthropic is a fully supported backend but had no documented variable).
-- Fixed the startup banner to print the web page URLs (`/register`, `/login`) instead of the JSON API endpoints (`/auth/register`, `/auth/jwt/login`), which return 405 in a browser.
-- Generation failures now return actionable error messages to the UI for configuration problems (unknown source, unreachable Ollama server, missing model, and missing OpenAI/Anthropic API keys) instead of a generic "Failed to generate text"; unexpected errors remain generic to avoid leaking internals. The web UI displays the returned message in the suggestion panel. These messages are now built the same way as the Test Connection button's (shared classifier in `core/ai_connection.py`): the exception is only classified — credentials, model not found, server unreachable, or an unrelated `ValueError` — and the wording is the app's own, using the request's source/model and pointing at the Server URL / API Key fields when those were in play ("double-check the API Key entered in AI Settings", `ollama pull <model>`, container `localhost` advice), instead of echoing the library/SDK exception text (which can carry internal hostnames or paths — same class of issue as code scanning alert 117).
-- Custom environment variables sent with a generation request (e.g. `TALKPIPE_OLLAMA_SERVER_URL`) now take effect: TalkPipe's cached configuration is reloaded around each request that supplies them, and restored afterwards.
-- `ALLOW_CUSTOM_ENV_VARS=false` (documented in `.env.example`) is now honored as an alternative to the `--disable-custom-env-vars` CLI flag.
-- The AI Source value is normalized (trimmed and lowercased), so `Ollama` works the same as `ollama`; the Model placeholder now shows realistic examples instead of misleading ones.
-- Registration now enforces the 8-character password minimum server-side (previously only the registration page checked it).
-- Replaced the stale `admin_users.py` and `create_superuser.py` scripts in the repository root — which crashed on `list`/`info` with an async lazy-loading error — with thin wrappers that delegate to the maintained `writing_assistant.admin_users` / `writing_assistant.create_superuser` modules.
-- docker-compose.yml: replaced the hardcoded personal `env_file` (`.env.podman.NOCOMMIT`, not shipped, which made `docker-compose up` fail after the image build) with an optional `.env`, and removed leftover editing comments.
-- Migrated startup database initialization from the deprecated `@app.on_event("startup")` hook to a FastAPI lifespan handler, removing the DeprecationWarning printed on every start.
-- Documentation fixes: README compose commands now use the real service names (`writing-assistant`, `writing-assistant-dev`); README Quick Start explains `TALKPIPE_OLLAMA_SERVER_URL` for remote Ollama servers and lists valid Source values; new README "Administration" section links ADMIN_GUIDE.md and the container deployment guide and introduces the `writing-assistant-admin` / `writing-assistant-create-superuser` console commands; ADMIN_GUIDE.md now documents the console commands (the previously documented `python admin_users.py` invocations crashed); the container deployment guide uses the real repository URL and the working `TALKPIPE_OLLAMA_SERVER_URL` variable name (plain `OLLAMA_SERVER_URL` has no effect as an environment variable); `.env.example` likewise.
-- Generation requests no longer print custom environment variable values (which may contain API keys) to the server console; only variable names are logged at debug level.
-- Renamed DOCKER_DEPLOYMENT.md to CONTAINER_DEPLOYMENT.md and made the container documentation Podman-first (Docker remains a fully compatible alternative with the same arguments); folded in Podman-specific notes: rootless port-conflict messages, `podman-compose` building the image before validating container options, the optional-`.env` compose syntax requirement, and reaching host services via `host.containers.internal`.
-- Moved the detailed container troubleshooting (Windows notes, browser connectivity) from the README front page into CONTAINER_DEPLOYMENT.md, leaving a compact pre-built-container section so Installation and Quick Start are prominent.
-- Container images now report the real package version: the Dockerfile takes an `APP_VERSION` build argument (compose passes `${APP_VERSION:-0.1.0}`; CI computes it with setuptools_scm) instead of hardcoding 0.1.0.
-- Fixed the black configuration in pyproject.toml (the `include`/`extend-exclude` patterns contained doubled backslashes, so `black --check` matched no files and passed vacuously) and reformatted the codebase so the check is meaningful.
+
+### Added
+
+- **Terminal interface**: `writing-assistant-tui` (also
+  `python -m writing_assistant.tui`), a Textual application with the same
+  features as the web UI, for places without a browser — an SSH session, a
+  tmux window, a headless machine. It is a client of the running server's
+  REST API (nothing in the web application changed), so it shares accounts,
+  documents, snapshots, and per-user settings with the web interface. It
+  provides a login/registration screen; an editor with title, blank-line
+  sections, and a suggestion panel that follows the cursor; the four
+  generation modes (F5–F8) and "Use This Text" (Ctrl+U); a File menu (F2)
+  with New, Save/Save As, Open, Delete, snapshots, Import/Export (same JSON
+  format as the web UI), Copy to clipboard, and Log out; and Settings (F3)
+  with document metadata, AI source/model, Connection fields, and Test
+  Connection. The session token lives in
+  `~/.writing_assistant/tui_session.json` (mode 600), so relaunching skips
+  login and reopens the last document at its saved cursor position;
+  `--server`, `--logout`, `WRITING_ASSISTANT_TUI_SERVER`, and
+  `WRITING_ASSISTANT_TUI_HOME` are the knobs. New dependencies: `textual`,
+  `httpx`. Tests drive the TUI end-to-end against the in-process FastAPI
+  app.
+- **Test Connection** button in Settings → AI Settings, backed by a new
+  authenticated `POST /ai/test-connection` endpoint. It runs a real,
+  token-capped probe through the same TalkPipe adapter generation uses —
+  for any registered source — and reports whether the source/model is
+  reachable, with an actionable, field-aware reason on failure (missing
+  API key, unknown source, unreachable server, model not pulled, and
+  container-specific `localhost` advice suggesting
+  `http://host.containers.internal:11434`). Empty source/model fall back to
+  the server defaults, mirroring generation, and a stale result is cleared
+  as soon as the Source, Model, Server URL, or API Key field changes.
+- **Connection fields** (Server URL and API Key) in Settings → AI
+  Settings, as a friendlier alternative to hand-crafting environment
+  variables. They apply to whichever AI source is selected and map
+  server-side to the variable that source's client actually reads
+  (`TALKPIPE_OLLAMA_SERVER_URL` for Ollama;
+  `OPENAI_API_KEY`/`OPENAI_BASE_URL` for OpenAI;
+  `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` for Anthropic). Like custom
+  environment variables, they are applied per-request, restored afterwards,
+  and gated behind the same `ALLOW_CUSTOM_ENV_VARS` switch; when that
+  switch is off, the section's help text says connection settings are
+  managed by the server administrator.
+- **System clipboard support in the terminal interface**: Ctrl+V pastes
+  text copied in other programs — into the editor, the title, and every
+  dialog field — via whichever of `wl-paste`, `xclip`, `xsel`, or
+  `pbpaste` is installed, and Ctrl+C / File → Copy mirror copied text back
+  to the system clipboard. Without a clipboard tool (e.g. over SSH) the
+  app's internal clipboard is used, File → Copy says so instead of
+  claiming the text reached the system clipboard, and the terminal's own
+  paste keys (Ctrl+Shift+V, Shift+Insert, middle-click) keep working.
+- Terminal interface: a suggestion requested while another section's is
+  still generating is queued and runs next (the panel shows "Queued")
+  instead of being silently dropped, and the "Generating…" status belongs
+  to the section under the cursor rather than whichever request is
+  running; the Open dialog gained a filter field (typing narrows the list
+  by name or title, Up/Down move through matches, Enter opens); and the
+  unsaved-changes prompt (Quit, Open, New, Import, Revert, Log out) gained
+  a **Save** button that saves — asking for a library name if needed — and
+  continues, alongside Discard changes and Cancel.
+- The web editor restores the last-open document when the page is reloaded
+  (tracked per browser via localStorage; cleared on New, Import, or when
+  the document is deleted). Previously a reload always presented an empty
+  editor.
+
+### Changed
+
+- The AI Source field in Settings → AI Settings is a dropdown (Server
+  default / OpenAI / Anthropic / Ollama) instead of free text, so typos
+  like `olama` can no longer be entered. "Server default" sends an empty
+  source, deferring to the server's TalkPipe configuration; saved values
+  outside the valid set fall back to it. The value is also normalized
+  (trimmed and lowercased) server-side, the Model placeholder shows
+  realistic examples, and the "Unknown source" error remains as a backstop
+  for direct API clients and now lists the accepted values.
+- Generation and Test Connection failures return actionable messages built
+  by a shared classifier (`core/ai_connection.py`) instead of a generic
+  "Failed to generate text" or the raw library error. The exception is
+  only *classified* — credentials problem, model not found, server
+  unreachable, read timeout (distinguished from "connection refused", with
+  a suggestion to retry), or unexpected — and the wording is the app's
+  own, pointing at the exact field to fix ("double-check the API Key
+  entered in AI Settings", "Enter one in the Model field",
+  `ollama pull <model>`). Raw exception text, which can carry internal
+  hostnames or paths, is never echoed to the client; full tracebacks go to
+  the server log. A request with no source/model and no server default
+  says exactly what to do in the app instead of surfacing TalkPipe's
+  configuration-file message.
+- `/generate-text` rejects an unknown generation mode with a 400 that
+  lists the known ones (`GENERATION_MODES` in `core/callbacks.py`). It
+  used to fall back to another mode's prompt silently, which hid a
+  half-finished custom mode behind plausible output.
+- Generation prompts for the rewrite, improve, proofread, and default
+  modes ask the model for a single bare paragraph — no heading, title, or
+  commentary. Some models returned a title line plus several paragraphs,
+  and because "Use This Text" replaces the section verbatim and sections
+  split at blank lines, one section became three. Only each prompt's
+  closing instruction changed (the `ideas` mode is unaffected); applies to
+  both interfaces, which share the endpoint.
+- Document and snapshot timestamps in the API (`modified`/`created` in
+  `GET /documents/list` and `GET /documents/snapshots/{filename}`) carry
+  an explicit `+00:00` offset. Bare UTC values were parsed by browsers as
+  *local* time, so the web UI's Open and Revert lists showed the wrong
+  wall-clock time. Storage is unchanged (still UTC; no migration), the
+  deprecated `datetime.utcnow` is gone, and a snapshot's name and stored
+  time are derived from one instant so they always agree.
+- Custom environment variables sent with a generation request (e.g.
+  `TALKPIPE_OLLAMA_SERVER_URL`) now take effect — TalkPipe's cached
+  configuration is reloaded around the request and restored afterwards.
+  Their values are no longer printed to the server console (only names,
+  at debug level), and `ALLOW_CUSTOM_ENV_VARS=false` is honored as an
+  alternative to the `--disable-custom-env-vars` flag.
+- Registration enforces the 8-character password minimum server-side
+  (previously only the registration page checked it). The login and
+  registration pages show human-readable messages instead of raw codes
+  (`LOGIN_BAD_CREDENTIALS`, `REGISTER_USER_ALREADY_EXISTS`), and validate
+  a stored token with `/auth/check` before auto-redirecting, clearing it
+  if stale — a stale token used to bounce visitors from `/register`
+  straight back to the editor, making the page appear broken.
+- Server startup: the banner prints the web page URLs (`/register`,
+  `/login`) rather than the JSON API endpoints (which return 405 in a
+  browser); when bound to all interfaces it uses the machine's host name
+  instead of the unusable `http://0.0.0.0:<port>/`; it points at
+  `writing-assistant-tui`; and it notes when custom environment variables
+  are disabled. Starting on a port already in use fails immediately with a
+  clear error and a `--port` hint instead of printing the success banner
+  first (the check probes every address the host resolves to).
+  `writing-assistant-create-superuser` builds its "login at" hint from
+  `WRITING_ASSISTANT_HOST`/`WRITING_ASSISTANT_PORT` instead of always
+  printing `http://localhost:8001/login`.
+- Startup database initialization migrated from the deprecated
+  `@app.on_event("startup")` hook to a FastAPI lifespan handler, removing
+  the DeprecationWarning printed on every start.
+- The stale `admin_users.py` and `create_superuser.py` scripts in the
+  repository root — which crashed on `list`/`info` — were replaced with
+  thin wrappers around the maintained `writing_assistant.admin_users` /
+  `writing_assistant.create_superuser` modules.
+
+### Fixed
+
+Terminal-interface fixes from four rounds of first-use review, driven over
+a pty (SSH/tmux) at several terminal sizes:
+
+- Small terminals: the Settings dialog, File menu, and Open/Revert pickers
+  scroll instead of being clipped (at 60x16 the File menu's last entries
+  were invisible while the highlight kept moving into them, so Enter could
+  run "Log out" sight unseen); the login, New Document, and Help dialogs
+  fit in 24 rows with their buttons on screen; dialogs never exceed the
+  terminal width and their captions wrap; the editor gets the larger share
+  of the height (nine rows of text at 80x24 instead of four); the mode
+  buttons are hidden below 22 rows so the suggestion panel stays visible,
+  switch to short labels below 90 columns so the row is not clipped, and a
+  terminal smaller than 60x16 gets a notice saying so; the Settings
+  Document tab's buttons fit in 70 columns.
+- Focus and keys: Tab moves focus out of the editor to the suggestion
+  panel and buttons (it inserted a tab character before); **Create an
+  account** and **Back to login** move focus into the form instead of
+  leaving it on the toggled button, where a second Enter flipped the mode
+  back; Enter in the New Document title submits it; F1 help works on the
+  login screen too; **F3** switches between the Settings tabs (Tab cycled
+  through the fields without reaching the tab bar) and no longer stops on
+  an invisible scroll container; the F5–F8 bindings are derived from the
+  same `GENERATION_MODES` list as the mode buttons, so adding a mode gives
+  it a working key.
+- False "unsaved changes": opening, reopening, reverting, or importing a
+  document no longer marks it modified straight away, and neither does
+  Save AI Settings on an empty, never-saved document — so Quit, Open, and
+  Log out no longer ask to discard changes that were never made.
+- **Save AI Settings** applies the chosen source/model to the open
+  document as well (as the web client does) instead of silently keeping
+  the document's previous model. **Save As** onto an existing library
+  name and **File → Export** onto an existing file ask before
+  overwriting.
+- **Use This Text** with a multi-paragraph suggestion leaves the cursor on
+  the first inserted section (it was on the last) and says how many
+  sections went in; using an Ideas suggestion — advice, not replacement
+  text — asks first.
+- Error handling: a Server URL that points at some other HTTP service no
+  longer dumps that service's entire HTML error page into the error line —
+  the client summarizes it and caps any non-JSON body to a short snippet;
+  AI Settings rejects a Server URL without an `http(s)://` scheme at save
+  time rather than at the next Test Connection; a failed suggestion is
+  shown once, in the panel, not also as a toast over the mode buttons; a
+  lingering "could not connect" error is cleared by the next successful
+  save; Test Connection against a server older than 1.0.0b1 (no
+  `/ai/test-connection` route) explains that the server needs upgrading
+  instead of showing a bare "Not Found"; validation errors drop the
+  `body.` request prefix.
+- Document and snapshot times in the Open and Revert pickers are shown in
+  local time (the server stamps them in UTC, which the pickers showed
+  as-is, contradicting the local-time stamp in snapshot names).
+- The command palette (Ctrl+P) lists the app's own commands — File menu,
+  Settings, Help, Use suggestion, and the generation modes — and no longer
+  offers Textual's Theme, Maximize, and Screenshot entries.
+- Notifications: toasts are cleared when Settings opens so they don't
+  cover its buttons; Test Connection reports once, in the dialog's status
+  line next to its buttons (not off-screen at the bottom of the form, and
+  not also as a toast); Save as Default reports once that it also applied
+  to the open document; deleting the open document says its text stays in
+  the editor as a way back; progress indicators use plain text instead of
+  the ⏳ emoji, whose width breaks layout in some terminals; a first-run
+  notification points at F3 → AI Settings when no source/model is
+  configured, without implying a choice is required when the server
+  provides a default.
+- Less work per keystroke on long documents: the cursor offset is read
+  from the editor's document instead of re-splitting the whole text on
+  every cursor move, and the suggestion panel is only redrawn when the
+  section under the cursor (or its state) actually changes.
+- Smaller polish: the footer shows Ctrl+Q and F1 on the login screen; the
+  create-account form states the 8-character password minimum up front;
+  the New Document dialog's button reads "Start Document" and says the
+  document is stored in the library on the next Ctrl+S; the Save As
+  caption explains why library names end in `.json`; and `--help`
+  documents the server-URL precedence, the session file, and that
+  `--logout` starts at the login screen.
+
+Web and build fixes:
+
+- Fixed the settings dialog's Environment Variables section lookup, which
+  keyed off the first `.settings-section h4` in the document and broke
+  when the Connection section was added.
+- docker-compose.yml: replaced the hardcoded personal `env_file`
+  (`.env.podman.NOCOMMIT`, not shipped, which made `docker-compose up`
+  fail) with an optional `.env`, and removed leftover editing comments.
+- Fixed the black configuration in pyproject.toml (doubled backslashes in
+  the `include`/`extend-exclude` patterns made `black --check` match no
+  files and pass vacuously) and reformatted the codebase.
+- Tests: `test_main_disable_custom_env_vars` no longer permanently flips
+  the module-level `ALLOW_CUSTOM_ENV_VARS` flag, which had made later
+  tests order-dependent.
+
+### Security
+
+- Error messages sent to clients never echo raw exception text, which can
+  carry internal hostnames, paths, or SDK internals (code scanning
+  alert 117) — see the shared error classifier under Changed.
+- The terminal interface's clipboard bridge runs the clipboard tool from
+  the absolute path `shutil.which` resolved (not a bare name looked up on
+  `PATH` again at launch) with `shell=False` explicit. The Bandit
+  advisories on that module (B404/B603) were reviewed — the command line
+  is a fixed allow-list and clipboard text reaches the tool via stdin only
+  — and are annotated on the specific lines, so new subprocess use
+  elsewhere in `src/` is still reported.
+- The runtime container image no longer ships pip: it was only used to
+  install the application wheel, and pip ≥ 25's vendored SBOM made Trivy
+  report packages that are not actually installed (setuptools
+  CVE-2025-47273, msgpack). A local Trivy scan of the rebuilt image
+  reports zero Python findings.
+- CI venvs are created with `python -m venv --upgrade-deps` and the seeded
+  pip/setuptools are upgraded before the project is installed, clearing a
+  Safety failure on the interpreter's bundled setuptools
+  (CVE-2026-59890); the build backend now requires `setuptools>=83` so
+  source builds never run a vulnerable one either.
+- Upgraded the locked `nltk` to 3.10.0 to clear CVE-2026-54293 (pulled in
+  as a dependency of safety itself).
+
+### Documentation
+
+- README: Installation says Python 3.11.4+ and walks through creating a
+  virtual environment first; Quick Start matches the actual UI (the old
+  text referenced buttons that no longer exist); a new Administration
+  section links ADMIN_GUIDE.md and the container guide and introduces the
+  `writing-assistant-admin` / `writing-assistant-create-superuser`
+  commands; compose commands use the real service names.
+- README: "Customizing Generation" points at `core/callbacks.py` and
+  explains that a new mode also needs its button added to the web UI
+  templates and its name registered in `GENERATION_MODES`; provider
+  wording is source-neutral (OpenAI, Anthropic, or Ollama — including
+  OpenAI-compatible local servers such as LM Studio or vLLM) rather than
+  Ollama-centric.
+- README: remote-Ollama instructions note that a running server must be
+  restarted for `TALKPIPE_OLLAMA_SERVER_URL` to take effect (or set it
+  per-user in AI Settings, no restart needed), how to find the model
+  names an Ollama server offers (`ollama list` or `/api/tags`), and where
+  the TUI takes a remote Ollama address.
+- README terminal-interface docs: how to reach AI Settings (F3) and run
+  Test Connection before the first suggestion; a key table covering the
+  generation keys, Ctrl+N / Ctrl+O, Tab/Shift+Tab, section-editing keys
+  (Shift+Arrows, Ctrl+X, Ctrl+Z / Ctrl+Y), and that Ctrl+G also runs
+  Ideas; that Save stores the document in the server library while Export
+  writes a file; clipboard behavior (Ctrl+C / Ctrl+V always work in-app;
+  only the system-clipboard bridge needs a clipboard tool); `--server`
+  for non-default ports; `WRITING_ASSISTANT_TUI_SERVER` /
+  `WRITING_ASSISTANT_TUI_HOME` in the environment-variable table; and how
+  to keep the server running for a terminal-only setup (a tmux one-liner
+  and a systemd user unit). The feature list no longer calls snapshots
+  "automatic" — they are created on demand and the 10 most recent are
+  kept. The in-app F1 help likewise lists the dialog keys and notes that
+  a multi-paragraph suggestion becomes several sections when used.
+- Documented the **server-wide default AI source and model**
+  (`TALKPIPE_DEFAULT_MODEL_SOURCE` / `TALKPIPE_DEFAULT_MODEL_NAME`, or
+  the equivalent `~/.talkpipe.toml` keys) in the README, ADMIN_GUIDE
+  (new "Server-Wide AI Defaults" section), and CONTAINER_DEPLOYMENT — the
+  "Server default" option pointed at a setting described nowhere.
+- CONTAINER_DEPLOYMENT.md (renamed from DOCKER_DEPLOYMENT.md; Podman-first,
+  with Docker as a fully compatible alternative): new "Connecting the
+  Container to an LLM" section (cloud keys, Ollama on the host,
+  `OPENAI_BASE_URL`/`ANTHROPIC_BASE_URL`, binding Ollama to a non-loopback
+  address); the standalone `podman run` examples include
+  `--add-host=host.containers.internal:host-gateway`; removed `-it` from
+  `podman-compose exec` examples (the flag is rejected, so every
+  documented admin command failed verbatim); backup/restore examples use
+  the real compose-created volume name (the unprefixed name silently
+  backed up a new empty volume); the `.env` heredoc no longer puts
+  comments on value lines or sets a bogus `OPENAI_API_KEY`; noted that
+  the development container lacks the console scripts on `PATH` (use
+  `python -m …`), that images published before the Connection/Test
+  Connection features will not show them, and Podman-specific behavior
+  (rootless port conflicts, `host.containers.internal`). The detailed
+  container troubleshooting moved here from the README front page.
+- ADMIN_GUIDE.md documents the console commands (the previously documented
+  `python admin_users.py` invocations crashed); `.env.example` lists
+  `ANTHROPIC_API_KEY` alongside `OPENAI_API_KEY` and uses the working
+  `TALKPIPE_OLLAMA_SERVER_URL` variable name.
+
+### Build and CI
+
+- Dependencies: talkpipe floor raised from 0.11.1a1 to 1.0.0b2, the first
+  release with a `py.typed` marker and typed decorators; the
+  `ignore_missing_imports` override for `talkpipe.*` was removed, so mypy
+  now checks talkpipe's real types at the call sites. Locked dependencies
+  refreshed.
+- Dockerfile: the builder stage no longer runs the test suite during image
+  builds (it added minutes to every build and its result was ignored);
+  images report the real package version via an `APP_VERSION` build
+  argument (compose passes `${APP_VERSION:-0.1.0}`; CI computes it with
+  setuptools_scm) instead of hardcoding 0.1.0.
+- CI: the Safety scan step used `--output` with a filename, which
+  safety 3.x rejects, so `safety-report.json` was never generated for the
+  artifact upload; it now uses `--save-json`.
 
 ## 0.1.4
-- README: Pre-built container section — optional `pull` (`run` fetches the image); avoid `pull pull` typo; Windows `docker`/`podman` one-liners; correct `-v` syntax (`/app/data`); browser connectivity troubleshooting (curl, `127.0.0.1` bind, alternate port, Podman on Windows, firewall).
-- README: Pre-built container run example omits optional `WRITING_ASSISTANT_SECRET` (defaults apply).
-- README: Prominent section on pulling and running the pre-built GHCR container with Docker or Podman; note that public packages do not require registry login.
-- CI/CD: Docker tags — `latest` only for stable (non-prerelease) GitHub releases; `experimental` for pushes to `develop` and for prerelease GitHub releases (replaces tag-name substring checks).
-- Declared `starlette>=1.0.0` and raised `fastapi[standard]` minimum to `>=0.133.0` so installs match the `Jinja2Templates.TemplateResponse(request, name, …)` API (Starlette 1.0 removed the legacy `(name, context)` signature).
-- Added `uv.lock` and documented `uv sync` / `uv lock` for reproducible dev installs; CI installs with `uv sync --frozen` and [astral-sh/setup-uv](https://github.com/astral-sh/setup-uv).
-- Fixed HTML page routes (`/`, `/login`, `/register`) to use Starlette’s `TemplateResponse(request, name, …)` argument order, restoring Jinja2 template loading (avoids `TypeError: unhashable type: 'dict'`).
-- CI/CD: Build Docker containers for multiple architectures (linux/amd64, linux/arm64) using QEMU emulation
-- CI/CD: Use single-arch (linux/amd64) for branch/PR builds; multi-arch only on release for faster feedback
-- Documentation: Renamed `OLLAMA_BASE_URL` to `OLLAMA_SERVER_URL` in README, DOCKER_DEPLOYMENT.md, and .env.example
+
+- README: prominent section on pulling and running the pre-built GHCR
+  container with Docker or Podman — optional `pull` (`run` fetches the
+  image), Windows one-liners, correct `-v` syntax (`/app/data`), a note
+  that public packages need no registry login, the optional
+  `WRITING_ASSISTANT_SECRET` omitted from the example, and browser
+  connectivity troubleshooting (curl, `127.0.0.1` bind, alternate port,
+  Podman on Windows, firewall).
+- CI/CD: Docker tags — `latest` only for stable (non-prerelease) GitHub
+  releases; `experimental` for pushes to `develop` and for prereleases
+  (replaces tag-name substring checks).
+- Declared `starlette>=1.0.0` and raised `fastapi[standard]` to
+  `>=0.133.0` so installs match the
+  `Jinja2Templates.TemplateResponse(request, name, …)` API (Starlette 1.0
+  removed the legacy signature).
+- Fixed the HTML page routes (`/`, `/login`, `/register`) to use
+  Starlette's new `TemplateResponse` argument order, restoring template
+  loading (avoids `TypeError: unhashable type: 'dict'`).
+- Added `uv.lock` and documented `uv sync` / `uv lock` for reproducible
+  dev installs; CI installs with `uv sync --frozen` and
+  [astral-sh/setup-uv](https://github.com/astral-sh/setup-uv).
+- CI/CD: multi-architecture container builds (linux/amd64, linux/arm64)
+  via QEMU on release; single-arch for branch/PR builds for faster
+  feedback.
+- Documentation: renamed `OLLAMA_BASE_URL` to `OLLAMA_SERVER_URL` in the
+  README, DOCKER_DEPLOYMENT.md, and `.env.example`.
 
 ## 0.1.3
-- Made AI generation mode buttons smaller and arranged in a single row for better visibility on small screens
-- Fixed potential performance issue causing progressive slowdown during extended editing sessions
-  - Removed 34 debug console.log statements that fired on every keystroke
-  - Eliminated logging of full document text and section arrays during typing
-  - Retained one-time initialization logs for startup troubleshooting
-- Optimized section parsing performance for smoother typing experience
-  - Added 150ms debounce to parseSections to avoid expensive operations on every keystroke
-  - Added length pre-filter to skip Levenshtein distance calculation when strings differ by >2x in length
-  - Implemented index-based matching to check same-position sections first before searching all sections
-  - Fixed suggestion panel stability: suggestions no longer flicker during typing
-  - Keyup handler now only triggers cursor updates for navigation keys (arrows, Home, End, etc.)
-  - Mode buttons and "Use suggestion" button no longer steal focus from the editor
-- Updated async issues causing unit tests and the admin command to hang.
+
+- Made the AI generation mode buttons smaller and arranged them in a
+  single row for better visibility on small screens.
+- Fixed a progressive slowdown during extended editing sessions: removed
+  34 debug `console.log` statements that fired on every keystroke
+  (including logs of the full document text), keeping only one-time
+  initialization logs.
+- Optimized section parsing for smoother typing: 150 ms debounce on
+  `parseSections`, a length pre-filter before Levenshtein distance
+  calculations, and index-based matching that checks same-position
+  sections first. Suggestions no longer flicker during typing, the keyup
+  handler only triggers cursor updates for navigation keys, and the mode
+  and "Use suggestion" buttons no longer steal focus from the editor.
+- Fixed async issues that caused the unit tests and the admin command to
+  hang.
 
 ## 0.1.2
-- Enhanced AI context generation to include multiple paragraphs (up to 2000 characters) instead of just adjacent paragraphs
-  - Frontend now collects context from multiple preceding and following sections
-  - Backend truncates context to 2000 characters (last 2000 for previous context, first 2000 for next context)
-  - Provides richer context for AI text generation while managing token usage
-  - Added comprehensive tests: truncation with long paragraphs and multi-paragraph collection with short paragraphs
-- Redesigned AI generation UI for improved usability
-  - Removed separate "Generate" button
-  - Replaced radio buttons with large, descriptive icon buttons (Ideas 💡, Rewrite ✏️, Improve ✨, Proofread 🔍)
-  - Each button includes hover tooltips explaining its purpose
-  - Direct click triggers generation immediately
-  - Visual feedback with pulsing indicator during generation
-  - Streamlined workflow reduces clicks and improves discoverability
-- Fixed dark mode styling issues
-  - Replaced hard-coded light backgrounds with CSS variables that adapt to dark mode
-  - Fixed loading indicators, dropdowns, form inputs, sections, and containers
-  - Dark mode now has consistent dark theming throughout the application
-  - Improved text contrast and border visibility in dark mode
-  - Fixed light mode background to use proper light gradient (was incorrectly using dark colors)
-  - Background now properly changes when toggling between light and dark modes
-- Adjusted prompt generation to make it clear what text was context and what was the target paragraph 
+
+- Enhanced AI context generation to include multiple paragraphs (up to
+  2000 characters each way) instead of just the adjacent ones: the
+  frontend collects context from several preceding and following
+  sections, and the backend truncates it (last 2000 characters of
+  previous context, first 2000 of next). Added tests for truncation and
+  multi-paragraph collection.
+- Redesigned the AI generation UI: removed the separate "Generate"
+  button and replaced the radio buttons with large, descriptive icon
+  buttons (Ideas 💡, Rewrite ✏️, Improve ✨, Proofread 🔍) with hover
+  tooltips — a click triggers generation immediately, with a pulsing
+  indicator while it runs.
+- Fixed dark mode styling: replaced hard-coded light backgrounds with CSS
+  variables (loading indicators, dropdowns, form inputs, sections, and
+  containers), improved contrast and border visibility, and fixed light
+  mode to use a light gradient — the background now changes properly when
+  toggling modes.
+- Adjusted the generation prompt to make clear which text is context and
+  which is the target paragraph.
 
 ## 0.1.1
-- Addressed "information exposure through exception" issue
-- Specified python 3.11.4 or higher to mitigate CVE-2025-8869 (pip symbolic link path traversal)
-  - Python >=3.11.4 implements PEP 706 which provides safe tar extraction
-  - Significantly reduces attack surface for this vulnerability
-  - Full fix requires pip 25.3+ (not yet released)
-- Migrated Docker base image from python:3.13-slim (Debian) to fedora:latest for improved security posture
-  - Eliminates OpenSSH vulnerability (null character in ssh:// URI leading to code execution via ProxyCommand)
-  - Eliminates Perl File::Temp insecure temporary file handling vulnerabilities
-  - Reduces attack surface by using minimal Fedora base without unnecessary packages
-  - Maintains consistency with TalkPipe project architecture
+
+- Addressed an "information exposure through exception" issue.
+- Specified Python 3.11.4 or higher to mitigate CVE-2025-8869 (pip
+  symbolic-link path traversal): Python ≥ 3.11.4 implements PEP 706 safe
+  tar extraction, significantly reducing the attack surface (a full fix
+  requires pip 25.3+).
+- Migrated the Docker base image from `python:3.13-slim` (Debian) to
+  `fedora:latest`: eliminates OpenSSH and Perl `File::Temp`
+  vulnerabilities flagged in the Debian base, reduces the attack surface,
+  and matches the TalkPipe project's architecture.
 
 ## 0.1.0
-- Improved working version with multi-user accounts
+
+- Improved working version with multi-user accounts.
 
 ## 0.0.1
-- Basic working version using jupyter notebook-like tokens
+
+- Basic working version using Jupyter-notebook-like tokens.
+
+---
+Last Reviewed: 20260829
