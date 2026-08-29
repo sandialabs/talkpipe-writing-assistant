@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 1.0.0 (2026-08-29)
 - Terminal interface, a third first-use review (small terminals, long
   documents, large libraries, the command palette):
   - The Settings dialog is usable on short terminals: below 24 rows it drops
