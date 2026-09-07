@@ -6,6 +6,8 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+## 1.1.0 (2026-09-07)
+
 ### Added
 
 - **Change email address and password** for the logged-in user, in both
