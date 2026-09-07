@@ -345,3 +345,85 @@ def test_generate_text_rejects_an_unknown_mode(authenticated_client):
     assert "Unknown generation mode 'summarize'" in detail
     for mode in ("ideas", "rewrite", "improve", "proofread"):
         assert mode in detail
+
+
+def test_change_password_requires_authentication(client):
+    response = client.post(
+        "/user/change-password",
+        json={"current_password": "testpassword123", "new_password": "another-one"},
+    )
+    assert response.status_code == 401
+
+
+def test_change_password_rejects_wrong_current_password(authenticated_client):
+    """A stolen token alone must not be enough to take over the account."""
+    response = authenticated_client.post(
+        "/user/change-password",
+        json={"current_password": "not-my-password", "new_password": "a-new-password"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "CHANGE_PASSWORD_INCORRECT_CURRENT"
+    assert "current password" in detail["reason"].lower()
+    # The old password still works.
+    login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "testpassword123"},
+        headers={"Authorization": ""},
+    )
+    assert login.status_code == 200
+
+
+def test_change_password_enforces_minimum_length(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-password",
+        json={"current_password": "testpassword123", "new_password": "short"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "CHANGE_PASSWORD_INVALID_PASSWORD"
+    assert "at least 8 characters" in detail["reason"]
+
+
+def test_change_password_rejects_reusing_the_current_password(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-password",
+        json={"current_password": "testpassword123", "new_password": "testpassword123"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "CHANGE_PASSWORD_INVALID_PASSWORD"
+
+
+def test_change_password_succeeds_with_the_current_password(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-password",
+        json={"current_password": "testpassword123", "new_password": "a-new-password"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "message": "Password changed"}
+
+    old_login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "testpassword123"},
+        headers={"Authorization": ""},
+    )
+    assert old_login.status_code == 400
+    new_login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "a-new-password"},
+        headers={"Authorization": ""},
+    )
+    assert new_login.status_code == 200
+
+
+def test_index_offers_a_change_password_form(client):
+    """The Settings dialog has an Account tab for changing the password."""
+    html = client.get("/").text
+    assert 'data-settings-tab="account"' in html
+    assert 'id="account-settings"' in html
+    for field in ("current-password", "new-password", "confirm-new-password"):
+        assert f'id="{field}"' in html
+        assert f'id="{field}" type="password"' in html or (
+            f'type="password" id="{field}"' in html
+        )
+    assert 'id="change-password-btn"' in html

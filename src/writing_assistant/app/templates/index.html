@@ -118,6 +118,7 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                     <div class="settings-tabs">
                         <button class="settings-tab-btn active" data-settings-tab="metadata">Writing Settings</button>
                         <button class="settings-tab-btn" data-settings-tab="generation">AI Settings</button>
+                        <button class="settings-tab-btn" data-settings-tab="account">Account</button>
                     </div>
 
                     <div class="settings-tab-content active" id="metadata-settings">
@@ -246,6 +247,42 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                 <div class="form-actions">
                                     <button type="button" id="save-generation-settings-btn" class="btn btn-primary">Save AI Settings</button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-tab-content" id="account-settings">
+                        <div class="account-form">
+                            <div class="settings-section">
+                                <h4>Signed in as</h4>
+                                <div id="account-email" class="account-email"></div>
+                            </div>
+
+                            <div class="settings-section">
+                                <h4>Change Password</h4>
+                                <small class="form-help">Enter your current password, then the new one twice. Other devices that are logged in stay logged in until their sessions expire.</small>
+
+                                <form id="change-password-form" autocomplete="off">
+                                    <div class="form-group">
+                                        <label for="current-password">Current Password:</label>
+                                        <input id="current-password" type="password" name="current_password" autocomplete="current-password" placeholder="Your current password">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="new-password">New Password:</label>
+                                        <input id="new-password" type="password" name="new_password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="confirm-new-password">Confirm New Password:</label>
+                                        <input id="confirm-new-password" type="password" name="confirm_new_password" autocomplete="new-password" placeholder="Repeat the new password">
+                                    </div>
+
+                                    <div class="form-actions">
+                                        <button type="submit" id="change-password-btn" class="btn btn-primary">🔑 Change Password</button>
+                                    </div>
+                                    <div id="change-password-status" class="ai-connection-status" aria-live="polite"></div>
+                                </form>
                             </div>
                         </div>
                     </div>

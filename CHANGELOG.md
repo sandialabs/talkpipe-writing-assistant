@@ -6,6 +6,19 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+### Added
+
+- **Change password** for the logged-in user, in both interfaces. The web
+  UI's Settings dialog gains an **Account** tab showing who is signed in
+  and a Change Password form; the terminal interface has **Change
+  password** in the File menu (F2) and the command palette. Both ask for
+  the current password and the new one twice, keep the form open with the
+  server's reason when it refuses (wrong current password, fewer than 8
+  characters, same as before), and leave the session logged in. Backed by
+  a new authenticated `POST /user/change-password` endpoint that verifies
+  the current password before applying the change — unlike the
+  fastapi-users `PATCH /users/me`, a bearer token alone is not enough.
+
 ## 1.0.0 (2026-08-29)
 
 ### Added

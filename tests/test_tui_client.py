@@ -255,3 +255,23 @@ async def test_test_connection_explains_server_without_endpoint():
     assert "http://old-server:8001" in message
     assert "1.0.0b1" in message
     assert "upgrade" in message.lower()
+
+
+async def test_change_password_round_trip(tui_client: WritingAssistantClient):
+    await tui_client.register("tui@example.com", "a-strong-password")
+    await tui_client.login("tui@example.com", "a-strong-password")
+
+    with pytest.raises(ApiError) as excinfo:
+        await tui_client.change_password("wrong-password", "another-password")
+    assert "current password" in excinfo.value.message.lower()
+    assert excinfo.value.status_code == 400
+
+    with pytest.raises(ApiError) as excinfo:
+        await tui_client.change_password("a-strong-password", "short")
+    assert "at least 8 characters" in excinfo.value.message
+
+    message = await tui_client.change_password("a-strong-password", "another-password")
+    assert message == "Password changed"
+    with pytest.raises(ApiError):
+        await tui_client.login("tui@example.com", "a-strong-password")
+    await tui_client.login("tui@example.com", "another-password")

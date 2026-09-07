@@ -39,6 +39,18 @@ class UserUpdate(schemas.BaseUserUpdate):
     is_verified: bool | None = None
 
 
+class PasswordChange(BaseModel):
+    """Body of POST /user/change-password.
+
+    The current password is required so that a leaked bearer token alone
+    cannot be used to take over the account (PATCH /users/me, which
+    fastapi-users provides, does not ask for it).
+    """
+
+    current_password: str
+    new_password: str
+
+
 # Document schemas
 class DocumentBase(BaseModel):
     """Base document schema."""

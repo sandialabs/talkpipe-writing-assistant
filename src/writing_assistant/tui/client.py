@@ -188,6 +188,25 @@ class WritingAssistantClient:
         """Return ``{"email": ..., "user_id": ...}``; raises AuthError if stale."""
         return await self._json("GET", "/auth/check")
 
+    async def change_password(self, current_password: str, new_password: str) -> str:
+        """Change the logged-in user's password; returns the server's message.
+
+        Raises ApiError with the server's reason (wrong current password,
+        too short, same as before). The token stays valid afterwards.
+        """
+        data = self._check_status(
+            await self._json(
+                "POST",
+                "/user/change-password",
+                json={
+                    "current_password": current_password,
+                    "new_password": new_password,
+                },
+            ),
+            "Failed to change password",
+        )
+        return str(data.get("message") or "Password changed")
+
     async def server_config(self) -> dict[str, Any]:
         return await self._json("GET", "/config")
 

@@ -131,6 +131,7 @@ The application uses **FastAPI Users** (v13+) for complete user management:
 - `POST /auth/reset-password` - Reset password with token
 - `GET /users/me` - Get current user profile
 - `PATCH /users/me` - Update current user profile
+- `POST /user/change-password` - Change the logged-in user's password (verifies the current password first; used by Settings → Account in the web UI and File → Change password in the TUI)
 
 **Database:**
 - SQLite database stored in `~/.writing_assistant/writing_assistant.db`

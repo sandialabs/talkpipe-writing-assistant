@@ -1856,6 +1856,39 @@ input[type="file"]:focus {
     font-weight: 600;
 }
 
+/* Account tab: same card styling as the AI Settings sections. */
+.account-form .settings-section {
+    background: var(--surface-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+
+.account-form .settings-section + .settings-section {
+    margin-top: 16px;
+}
+
+.account-form .settings-section h4 {
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.account-form .form-help {
+    margin-bottom: 12px;
+}
+
+.account-form input[type="password"] {
+    width: 100%;
+}
+
+.account-email {
+    font-weight: 600;
+    color: var(--primary-color);
+    word-break: break-all;
+}
+
 /* Environment Variables Styles */
 .env-var-item {
     display: grid;

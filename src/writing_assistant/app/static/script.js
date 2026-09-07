@@ -265,6 +265,17 @@ class WritingAssistant {
             if (e.target === settingsModal) this.hideSettingsModal();
         });
 
+        // Account tab: the change-password form
+        document.getElementById('change-password-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.changePassword();
+        });
+        // A result only describes the values it was run with - clear it
+        // as soon as a field changes, like the connection test.
+        ['current-password', 'new-password', 'confirm-new-password'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', () => this.clearChangePasswordStatus());
+        });
+
         // Add Enter key handler for Settings modal
         settingsModal.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -279,6 +290,8 @@ class WritingAssistant {
                     this.saveMetadata();
                 } else if (activeTab && activeTab.id === 'generation-settings') {
                     this.saveGenerationSettings();
+                } else if (activeTab && activeTab.id === 'account-settings') {
+                    this.changePassword();
                 }
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -944,6 +957,100 @@ class WritingAssistant {
 
         // Stale connection results are misleading - clear on open.
         this.clearConnectionStatus();
+
+        // Account tab: show who is signed in and start from empty password
+        // fields (a half-typed password must not survive a close/reopen).
+        const accountEmail = document.getElementById('account-email');
+        if (accountEmail) {
+            accountEmail.textContent = document.getElementById('user-email')?.textContent || '';
+        }
+        this.resetChangePasswordForm();
+    }
+
+    resetChangePasswordForm() {
+        document.getElementById('change-password-form')?.reset();
+        this.clearChangePasswordStatus();
+    }
+
+    clearChangePasswordStatus() {
+        const statusEl = document.getElementById('change-password-status');
+        if (statusEl) {
+            statusEl.className = 'ai-connection-status';
+            statusEl.textContent = '';
+        }
+    }
+
+    async changePassword() {
+        const button = document.getElementById('change-password-btn');
+        const statusEl = document.getElementById('change-password-status');
+        const currentField = document.getElementById('current-password');
+        const newField = document.getElementById('new-password');
+        const confirmField = document.getElementById('confirm-new-password');
+        if (!button || !statusEl || !currentField || !newField || !confirmField) return;
+
+        const showError = (text, field) => {
+            statusEl.className = 'ai-connection-status error';
+            statusEl.textContent = `✗ ${text}`;
+            field?.focus();
+        };
+
+        const currentPassword = currentField.value;
+        const newPassword = newField.value;
+        if (!currentPassword) {
+            showError('Enter your current password.', currentField);
+            return;
+        }
+        if (!newPassword) {
+            showError('Enter a new password.', newField);
+            return;
+        }
+        if (newPassword.length < 8) {
+            showError('The new password must be at least 8 characters long.', newField);
+            return;
+        }
+        if (newPassword !== confirmField.value) {
+            showError('The new passwords do not match.', confirmField);
+            return;
+        }
+
+        button.disabled = true;
+        statusEl.className = 'ai-connection-status testing';
+        statusEl.textContent = 'Changing password…';
+
+        try {
+            const response = await this.authFetch('/user/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            });
+            const result = await response.json().catch(() => ({}));
+
+            if (response.ok && result.status === 'success') {
+                this.resetChangePasswordForm();
+                statusEl.className = 'ai-connection-status ok';
+                statusEl.textContent = '✓ Password changed.';
+                this.showMessage('Password changed', 'success');
+            } else if (response.status === 401) {
+                showError('Your session has expired. Please log in again.', currentField);
+            } else {
+                // The server answers with fastapi-users' {code, reason} shape.
+                const detail = result.detail;
+                const reason = (detail && detail.reason) ||
+                    (typeof detail === 'string' ? detail : null) ||
+                    result.message || 'Could not change the password.';
+                const field = detail && detail.code === 'CHANGE_PASSWORD_INCORRECT_CURRENT'
+                    ? currentField : newField;
+                showError(reason, field);
+            }
+        } catch (error) {
+            console.error('Error changing password:', error);
+            showError('Could not reach the server. Please try again.', null);
+        } finally {
+            button.disabled = false;
+        }
     }
 
     clearConnectionStatus() {

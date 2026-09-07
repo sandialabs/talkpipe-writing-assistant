@@ -14,6 +14,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi_users import InvalidPasswordException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
@@ -21,10 +22,16 @@ from talkpipe.util.config import reset_config as reset_talkpipe_config
 from ..core import ai_connection
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
-from .auth import auth_backend, current_active_user, fastapi_users
+from .auth import (
+    UserManager,
+    auth_backend,
+    current_active_user,
+    fastapi_users,
+    get_user_manager,
+)
 from .database import create_db_and_tables, get_async_session
 from .models import Document, DocumentSnapshot, User, iso_utc, utcnow
-from .schemas import UserCreate, UserRead, UserUpdate
+from .schemas import PasswordChange, UserCreate, UserRead, UserUpdate
 
 # Lock to prevent race conditions when setting environment variables
 _env_var_lock = threading.Lock()
@@ -225,6 +232,56 @@ async def check_auth(user: User = Depends(current_active_user)) -> dict[str, Any
         "email": user.email,
         "user_id": str(user.id),
     }
+
+
+@app.post("/user/change-password")
+async def change_password(
+    body: PasswordChange,
+    request: Request,
+    user: User = Depends(current_active_user),
+    user_manager: UserManager = Depends(get_user_manager),
+) -> dict[str, Any]:
+    """Change the logged-in user's password.
+
+    The current password must be supplied and verified first; a bearer
+    token alone is not enough. The new password goes through the same
+    validation as registration (``UserManager.validate_password``), and
+    the error body uses the fastapi-users ``{"code", "reason"}`` shape so
+    both clients can show the reason as-is.
+    """
+    verified, _ = user_manager.password_helper.verify_and_update(
+        body.current_password, user.hashed_password
+    )
+    if not verified:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHANGE_PASSWORD_INCORRECT_CURRENT",
+                "reason": "The current password is incorrect.",
+            },
+        )
+    if body.new_password == body.current_password:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHANGE_PASSWORD_INVALID_PASSWORD",
+                "reason": "The new password must differ from the current one.",
+            },
+        )
+    try:
+        await user_manager.update(
+            UserUpdate(password=body.new_password), user, safe=True, request=request
+        )
+    except InvalidPasswordException as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHANGE_PASSWORD_INVALID_PASSWORD",
+                "reason": exc.reason,
+            },
+        ) from exc
+    logger.info("User %s changed their password", user.id)
+    return {"status": "success", "message": "Password changed"}
 
 
 @app.get("/user/preferences")

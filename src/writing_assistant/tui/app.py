@@ -126,7 +126,8 @@ HELP_TEXT = """\
 
 [b]Documents[/b]
   F2      File menu: New, Save, Save As, Open, Delete, Create snapshot,
-          Revert to snapshot, Import, Export, Copy, Log out
+          Revert to snapshot, Import, Export, Copy, Change password,
+          Log out
   Ctrl+S  Save
   Ctrl+O  Open
   Ctrl+N  New (a title and optional outline; Ctrl+S then stores it in
@@ -310,6 +311,81 @@ class PromptScreen(ModalScreen[str | None]):
     @on(Button.Pressed, "#cancel")
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class ChangePasswordScreen(ModalScreen[bool]):
+    """Change the logged-in user's password.
+
+    Talks to the server itself (like LoginScreen) so a rejected attempt —
+    wrong current password, too short — keeps the dialog open with the
+    reason, rather than making the user start over. Dismisses with True
+    once the password was changed, False when cancelled.
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, client: Any) -> None:
+        super().__init__()
+        self._client = client
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield Label("Change password", classes="dialog-title")
+            yield Label("Current password")
+            yield Input(password=True, id="current")
+            yield Label("New password")
+            yield Input(placeholder="at least 8 characters", password=True, id="new")
+            yield Label("Confirm new password")
+            yield Input(placeholder="repeat new password", password=True, id="confirm")
+            yield Static("", id="message", classes="status-line")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Change password", variant="primary", id="confirm-btn")
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#current", Input).focus()
+
+    def _set_message(self, text: str, *, error: bool = False) -> None:
+        widget = self.query_one("#message", Static)
+        widget.update(text)
+        widget.set_classes("status-line error" if error else "status-line")
+
+    @on(Input.Submitted)
+    @on(Button.Pressed, "#confirm-btn")
+    def _submit(self) -> None:
+        current = self.query_one("#current", Input).value
+        new = self.query_one("#new", Input).value
+        confirm = self.query_one("#confirm", Input).value
+        if not current:
+            self._set_message("Enter your current password.", error=True)
+            self.query_one("#current", Input).focus()
+            return
+        if not new:
+            self._set_message("Enter a new password.", error=True)
+            self.query_one("#new", Input).focus()
+            return
+        if new != confirm:
+            self._set_message("The new passwords do not match.", error=True)
+            self.query_one("#confirm", Input).focus()
+            return
+        self.query_one("#confirm-btn", Button).disabled = True
+        self._set_message("Contacting server...")
+        self._change(current, new)
+
+    @work(exclusive=True)
+    async def _change(self, current: str, new: str) -> None:
+        try:
+            await self._client.change_password(current, new)
+        except ApiError as exc:
+            self._set_message(exc.message, error=True)
+            self.query_one("#confirm-btn", Button).disabled = False
+            self.query_one("#current", Input).focus()
+            return
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 class MenuScreen(ModalScreen[str | None]):
@@ -1616,6 +1692,7 @@ class EditorScreen(Screen[None]):
             ("import", "Import from file"),
             ("export", "Export to file"),
             ("copy", "Copy document to clipboard"),
+            ("change_password", "Change password"),
             ("logout", "Log out"),
         ]
         self.app.push_screen(MenuScreen("File", items), self._file_menu_chosen)
@@ -1634,6 +1711,7 @@ class EditorScreen(Screen[None]):
             "import": self.action_import,
             "export": self.action_export,
             "copy": self.action_copy,
+            "change_password": self.action_change_password,
             "logout": self.action_logout,
         }[choice]
         handler()
@@ -2013,6 +2091,14 @@ class EditorScreen(Screen[None]):
             )
 
     @work
+    async def action_change_password(self) -> None:
+        # The document is untouched, so no unsaved-changes prompt; the
+        # session token stays valid, so no re-login either.
+        self.app.clear_notifications()
+        if await self.app.push_screen_wait(ChangePasswordScreen(self.client)):
+            self.notify("Password changed.")
+
+    @work
     async def action_logout(self) -> None:
         if not await self._confirm_discard("Log out"):
             return
@@ -2181,6 +2267,7 @@ EDITOR_COMMANDS: list[tuple[str, str, str]] = [
     ("settings", "Settings", "Document and AI settings (F3)"),
     ("help", "Help", "Keyboard reference (F1)"),
     ("use_suggestion", "Use suggestion", "Replace the section with it (Ctrl+U)"),
+    ("change_password", "Change password", "Set a new password for your account"),
     ("logout", "Log out", "Forget the saved session and return to login"),
 ]
 

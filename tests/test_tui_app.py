@@ -13,16 +13,19 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from textual.command import CommandList
-from textual.widgets import Button, Input, Static, TextArea
+from textual.widgets import Button, Input, OptionList, Static, TextArea
 from textual.widgets._tabbed_content import ContentTabs
 
 from writing_assistant.app.database import get_async_session
 from writing_assistant.app.main import app as fastapi_app
 from writing_assistant.tui.app import (
+    EDITOR_COMMANDS,
     HELP_TEXT,
+    ChangePasswordScreen,
     ConfirmScreen,
     EditorScreen,
     LoginScreen,
+    MenuScreen,
     NewDocumentScreen,
     PickerScreen,
     PromptScreen,
@@ -34,7 +37,7 @@ from writing_assistant.tui.app import (
     main,
     parse_env_vars_text,
 )
-from writing_assistant.tui.client import WritingAssistantClient
+from writing_assistant.tui.client import ApiError, WritingAssistantClient
 from writing_assistant.tui.session import Session
 
 SIZE = (120, 45)
@@ -101,6 +104,10 @@ async def _settle(pilot, rounds: int = 12) -> None:
 
 def _text(widget: Static) -> str:
     return str(widget.content)
+
+
+def _notifications(app: WritingAssistantApp) -> str:
+    return "\n".join(str(n.message) for n in app._notifications)
 
 
 async def test_register_login_edit_generate_use_and_save(tui_app, mocker):
@@ -1547,3 +1554,73 @@ async def test_command_palette_offers_only_relevant_system_commands(tui_app):
 def test_help_text_covers_the_palette_and_the_open_filter():
     for needle in ("Ctrl+P", "filter"):
         assert needle in HELP_TEXT, needle
+
+
+async def _open_change_password(pilot, editor: EditorScreen) -> ChangePasswordScreen:
+    editor.action_file_menu()
+    await pilot.pause()
+    menu = editor.app.screen
+    assert isinstance(menu, MenuScreen)
+    options = menu.query_one("#menu", OptionList)
+    ids = [options.get_option_at_index(i).id for i in range(options.option_count)]
+    assert "change_password" in ids
+    assert ids.index("change_password") == ids.index("logout") - 1
+    options.highlighted = ids.index("change_password")
+    await pilot.press("enter")
+    await _settle(pilot)
+    dialog = editor.app.screen
+    assert isinstance(dialog, ChangePasswordScreen)
+    return dialog
+
+
+async def test_change_password_from_the_file_menu(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        dialog = await _open_change_password(pilot, editor)
+
+        # Client-side checks keep the dialog open with a readable reason.
+        dialog.query_one("#current", Input).value = PASSWORD
+        dialog.query_one("#new", Input).value = "one-new-password"
+        dialog.query_one("#confirm", Input).value = "a-different-one"
+        await pilot.click("#confirm-btn")
+        await _settle(pilot)
+        assert app.screen is dialog
+        assert "do not match" in _text(dialog.query_one("#message", Static))
+
+        # The server rejects a wrong current password; the dialog stays open.
+        dialog.query_one("#current", Input).value = "not-the-password"
+        dialog.query_one("#confirm", Input).value = "one-new-password"
+        await pilot.click("#confirm-btn")
+        await _settle(pilot)
+        assert app.screen is dialog
+        assert "current password" in _text(dialog.query_one("#message", Static)).lower()
+
+        dialog.query_one("#current", Input).value = PASSWORD
+        await pilot.click("#confirm-btn")
+        await _settle(pilot)
+        assert app.screen is editor
+        assert "Password changed" in _notifications(app)
+
+        # Still logged in, and the new password is what the server knows.
+        assert (await editor.client.check_auth())["email"] == EMAIL
+        with pytest.raises(ApiError):
+            await editor.client.login(EMAIL, PASSWORD)
+        await editor.client.login(EMAIL, "one-new-password")
+
+
+async def test_change_password_dialog_cancels_with_escape(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        dialog = await _open_change_password(pilot, editor)
+        dialog.query_one("#current", Input).value = PASSWORD
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is editor
+        await editor.client.login(EMAIL, PASSWORD)  # unchanged
+
+
+def test_change_password_is_in_the_help_and_palette():
+    assert "Change password" in HELP_TEXT
+    assert any(name == "change_password" for name, _, _ in EDITOR_COMMANDS)
