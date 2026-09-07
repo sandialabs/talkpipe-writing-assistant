@@ -275,3 +275,30 @@ async def test_change_password_round_trip(tui_client: WritingAssistantClient):
     with pytest.raises(ApiError):
         await tui_client.login("tui@example.com", "a-strong-password")
     await tui_client.login("tui@example.com", "another-password")
+
+
+async def test_change_email_round_trip(tui_client: WritingAssistantClient):
+    await tui_client.register("tui@example.com", "a-strong-password")
+    await tui_client.register("taken@example.com", "someone-elses-pw")
+    await tui_client.login("tui@example.com", "a-strong-password")
+
+    with pytest.raises(ApiError) as excinfo:
+        await tui_client.change_email("wrong-password", "new@example.com")
+    assert "current password" in excinfo.value.message.lower()
+    assert excinfo.value.status_code == 400
+
+    with pytest.raises(ApiError) as excinfo:
+        await tui_client.change_email("a-strong-password", "taken@example.com")
+    assert "already" in excinfo.value.message.lower()
+
+    with pytest.raises(ApiError) as excinfo:
+        await tui_client.change_email("a-strong-password", "not-an-address")
+    assert "new_email" in excinfo.value.message
+
+    email = await tui_client.change_email("a-strong-password", "new@example.com")
+    assert email == "new@example.com"
+    # Same token, new address.
+    assert (await tui_client.check_auth())["email"] == "new@example.com"
+    with pytest.raises(ApiError):
+        await tui_client.login("tui@example.com", "a-strong-password")
+    await tui_client.login("new@example.com", "a-strong-password")

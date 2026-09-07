@@ -265,15 +265,22 @@ class WritingAssistant {
             if (e.target === settingsModal) this.hideSettingsModal();
         });
 
-        // Account tab: the change-password form
+        // Account tab: the change-email and change-password forms
+        document.getElementById('change-email-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.changeEmail();
+        });
         document.getElementById('change-password-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.changePassword();
         });
         // A result only describes the values it was run with - clear it
         // as soon as a field changes, like the connection test.
+        ['new-email', 'email-current-password'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', () => this.clearAccountStatus('change-email-status'));
+        });
         ['current-password', 'new-password', 'confirm-new-password'].forEach(id => {
-            document.getElementById(id)?.addEventListener('input', () => this.clearChangePasswordStatus());
+            document.getElementById(id)?.addEventListener('input', () => this.clearAccountStatus('change-password-status'));
         });
 
         // Add Enter key handler for Settings modal
@@ -291,7 +298,12 @@ class WritingAssistant {
                 } else if (activeTab && activeTab.id === 'generation-settings') {
                     this.saveGenerationSettings();
                 } else if (activeTab && activeTab.id === 'account-settings') {
-                    this.changePassword();
+                    // Two forms on this tab: submit the one Enter was pressed in.
+                    if (e.target.closest('form')?.id === 'change-email-form') {
+                        this.changeEmail();
+                    } else {
+                        this.changePassword();
+                    }
                 }
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -958,26 +970,126 @@ class WritingAssistant {
         // Stale connection results are misleading - clear on open.
         this.clearConnectionStatus();
 
-        // Account tab: show who is signed in and start from empty password
-        // fields (a half-typed password must not survive a close/reopen).
-        const accountEmail = document.getElementById('account-email');
-        if (accountEmail) {
-            accountEmail.textContent = document.getElementById('user-email')?.textContent || '';
-        }
-        this.resetChangePasswordForm();
+        // Account tab: show who is signed in and start from empty forms
+        // (a half-typed password must not survive a close/reopen).
+        this.showAccountEmail(document.getElementById('user-email')?.textContent || '');
+        this.resetAccountForm('change-email-form', 'change-email-status');
+        this.resetAccountForm('change-password-form', 'change-password-status');
     }
 
-    resetChangePasswordForm() {
-        document.getElementById('change-password-form')?.reset();
-        this.clearChangePasswordStatus();
+    // Keep the top bar and the Account tab's "Signed in as" in step.
+    showAccountEmail(email) {
+        ['user-email', 'account-email'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = email;
+        });
     }
 
-    clearChangePasswordStatus() {
-        const statusEl = document.getElementById('change-password-status');
+    resetAccountForm(formId, statusId) {
+        document.getElementById(formId)?.reset();
+        this.clearAccountStatus(statusId);
+    }
+
+    clearAccountStatus(statusId) {
+        const statusEl = document.getElementById(statusId);
         if (statusEl) {
             statusEl.className = 'ai-connection-status';
             statusEl.textContent = '';
         }
+    }
+
+    /**
+     * POST one of the Account tab's forms to a /user/change-* endpoint.
+     *
+     * Both endpoints answer 400 with fastapi-users' {code, reason} shape
+     * (and 422 with Pydantic's list for a malformed address); the reason is
+     * shown under the button and the field named by `fieldFor(code)` gets
+     * focus. Resolves to the response body on success, null otherwise.
+     */
+    async submitAccountChange({ path, body, button, statusEl, progress, fallback, fieldFor, showError }) {
+        button.disabled = true;
+        statusEl.className = 'ai-connection-status testing';
+        statusEl.textContent = progress;
+        try {
+            const response = await this.authFetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.status === 'success') {
+                return result;
+            }
+            if (response.status === 401) {
+                showError('Your session has expired. Please log in again.', fieldFor('INCORRECT_CURRENT'));
+                return null;
+            }
+            const detail = result.detail;
+            const reason = (detail && detail.reason) ||
+                (Array.isArray(detail) && detail[0] && detail[0].msg) ||
+                (typeof detail === 'string' ? detail : null) ||
+                result.message || fallback;
+            showError(reason, fieldFor((detail && detail.code) || ''));
+            return null;
+        } catch (error) {
+            console.error(`Error posting to ${path}:`, error);
+            showError('Could not reach the server. Please try again.', null);
+            return null;
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    accountErrorShower(statusEl) {
+        return (text, field) => {
+            statusEl.className = 'ai-connection-status error';
+            statusEl.textContent = `✗ ${text}`;
+            field?.focus();
+        };
+    }
+
+    async changeEmail() {
+        const button = document.getElementById('change-email-btn');
+        const statusEl = document.getElementById('change-email-status');
+        const emailField = document.getElementById('new-email');
+        const currentField = document.getElementById('email-current-password');
+        if (!button || !statusEl || !emailField || !currentField) return;
+        const showError = this.accountErrorShower(statusEl);
+
+        const newEmail = emailField.value.trim();
+        if (!newEmail) {
+            showError('Enter the new email address.', emailField);
+            return;
+        }
+        if (!emailField.checkValidity()) {
+            showError('Enter a valid email address.', emailField);
+            return;
+        }
+        if (newEmail.toLowerCase() === (document.getElementById('user-email')?.textContent || '').toLowerCase()) {
+            showError('That is already your email address.', emailField);
+            return;
+        }
+        if (!currentField.value) {
+            showError('Enter your current password.', currentField);
+            return;
+        }
+
+        const result = await this.submitAccountChange({
+            path: '/user/change-email',
+            body: { current_password: currentField.value, new_email: newEmail },
+            button, statusEl,
+            progress: 'Changing email…',
+            fallback: 'Could not change the email address.',
+            fieldFor: code => code.endsWith('INCORRECT_CURRENT') ? currentField : emailField,
+            showError
+        });
+        if (!result) return;
+
+        this.showAccountEmail(result.email || newEmail);
+        this.resetAccountForm('change-email-form', 'change-email-status');
+        statusEl.className = 'ai-connection-status ok';
+        statusEl.textContent = `✓ Email changed to ${result.email || newEmail}. Log in with it next time.`;
+        this.showMessage('Email changed', 'success');
     }
 
     async changePassword() {
@@ -987,12 +1099,7 @@ class WritingAssistant {
         const newField = document.getElementById('new-password');
         const confirmField = document.getElementById('confirm-new-password');
         if (!button || !statusEl || !currentField || !newField || !confirmField) return;
-
-        const showError = (text, field) => {
-            statusEl.className = 'ai-connection-status error';
-            statusEl.textContent = `✗ ${text}`;
-            field?.focus();
-        };
+        const showError = this.accountErrorShower(statusEl);
 
         const currentPassword = currentField.value;
         const newPassword = newField.value;
@@ -1013,44 +1120,21 @@ class WritingAssistant {
             return;
         }
 
-        button.disabled = true;
-        statusEl.className = 'ai-connection-status testing';
-        statusEl.textContent = 'Changing password…';
+        const result = await this.submitAccountChange({
+            path: '/user/change-password',
+            body: { current_password: currentPassword, new_password: newPassword },
+            button, statusEl,
+            progress: 'Changing password…',
+            fallback: 'Could not change the password.',
+            fieldFor: code => code.endsWith('INCORRECT_CURRENT') ? currentField : newField,
+            showError
+        });
+        if (!result) return;
 
-        try {
-            const response = await this.authFetch('/user/change-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    current_password: currentPassword,
-                    new_password: newPassword
-                })
-            });
-            const result = await response.json().catch(() => ({}));
-
-            if (response.ok && result.status === 'success') {
-                this.resetChangePasswordForm();
-                statusEl.className = 'ai-connection-status ok';
-                statusEl.textContent = '✓ Password changed.';
-                this.showMessage('Password changed', 'success');
-            } else if (response.status === 401) {
-                showError('Your session has expired. Please log in again.', currentField);
-            } else {
-                // The server answers with fastapi-users' {code, reason} shape.
-                const detail = result.detail;
-                const reason = (detail && detail.reason) ||
-                    (typeof detail === 'string' ? detail : null) ||
-                    result.message || 'Could not change the password.';
-                const field = detail && detail.code === 'CHANGE_PASSWORD_INCORRECT_CURRENT'
-                    ? currentField : newField;
-                showError(reason, field);
-            }
-        } catch (error) {
-            console.error('Error changing password:', error);
-            showError('Could not reach the server. Please try again.', null);
-        } finally {
-            button.disabled = false;
-        }
+        this.resetAccountForm('change-password-form', 'change-password-status');
+        statusEl.className = 'ai-connection-status ok';
+        statusEl.textContent = '✓ Password changed.';
+        this.showMessage('Password changed', 'success');
     }
 
     clearConnectionStatus() {

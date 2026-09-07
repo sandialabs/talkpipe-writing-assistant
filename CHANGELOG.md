@@ -8,16 +8,28 @@ release are grouped by kind rather than listed in the order they landed.
 
 ### Added
 
-- **Change password** for the logged-in user, in both interfaces. The web
-  UI's Settings dialog gains an **Account** tab showing who is signed in
-  and a Change Password form; the terminal interface has **Change
-  password** in the File menu (F2) and the command palette. Both ask for
-  the current password and the new one twice, keep the form open with the
-  server's reason when it refuses (wrong current password, fewer than 8
-  characters, same as before), and leave the session logged in. Backed by
-  a new authenticated `POST /user/change-password` endpoint that verifies
-  the current password before applying the change — unlike the
-  fastapi-users `PATCH /users/me`, a bearer token alone is not enough.
+- **Change email address and password** for the logged-in user, in both
+  interfaces. The web UI's Settings dialog gains an **Account** tab
+  showing who is signed in, a Change Email form and a Change Password
+  form; the terminal interface has **Account** in the File menu (F2) and
+  the command palette, one dialog with the email and the new password
+  (leave it blank to keep the current one). Both ask for the current
+  password, keep the form open with the server's reason when it refuses
+  (wrong current password, address already in use, password shorter than
+  8 characters or same as before), and leave the session logged in — the
+  new email is what you log in with next time. Backed by two new
+  authenticated endpoints, `POST /user/change-password` and
+  `POST /user/change-email`, that verify the current password before
+  applying the change, so a bearer token alone is not enough.
+
+### Removed
+
+- The fastapi-users `GET`/`PATCH /users/me` routes. Nothing in the web
+  UI, the terminal interface or the admin tools used them, and the `PATCH`
+  let a bearer token alone set a new password or email without knowing
+  the current password. Self-service now goes through the two
+  `/user/change-*` endpoints above; the superuser `/users/{id}` routes
+  are unchanged. For a token check, use `GET /auth/check`.
 
 ## 1.0.0 (2026-08-29)
 

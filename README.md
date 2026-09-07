@@ -330,10 +330,10 @@ a server default, leave the source on "Server default" and the model blank
 | `Ctrl+U` | Use the suggestion as the section's text (for Ideas, which are advice rather than prose, it asks first) |
 | `Ctrl+S` | Save (asks for a library name the first time — the document is stored on the server, shared with the web UI, not written to a file here; use File → Export for a file) |
 | `Ctrl+N` / `Ctrl+O` | New document (a title and optional outline; `Ctrl+S` then stores it in your library) / Open a document from your library (type to filter the list by name or title; `Up`/`Down` and `Enter` pick one) |
-| `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Change password, Log out |
+| `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Account (change email or password), Log out |
 | `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
 | `F1` | Help |
-| `Ctrl+P` | Command palette: type part of a command's name (Save As, Create snapshot, Export, Change password, Log out, …) and press `Enter` |
+| `Ctrl+P` | Command palette: type part of a command's name (Save As, Create snapshot, Export, Account, Log out, …) and press `Enter` |
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |
 | `Esc` | Close a dialog or menu without changes |
 | `Ctrl+Q` | Quit (asks first if there are unsaved changes — **Save**, **Discard changes** or **Cancel**; the same prompt guards Open, New, Import, Revert and Log out. `Ctrl+C` copies the editor selection and does not quit) |
@@ -396,7 +396,7 @@ When the server starts, it will display:
 - API documentation URL
 - Database location
 
-**Authentication:** The application uses JWT-based multi-user authentication with FastAPI Users. Each user has their own account with secure password storage. New users can register through the web interface at `/register`, and existing users log in at `/login`. To change your password once logged in, open **Settings → Account** in the web interface, or **File → Change password** (F2) in the terminal interface; both ask for the current password first.
+**Authentication:** The application uses JWT-based multi-user authentication with FastAPI Users. Each user has their own account with secure password storage. New users can register through the web interface at `/register`, and existing users log in at `/login`. To change your email address or password once logged in, open **Settings → Account** in the web interface, or **File → Account** (F2) in the terminal interface; both ask for the current password first, and a changed email is what you log in with next time.
 
 ### Environment Variables
 

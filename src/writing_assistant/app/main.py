@@ -12,9 +12,11 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_users import InvalidPasswordException
+from fastapi_users.exceptions import UserAlreadyExists
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
@@ -31,7 +33,7 @@ from .auth import (
 )
 from .database import create_db_and_tables, get_async_session
 from .models import Document, DocumentSnapshot, User, iso_utc, utcnow
-from .schemas import PasswordChange, UserCreate, UserRead, UserUpdate
+from .schemas import EmailChange, PasswordChange, UserCreate, UserRead, UserUpdate
 
 # Lock to prevent race conditions when setting environment variables
 _env_var_lock = threading.Lock()
@@ -178,11 +180,19 @@ app.include_router(
     tags=["auth"],
 )
 
-app.include_router(
-    fastapi_users.get_users_router(UserRead, UserUpdate),
-    prefix="/users",
-    tags=["users"],
-)
+# Only the superuser routes (GET/PATCH/DELETE /users/{id}) are mounted. The
+# self-service /users/me routes fastapi-users adds to the same router are
+# dropped: nothing in the web UI, the TUI or the admin tools uses them, and
+# PATCH /users/me would let a bearer token alone set a new password or email.
+# Self-service goes through /user/change-password and /user/change-email,
+# which verify the current password first.
+_users_router = fastapi_users.get_users_router(UserRead, UserUpdate)
+_users_router.routes = [
+    route
+    for route in _users_router.routes
+    if not (isinstance(route, APIRoute) and route.path == "/me")
+]
+app.include_router(_users_router, prefix="/users", tags=["users"])
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -234,6 +244,26 @@ async def check_auth(user: User = Depends(current_active_user)) -> dict[str, Any
     }
 
 
+def _require_current_password(
+    user_manager: UserManager, user: User, current_password: str, code: str
+) -> None:
+    """Reject an account change unless the current password is right.
+
+    A bearer token alone must not be enough to change the password or
+    the email (the address a password reset goes to). The error body
+    uses the fastapi-users ``{"code", "reason"}`` shape so both clients
+    can show the reason as-is.
+    """
+    verified, _ = user_manager.password_helper.verify_and_update(
+        current_password, user.hashed_password
+    )
+    if not verified:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": code, "reason": "The current password is incorrect."},
+        )
+
+
 @app.post("/user/change-password")
 async def change_password(
     body: PasswordChange,
@@ -243,23 +273,13 @@ async def change_password(
 ) -> dict[str, Any]:
     """Change the logged-in user's password.
 
-    The current password must be supplied and verified first; a bearer
-    token alone is not enough. The new password goes through the same
-    validation as registration (``UserManager.validate_password``), and
-    the error body uses the fastapi-users ``{"code", "reason"}`` shape so
-    both clients can show the reason as-is.
+    The current password must be supplied and verified first. The new
+    password goes through the same validation as registration
+    (``UserManager.validate_password``).
     """
-    verified, _ = user_manager.password_helper.verify_and_update(
-        body.current_password, user.hashed_password
+    _require_current_password(
+        user_manager, user, body.current_password, "CHANGE_PASSWORD_INCORRECT_CURRENT"
     )
-    if not verified:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "CHANGE_PASSWORD_INCORRECT_CURRENT",
-                "reason": "The current password is incorrect.",
-            },
-        )
     if body.new_password == body.current_password:
         raise HTTPException(
             status_code=400,
@@ -282,6 +302,48 @@ async def change_password(
         ) from exc
     logger.info("User %s changed their password", user.id)
     return {"status": "success", "message": "Password changed"}
+
+
+@app.post("/user/change-email")
+async def change_email(
+    body: EmailChange,
+    request: Request,
+    user: User = Depends(current_active_user),
+    user_manager: UserManager = Depends(get_user_manager),
+) -> dict[str, Any]:
+    """Change the logged-in user's email address.
+
+    The current password must be supplied and verified first. The address
+    must not belong to another account. The session token identifies the
+    user by id, so it stays valid; ``is_verified`` is reset by
+    fastapi-users, as on any email change.
+    """
+    _require_current_password(
+        user_manager, user, body.current_password, "CHANGE_EMAIL_INCORRECT_CURRENT"
+    )
+    new_email = str(body.new_email)
+    if new_email.lower() == user.email.lower():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHANGE_EMAIL_INVALID_EMAIL",
+                "reason": "The new email address is the same as the current one.",
+            },
+        )
+    try:
+        updated = await user_manager.update(
+            UserUpdate(email=new_email), user, safe=True, request=request
+        )
+    except UserAlreadyExists as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHANGE_EMAIL_ALREADY_EXISTS",
+                "reason": "An account with that email address already exists.",
+            },
+        ) from exc
+    logger.info("User %s changed their email address", user.id)
+    return {"status": "success", "message": "Email changed", "email": updated.email}
 
 
 @app.get("/user/preferences")

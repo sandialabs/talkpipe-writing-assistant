@@ -207,6 +207,23 @@ class WritingAssistantClient:
         )
         return str(data.get("message") or "Password changed")
 
+    async def change_email(self, current_password: str, new_email: str) -> str:
+        """Change the logged-in user's email; returns the address as stored.
+
+        Raises ApiError with the server's reason (wrong current password,
+        address in use, same as before, malformed). The token stays valid
+        afterwards, so the caller only needs to update the saved session.
+        """
+        data = self._check_status(
+            await self._json(
+                "POST",
+                "/user/change-email",
+                json={"current_password": current_password, "new_email": new_email},
+            ),
+            "Failed to change email",
+        )
+        return str(data.get("email") or new_email)
+
     async def server_config(self) -> dict[str, Any]:
         return await self._json("GET", "/config")
 

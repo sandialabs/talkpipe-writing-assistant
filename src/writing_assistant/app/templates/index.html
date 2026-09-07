@@ -259,6 +259,28 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                             </div>
 
                             <div class="settings-section">
+                                <h4>Change Email</h4>
+                                <small class="form-help">This is the address you log in with and where a password reset is sent, so your current password is required.</small>
+
+                                <form id="change-email-form" autocomplete="off">
+                                    <div class="form-group">
+                                        <label for="new-email">New Email:</label>
+                                        <input id="new-email" type="email" name="new_email" autocomplete="email" placeholder="you@example.com">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="email-current-password">Current Password:</label>
+                                        <input id="email-current-password" type="password" name="current_password" autocomplete="current-password" placeholder="Your current password">
+                                    </div>
+
+                                    <div class="form-actions">
+                                        <button type="submit" id="change-email-btn" class="btn btn-primary">✉️ Change Email</button>
+                                    </div>
+                                    <div id="change-email-status" class="ai-connection-status" aria-live="polite"></div>
+                                </form>
+                            </div>
+
+                            <div class="settings-section">
                                 <h4>Change Password</h4>
                                 <small class="form-help">Enter your current password, then the new one twice. Other devices that are logged in stay logged in until their sessions expire.</small>
 

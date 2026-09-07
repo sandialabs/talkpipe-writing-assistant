@@ -1879,7 +1879,8 @@ input[type="file"]:focus {
     margin-bottom: 12px;
 }
 
-.account-form input[type="password"] {
+.account-form input[type="password"],
+.account-form input[type="email"] {
     width: 100%;
 }
 

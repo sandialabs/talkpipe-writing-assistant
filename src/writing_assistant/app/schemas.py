@@ -43,12 +43,23 @@ class PasswordChange(BaseModel):
     """Body of POST /user/change-password.
 
     The current password is required so that a leaked bearer token alone
-    cannot be used to take over the account (PATCH /users/me, which
-    fastapi-users provides, does not ask for it).
+    cannot be used to take over the account (the fastapi-users
+    ``PATCH /users/me`` route, which does not ask for it, is not mounted).
     """
 
     current_password: str
     new_password: str
+
+
+class EmailChange(BaseModel):
+    """Body of POST /user/change-email.
+
+    Same rule as PasswordChange: the email is where a password reset
+    goes, so moving it requires the current password.
+    """
+
+    current_password: str
+    new_email: EmailStr
 
 
 # Document schemas

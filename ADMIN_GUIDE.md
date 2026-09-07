@@ -97,10 +97,21 @@ curl -X POST http://localhost:8001/auth/jwt/login \
 
 Then use the token for admin operations:
 
-**List users (via /users/me for self, need to query each user ID for others):**
+**Check the token (your own email and user id):**
 ```bash
 curl -H "Authorization: Bearer <token>" \
-  http://localhost:8001/users/me
+  http://localhost:8001/auth/check
+```
+
+There is no list-users endpoint; look up ids with the `writing-assistant-admin`
+command or in the database (Methods 1 and 3). Users change their own email
+and password in the apps (Settings → Account in the web UI, File → Account
+in the TUI); the fastapi-users `/users/me` routes are not mounted.
+
+**Read a user (superuser):**
+```bash
+curl -H "Authorization: Bearer <superuser_token>" \
+  http://localhost:8001/users/{user_id}
 ```
 
 **Update a user (deactivate, change email, etc.):**

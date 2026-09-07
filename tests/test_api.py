@@ -427,3 +427,131 @@ def test_index_offers_a_change_password_form(client):
             f'type="password" id="{field}"' in html
         )
     assert 'id="change-password-btn"' in html
+
+
+def test_change_email_requires_authentication(client):
+    response = client.post(
+        "/user/change-email",
+        json={"current_password": "testpassword123", "new_email": "new@example.com"},
+    )
+    assert response.status_code == 401
+
+
+def test_change_email_rejects_wrong_current_password(authenticated_client):
+    """The email is the password-reset address: a token alone must not move it."""
+    response = authenticated_client.post(
+        "/user/change-email",
+        json={"current_password": "not-my-password", "new_email": "new@example.com"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "CHANGE_EMAIL_INCORRECT_CURRENT"
+    assert "current password" in detail["reason"].lower()
+    assert authenticated_client.get("/auth/check").json()["email"] == "test@example.com"
+
+
+def test_change_email_rejects_the_current_address(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-email",
+        json={"current_password": "testpassword123", "new_email": "test@example.com"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "CHANGE_EMAIL_INVALID_EMAIL"
+    assert "same" in detail["reason"].lower()
+
+
+def test_change_email_rejects_an_address_in_use(authenticated_client):
+    register = authenticated_client.post(
+        "/auth/register",
+        json={"email": "taken@example.com", "password": "someone-elses-pw"},
+        headers={"Authorization": ""},
+    )
+    assert register.status_code == 201
+    response = authenticated_client.post(
+        "/user/change-email",
+        json={"current_password": "testpassword123", "new_email": "taken@example.com"},
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "CHANGE_EMAIL_ALREADY_EXISTS"
+    assert "already" in detail["reason"].lower()
+    assert authenticated_client.get("/auth/check").json()["email"] == "test@example.com"
+
+
+def test_change_email_rejects_a_malformed_address(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-email",
+        json={"current_password": "testpassword123", "new_email": "not-an-address"},
+    )
+    assert response.status_code == 422
+    assert authenticated_client.get("/auth/check").json()["email"] == "test@example.com"
+
+
+def test_change_email_succeeds_with_the_current_password(authenticated_client):
+    response = authenticated_client.post(
+        "/user/change-email",
+        json={"current_password": "testpassword123", "new_email": "new@example.com"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "success",
+        "message": "Email changed",
+        "email": "new@example.com",
+    }
+
+    # The session token identifies the user by id, so it keeps working and
+    # now reports the new address.
+    assert authenticated_client.get("/auth/check").json()["email"] == "new@example.com"
+
+    old_login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "testpassword123"},
+        headers={"Authorization": ""},
+    )
+    assert old_login.status_code == 400
+    new_login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "new@example.com", "password": "testpassword123"},
+        headers={"Authorization": ""},
+    )
+    assert new_login.status_code == 200
+
+
+def test_users_me_routes_are_not_mounted(authenticated_client):
+    """Self-service goes through /user/change-*, which verify the password.
+
+    fastapi-users' ``/users/me`` routes are dropped; the superuser
+    ``/users/{id}`` routes the admin guide relies on stay.
+    """
+    from writing_assistant.app.main import app
+
+    paths = app.openapi()["paths"]
+    assert "/users/me" not in paths
+    assert set(paths["/users/{id}"]) == {"get", "patch", "delete"}
+
+    # Without the /me route, a token alone can no longer set a password.
+    response = authenticated_client.patch(
+        "/users/me", json={"password": "taken-over-password"}
+    )
+    assert response.status_code != 200
+    login = authenticated_client.post(
+        "/auth/jwt/login",
+        data={"username": "test@example.com", "password": "testpassword123"},
+        headers={"Authorization": ""},
+    )
+    assert login.status_code == 200
+
+
+def test_index_offers_a_change_email_form(client):
+    """The Account tab also changes the email address, on the same tab."""
+    html = client.get("/").text
+    assert html.count('data-settings-tab="account"') == 1
+    account = html[html.index('id="account-settings"') :]
+    account = account[: account.index("<!-- Load Document Modal -->")]
+    assert 'id="change-email-form"' in account
+    assert 'id="new-email"' in account
+    assert 'type="email"' in account
+    assert 'id="email-current-password"' in account
+    assert 'id="change-email-btn"' in account
+    assert 'id="change-password-form"' in account

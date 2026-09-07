@@ -126,8 +126,8 @@ HELP_TEXT = """\
 
 [b]Documents[/b]
   F2      File menu: New, Save, Save As, Open, Delete, Create snapshot,
-          Revert to snapshot, Import, Export, Copy, Change password,
-          Log out
+          Revert to snapshot, Import, Export, Copy, Account (email,
+          password), Log out
   Ctrl+S  Save
   Ctrl+O  Open
   Ctrl+N  New (a title and optional outline; Ctrl+S then stores it in
@@ -313,79 +313,114 @@ class PromptScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
-class ChangePasswordScreen(ModalScreen[bool]):
-    """Change the logged-in user's password.
+class AccountScreen(ModalScreen[list[str]]):
+    """The logged-in user's account: email address and password.
 
-    Talks to the server itself (like LoginScreen) so a rejected attempt —
-    wrong current password, too short — keeps the dialog open with the
-    reason, rather than making the user start over. Dismisses with True
-    once the password was changed, False when cancelled.
+    One dialog for both, with a single current-password field, since the
+    server requires the current password for either change. Talks to the
+    server itself (like LoginScreen) so a refusal — wrong current
+    password, address in use, new password too short — keeps the dialog
+    open with the reason rather than making the user start over.
+
+    The email is changed first, then the password; a refused password
+    does not undo an email change that already went through, so the
+    dialog updates ``session.email`` itself as soon as the server accepts
+    the address. Dismisses with the list of what changed (``"email"``,
+    ``"password"``), empty when cancelled before anything was applied.
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, session: Session) -> None:
         super().__init__()
         self._client = client
+        self._session = session
+        self._changed: list[str] = []
 
     def compose(self) -> ComposeResult:
+        email = self._session.email or ""
         with Vertical(classes="dialog"):
-            yield Label("Change password", classes="dialog-title")
-            yield Label("Current password")
+            yield Label("Account", classes="dialog-title")
+            yield Static(f"Signed in as {email}", id="signed-in")
+            yield Label("Email")
+            yield Input(value=email, placeholder="you@example.com", id="email")
+            yield Label("Current password (required for any change)")
             yield Input(password=True, id="current")
-            yield Label("New password")
+            yield Label("New password (leave blank to keep the current one)")
             yield Input(placeholder="at least 8 characters", password=True, id="new")
             yield Label("Confirm new password")
             yield Input(placeholder="repeat new password", password=True, id="confirm")
             yield Static("", id="message", classes="status-line")
             with Horizontal(classes="dialog-buttons"):
-                yield Button("Change password", variant="primary", id="confirm-btn")
+                yield Button("Apply", variant="primary", id="apply")
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#current", Input).focus()
+        self.query_one("#email", Input).focus()
 
     def _set_message(self, text: str, *, error: bool = False) -> None:
         widget = self.query_one("#message", Static)
         widget.update(text)
         widget.set_classes("status-line error" if error else "status-line")
 
+    def _fail(self, text: str, focus: str) -> None:
+        self._set_message(text, error=True)
+        self.query_one("#apply", Button).disabled = False
+        self.query_one(focus, Input).focus()
+
     @on(Input.Submitted)
-    @on(Button.Pressed, "#confirm-btn")
+    @on(Button.Pressed, "#apply")
     def _submit(self) -> None:
+        email = self.query_one("#email", Input).value.strip()
         current = self.query_one("#current", Input).value
         new = self.query_one("#new", Input).value
         confirm = self.query_one("#confirm", Input).value
-        if not current:
-            self._set_message("Enter your current password.", error=True)
-            self.query_one("#current", Input).focus()
+        if not email:
+            self._fail("Enter an email address.", "#email")
             return
-        if not new:
-            self._set_message("Enter a new password.", error=True)
-            self.query_one("#new", Input).focus()
+        if not current:
+            self._fail("Enter your current password.", "#current")
             return
         if new != confirm:
-            self._set_message("The new passwords do not match.", error=True)
-            self.query_one("#confirm", Input).focus()
+            self._fail("The new passwords do not match.", "#confirm")
             return
-        self.query_one("#confirm-btn", Button).disabled = True
+        new_email = email if email != (self._session.email or "") else None
+        if new_email is None and not new:
+            self._fail(
+                "Nothing to change: edit the email or enter a new password.", "#email"
+            )
+            return
+        self.query_one("#apply", Button).disabled = True
         self._set_message("Contacting server...")
-        self._change(current, new)
+        self._apply(new_email, current, new or None)
 
     @work(exclusive=True)
-    async def _change(self, current: str, new: str) -> None:
-        try:
-            await self._client.change_password(current, new)
-        except ApiError as exc:
-            self._set_message(exc.message, error=True)
-            self.query_one("#confirm-btn", Button).disabled = False
-            self.query_one("#current", Input).focus()
-            return
-        self.dismiss(True)
+    async def _apply(
+        self, new_email: str | None, current: str, new: str | None
+    ) -> None:
+        if new_email is not None:
+            try:
+                stored = await self._client.change_email(current, new_email)
+            except ApiError as exc:
+                self._fail(exc.message, "#email")
+                return
+            self._session.email = stored
+            self._session.save()
+            self._changed.append("email")
+            self.query_one("#signed-in", Static).update(f"Signed in as {stored}")
+            self.query_one("#email", Input).value = stored
+        if new is not None:
+            try:
+                await self._client.change_password(current, new)
+            except ApiError as exc:
+                self._fail(exc.message, "#new")
+                return
+            self._changed.append("password")
+        self.dismiss(list(self._changed))
 
     @on(Button.Pressed, "#cancel")
     def action_cancel(self) -> None:
-        self.dismiss(False)
+        self.dismiss(list(self._changed))
 
 
 class MenuScreen(ModalScreen[str | None]):
@@ -1692,7 +1727,7 @@ class EditorScreen(Screen[None]):
             ("import", "Import from file"),
             ("export", "Export to file"),
             ("copy", "Copy document to clipboard"),
-            ("change_password", "Change password"),
+            ("account", "Account (email, password)"),
             ("logout", "Log out"),
         ]
         self.app.push_screen(MenuScreen("File", items), self._file_menu_chosen)
@@ -1711,7 +1746,7 @@ class EditorScreen(Screen[None]):
             "import": self.action_import,
             "export": self.action_export,
             "copy": self.action_copy,
-            "change_password": self.action_change_password,
+            "account": self.action_account,
             "logout": self.action_logout,
         }[choice]
         handler()
@@ -2091,11 +2126,18 @@ class EditorScreen(Screen[None]):
             )
 
     @work
-    async def action_change_password(self) -> None:
+    async def action_account(self) -> None:
         # The document is untouched, so no unsaved-changes prompt; the
         # session token stays valid, so no re-login either.
         self.app.clear_notifications()
-        if await self.app.push_screen_wait(ChangePasswordScreen(self.client)):
+        changed = await self.app.push_screen_wait(
+            AccountScreen(self.client, self.session)
+        )
+        # The dialog saved the session; the top bar is ours to refresh.
+        self.query_one("#user", Static).update(self.session.email or "")
+        if "email" in changed:
+            self.notify(f"Email changed to {self.session.email}.")
+        if "password" in changed:
             self.notify("Password changed.")
 
     @work
@@ -2267,7 +2309,7 @@ EDITOR_COMMANDS: list[tuple[str, str, str]] = [
     ("settings", "Settings", "Document and AI settings (F3)"),
     ("help", "Help", "Keyboard reference (F1)"),
     ("use_suggestion", "Use suggestion", "Replace the section with it (Ctrl+U)"),
-    ("change_password", "Change password", "Set a new password for your account"),
+    ("account", "Account", "Change your email address or password"),
     ("logout", "Log out", "Forget the saved session and return to login"),
 ]
 

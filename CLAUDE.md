@@ -129,9 +129,10 @@ The application uses **FastAPI Users** (v13+) for complete user management:
 - `POST /auth/jwt/logout` - Logout (invalidate token)
 - `POST /auth/forgot-password` - Request password reset
 - `POST /auth/reset-password` - Reset password with token
-- `GET /users/me` - Get current user profile
-- `PATCH /users/me` - Update current user profile
-- `POST /user/change-password` - Change the logged-in user's password (verifies the current password first; used by Settings → Account in the web UI and File → Change password in the TUI)
+- `GET /auth/check` - Who the token belongs to (`email`, `user_id`); both UIs use it after login
+- `POST /user/change-password` - Change the logged-in user's password (verifies the current password first; used by Settings → Account in the web UI and File → Account in the TUI)
+- `POST /user/change-email` - Change the logged-in user's email address (same rule; the token stays valid, `is_verified` resets)
+- `GET`/`PATCH`/`DELETE /users/{id}` - Superuser-only user management (see ADMIN_GUIDE.md). The fastapi-users `/users/me` routes are deliberately **not** mounted: `PATCH /users/me` would let a bearer token alone set a password or email
 
 **Database:**
 - SQLite database stored in `~/.writing_assistant/writing_assistant.db`

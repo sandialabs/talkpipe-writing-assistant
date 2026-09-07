@@ -21,7 +21,7 @@ from writing_assistant.app.main import app as fastapi_app
 from writing_assistant.tui.app import (
     EDITOR_COMMANDS,
     HELP_TEXT,
-    ChangePasswordScreen,
+    AccountScreen,
     ConfirmScreen,
     EditorScreen,
     LoginScreen,
@@ -1556,34 +1556,36 @@ def test_help_text_covers_the_palette_and_the_open_filter():
         assert needle in HELP_TEXT, needle
 
 
-async def _open_change_password(pilot, editor: EditorScreen) -> ChangePasswordScreen:
+async def _open_account(pilot, editor: EditorScreen) -> AccountScreen:
     editor.action_file_menu()
     await pilot.pause()
     menu = editor.app.screen
     assert isinstance(menu, MenuScreen)
     options = menu.query_one("#menu", OptionList)
     ids = [options.get_option_at_index(i).id for i in range(options.option_count)]
-    assert "change_password" in ids
-    assert ids.index("change_password") == ids.index("logout") - 1
-    options.highlighted = ids.index("change_password")
+    assert "account" in ids
+    assert ids.index("account") == ids.index("logout") - 1
+    options.highlighted = ids.index("account")
     await pilot.press("enter")
     await _settle(pilot)
     dialog = editor.app.screen
-    assert isinstance(dialog, ChangePasswordScreen)
+    assert isinstance(dialog, AccountScreen)
+    # The email field starts from the signed-in address.
+    assert dialog.query_one("#email", Input).value == editor.session.email
     return dialog
 
 
-async def test_change_password_from_the_file_menu(tui_app):
+async def test_account_dialog_changes_the_password(tui_app):
     app = tui_app
     async with app.run_test(size=SIZE) as pilot:
         editor = await _register_and_login(pilot, app)
-        dialog = await _open_change_password(pilot, editor)
+        dialog = await _open_account(pilot, editor)
 
         # Client-side checks keep the dialog open with a readable reason.
         dialog.query_one("#current", Input).value = PASSWORD
         dialog.query_one("#new", Input).value = "one-new-password"
         dialog.query_one("#confirm", Input).value = "a-different-one"
-        await pilot.click("#confirm-btn")
+        await pilot.click("#apply")
         await _settle(pilot)
         assert app.screen is dialog
         assert "do not match" in _text(dialog.query_one("#message", Static))
@@ -1591,16 +1593,17 @@ async def test_change_password_from_the_file_menu(tui_app):
         # The server rejects a wrong current password; the dialog stays open.
         dialog.query_one("#current", Input).value = "not-the-password"
         dialog.query_one("#confirm", Input).value = "one-new-password"
-        await pilot.click("#confirm-btn")
+        await pilot.click("#apply")
         await _settle(pilot)
         assert app.screen is dialog
         assert "current password" in _text(dialog.query_one("#message", Static)).lower()
 
         dialog.query_one("#current", Input).value = PASSWORD
-        await pilot.click("#confirm-btn")
+        await pilot.click("#apply")
         await _settle(pilot)
         assert app.screen is editor
         assert "Password changed" in _notifications(app)
+        assert "Email" not in _notifications(app)
 
         # Still logged in, and the new password is what the server knows.
         assert (await editor.client.check_auth())["email"] == EMAIL
@@ -1609,18 +1612,114 @@ async def test_change_password_from_the_file_menu(tui_app):
         await editor.client.login(EMAIL, "one-new-password")
 
 
-async def test_change_password_dialog_cancels_with_escape(tui_app):
+async def test_account_dialog_changes_the_email(tui_app):
     app = tui_app
     async with app.run_test(size=SIZE) as pilot:
         editor = await _register_and_login(pilot, app)
-        dialog = await _open_change_password(pilot, editor)
+        await editor.client.register("taken@example.com", "someone-elses-pw")
+        dialog = await _open_account(pilot, editor)
+
+        # Nothing edited: say so rather than round-tripping to the server.
+        dialog.query_one("#current", Input).value = PASSWORD
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is dialog
+        assert (
+            "nothing to change" in _text(dialog.query_one("#message", Static)).lower()
+        )
+
+        # The current password is required for an email change too.
+        dialog.query_one("#email", Input).value = "new@example.com"
+        dialog.query_one("#current", Input).value = ""
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is dialog
+        assert "current password" in _text(dialog.query_one("#message", Static)).lower()
+
+        # A refused address keeps the dialog open with the server's reason.
+        dialog.query_one("#email", Input).value = "taken@example.com"
+        dialog.query_one("#current", Input).value = PASSWORD
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is dialog
+        assert "already" in _text(dialog.query_one("#message", Static)).lower()
+
+        dialog.query_one("#email", Input).value = "new@example.com"
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is editor
+        assert "new@example.com" in _notifications(app)
+        assert "Password" not in _notifications(app)
+
+        # The editor, the saved session and the server all agree.
+        assert _text(editor.query_one("#user", Static)) == "new@example.com"
+        assert editor.session.email == "new@example.com"
+        assert Session.load().email == "new@example.com"
+        assert (await editor.client.check_auth())["email"] == "new@example.com"
+        with pytest.raises(ApiError):
+            await editor.client.login(EMAIL, PASSWORD)
+        await editor.client.login("new@example.com", PASSWORD)
+
+
+async def test_account_dialog_changes_email_and_password_together(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        dialog = await _open_account(pilot, editor)
+        dialog.query_one("#email", Input).value = "new@example.com"
+        dialog.query_one("#current", Input).value = PASSWORD
+        dialog.query_one("#new", Input).value = "one-new-password"
+        dialog.query_one("#confirm", Input).value = "one-new-password"
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is editor
+        assert "new@example.com" in _notifications(app)
+        assert "Password changed" in _notifications(app)
+        assert _text(editor.query_one("#user", Static)) == "new@example.com"
+        await editor.client.login("new@example.com", "one-new-password")
+
+
+async def test_account_dialog_keeps_a_changed_email_when_the_password_fails(tui_app):
+    """Email first, then password: a refused password does not undo the email."""
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        dialog = await _open_account(pilot, editor)
+        dialog.query_one("#email", Input).value = "new@example.com"
+        dialog.query_one("#current", Input).value = PASSWORD
+        dialog.query_one("#new", Input).value = "short"
+        dialog.query_one("#confirm", Input).value = "short"
+        await pilot.click("#apply")
+        await _settle(pilot)
+        assert app.screen is dialog
+        message = _text(dialog.query_one("#message", Static))
+        assert "at least 8 characters" in message
+        # The dialog now treats the new address as current.
+        assert "new@example.com" in _text(dialog.query_one("#signed-in", Static))
+
+        await pilot.press("escape")
+        await _settle(pilot)
+        assert app.screen is editor
+        assert "new@example.com" in _notifications(app)
+        assert _text(editor.query_one("#user", Static)) == "new@example.com"
+        assert editor.session.email == "new@example.com"
+        await editor.client.login("new@example.com", PASSWORD)
+
+
+async def test_account_dialog_cancels_with_escape(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        dialog = await _open_account(pilot, editor)
+        dialog.query_one("#email", Input).value = "new@example.com"
         dialog.query_one("#current", Input).value = PASSWORD
         await pilot.press("escape")
         await _settle(pilot)
         assert app.screen is editor
+        assert _text(editor.query_one("#user", Static)) == EMAIL
         await editor.client.login(EMAIL, PASSWORD)  # unchanged
 
 
-def test_change_password_is_in_the_help_and_palette():
-    assert "Change password" in HELP_TEXT
-    assert any(name == "change_password" for name, _, _ in EDITOR_COMMANDS)
+def test_account_is_in_the_help_and_palette():
+    assert "Account" in HELP_TEXT
+    assert any(name == "account" for name, _, _ in EDITOR_COMMANDS)
