@@ -41,6 +41,27 @@ release are grouped by kind rather than listed in the order they landed.
   defaults, as blank document fields do; AI source and model are not part
   of a template.
 
+### Changed
+
+- **Saving a document stores its committed settings.** A save (File → Save,
+  Save As, auto-save, and the save-before-leaving below) now writes the
+  writing settings last kept with the document — by Save to Document, by
+  loading it, by a template, or by Save AI Settings — rather than whatever
+  is currently typed in the Settings form. Suggestions still use the form
+  as it stands, so a setting can be tried before it is kept. Before, filling
+  in the form to author a template and then starting a document from that
+  template rewrote the previous document's settings on the way out.
+  Reverting to a snapshot now also adopts the snapshot's settings as the
+  document's, so the next save keeps them.
+- The Settings dialog opens at the top of its tab instead of wherever it
+  was last scrolled, and the suggestion panel's prompt now points at the
+  mode buttons above it.
+- The web UI's Save As dialog asks for a **Name** and says the document is
+  stored in your library on the server (shared with the terminal
+  interface), not for a "filename" with a `.json` extension.
+- The API documentation (`/docs`) and `writing_assistant.__version__`
+  report the installed package version instead of a hard-coded `0.1.0`.
+
 ### Removed
 
 - The fastapi-users `GET`/`PATCH /users/me` routes. Nothing in the web
@@ -49,6 +70,30 @@ release are grouped by kind rather than listed in the order they landed.
   the current password. Self-service now goes through the two
   `/user/change-*` endpoints above; the superuser `/users/{id}` routes
   are unchanged. For a token check, use `GET /auth/check`.
+
+### Fixed
+
+- **File → Open, New and Import no longer drop an unsaved document** in the
+  web UI. As the Templates menu already did, they save the open document in
+  place first when it has a library name, and otherwise — when it has any
+  text or title — ask **Save… / Discard / Cancel**; choosing Save… opens
+  Save As and continues with the original action once the save succeeds.
+  Before, loading another document replaced an unsaved one silently.
+
+### Documentation
+
+- AI Settings and the README now say where the Server URL, API key and
+  environment variables are kept — with your account on the server, once
+  Save AI Settings is pressed — rather than "in your browser's local
+  storage".
+- README: the Quick Start's banner and registration steps match the
+  application; the web UI's `Ctrl+G` / `Ctrl+U` hotkeys and the
+  save-before-leaving behaviour are described; the "Customizing Generation"
+  recipe says which files a new mode touches (and that `script.js` needs no
+  edit) and that the server must be restarted; the systemd example uses a
+  venv path that matches the install steps; `pip install -e '.[dev]'` is
+  quoted so it works in zsh; the environment-variable table gains the
+  OpenAI/Anthropic key and base-URL variables.
 
 ## 1.0.0 (2026-08-29)
 

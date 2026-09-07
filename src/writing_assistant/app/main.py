@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
 
+from .. import __version__
 from ..core import ai_connection
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
@@ -56,7 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="Writing Assistant - Multi-User", lifespan=lifespan)
+app = FastAPI(
+    title="Writing Assistant - Multi-User", version=__version__, lifespan=lifespan
+)
 
 # Get the directory where this module is located
 app_dir = Path(__file__).parent

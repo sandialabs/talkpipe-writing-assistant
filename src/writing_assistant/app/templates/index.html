@@ -231,7 +231,7 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                     <div class="form-group" id="api-key-group">
                                         <label for="ai-api-key">API Key:</label>
                                         <input type="password" id="ai-api-key" name="api_key" placeholder="e.g., sk-... (not needed for Ollama)" autocomplete="off">
-                                        <small class="form-help">API key for cloud sources (OpenAI, Anthropic). Stored in your browser's local storage and sent with each generation request. Ignored for Ollama.</small>
+                                        <small class="form-help">API key for cloud sources (OpenAI, Anthropic). Saved with your account on the server by Save AI Settings (the terminal interface uses it too) and sent with each generation request. Ignored for Ollama.</small>
                                     </div>
 
                                     <div class="form-group">
@@ -242,7 +242,7 @@ Separate sections with blank lines. When you place your cursor in a section, sug
 
                                 <div class="settings-section">
                                     <h4>Environment Variables</h4>
-                                    <small class="form-help">Configure environment variables for AI services. These are stored in your browser's local storage and sent with each generation request.</small>
+                                    <small class="form-help">Configure environment variables for AI services. They are saved with your account on the server by Save AI Settings and sent with each generation request.</small>
 
                                     <div id="env-vars-container">
                                         <!-- Environment variables will be added here dynamically -->
@@ -364,9 +364,9 @@ Separate sections with blank lines. When you place your cursor in a section, sug
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="save-as-filename">Filename:</label>
-                    <input type="text" id="save-as-filename" placeholder="Enter filename..." class="filename-input">
-                    <small class="form-help">The .json extension will be added automatically</small>
+                    <label for="save-as-filename">Name:</label>
+                    <input type="text" id="save-as-filename" placeholder="Enter a name..." class="filename-input">
+                    <small class="form-help">Stored in your library on the server, shared with the terminal interface — not a file on this machine (use File → Export for that).</small>
                 </div>
             </div>
             <div class="modal-footer">

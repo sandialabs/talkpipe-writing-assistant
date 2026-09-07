@@ -555,3 +555,37 @@ def test_index_offers_a_change_email_form(client):
     assert 'id="email-current-password"' in account
     assert 'id="change-email-btn"' in account
     assert 'id="change-password-form"' in account
+
+
+def test_api_docs_report_the_installed_version():
+    """``/docs`` and ``__version__`` come from the package metadata.
+
+    The version used to be a hard-coded ``0.1.0`` that no release updated.
+    """
+    from importlib.metadata import version
+
+    import writing_assistant
+    from writing_assistant.app.main import app
+
+    installed = version("talkpipe-writing-assistant")
+    assert writing_assistant.__version__ == installed
+    assert app.openapi()["info"]["version"] == installed
+
+
+def test_save_as_dialog_asks_for_a_library_name(client):
+    """The document goes to the server library, not to a ``.json`` file."""
+    html = client.get("/").text
+    dialog = html[html.index('id="save-as-modal"') :]
+    dialog = dialog[: dialog.index("</form>") if "</form>" in dialog else 2000]
+    assert 'for="save-as-filename">Name:' in dialog
+    assert "library on the server" in dialog
+    assert ".json extension" not in dialog
+
+
+def test_ai_settings_say_where_the_key_is_kept(client):
+    """Server URL, API key and environment variables are saved per account
+    on the server (GET /user/preferences returns them), not only in the
+    browser — the help text must not claim otherwise."""
+    html = client.get("/").text
+    assert "browser's local storage" not in html
+    assert html.count("Saved with your account on the server") >= 1

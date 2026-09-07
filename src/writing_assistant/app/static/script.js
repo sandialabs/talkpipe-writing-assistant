@@ -25,10 +25,11 @@ class WritingAssistant {
         this.environmentVariables = this.loadEnvironmentVariables();
 
         // Quick-access templates (named writing settings, stored per user on
-        // the server). pendingTemplate is the one waiting for a Save As to
-        // finish before it replaces a never-saved document.
+        // the server).
         this.templates = [];
-        this.pendingTemplate = null;
+        // What to run once a Save As succeeds when the user chose Save… in
+        // the unsaved-document prompt (Open, New, Import, a template).
+        this.pendingAfterSave = null;
         this.unsavedDocumentResolve = null;
 
         // Undo/Redo system
@@ -188,10 +189,12 @@ class WritingAssistant {
         });
 
         // Header controls (dropdown items)
-        document.getElementById('new-document-btn').addEventListener('click', (e) => {
+        document.getElementById('new-document-btn').addEventListener('click', async (e) => {
             e.preventDefault();
             this.hideFileMenu();
-            this.showNewDocumentModal();
+            if (await this.leaveCurrentDocument('starting a new document', () => this.showNewDocumentModal())) {
+                this.showNewDocumentModal();
+            }
         });
         document.getElementById('save-document-btn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -208,10 +211,12 @@ class WritingAssistant {
             this.hideFileMenu();
             this.showLoadDocumentModal();
         });
-        document.getElementById('import-document-btn').addEventListener('click', (e) => {
+        document.getElementById('import-document-btn').addEventListener('click', async (e) => {
             e.preventDefault();
             this.hideFileMenu();
-            this.importDocumentFromFile();
+            if (await this.leaveCurrentDocument('importing a file', () => this.importDocumentFromFile())) {
+                this.importDocumentFromFile();
+            }
         });
         document.getElementById('export-document-btn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -774,7 +779,7 @@ class WritingAssistant {
                 suggestionText.textContent = currentSection.generated_text;
                 useSuggestionBtn.disabled = false;
             } else {
-                suggestionText.textContent = 'Click a mode button below to get AI suggestions for this section.';
+                suggestionText.textContent = 'Click a mode button above (Ideas, Rewrite, Improve, Proofread) to get AI suggestions for this section.';
                 useSuggestionBtn.disabled = true;
             }
         }
@@ -1028,6 +1033,16 @@ class WritingAssistant {
         this.showAccountEmail(document.getElementById('user-email')?.textContent || '');
         this.resetAccountForm('change-email-form', 'change-email-status');
         this.resetAccountForm('change-password-form', 'change-password-status');
+
+        // Open at the top of the tab, not wherever it was last scrolled to.
+        // A field left focused when the dialog was last closed would pull
+        // its caret back into view as the form is filled in above, so drop
+        // that focus first.
+        if (modal.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
+        const content = modal.querySelector('.modal-content');
+        if (content) content.scrollTop = 0;
     }
 
     // Keep the top bar and the Account tab's "Signed in as" in step.
@@ -1237,9 +1252,9 @@ class WritingAssistant {
     hideSaveAsModal() {
         const modal = document.getElementById('save-as-modal');
         modal.classList.remove('show');
-        // Cancelling the Save As that a template was waiting on drops the
-        // template too; the document stays as it was.
-        this.pendingTemplate = null;
+        // Cancelling the Save As that an action was waiting on drops that
+        // action too; the document stays as it was.
+        this.pendingAfterSave = null;
     }
 
     showRevertSnapshotModal() {
@@ -1313,17 +1328,9 @@ class WritingAssistant {
                 document.getElementById('document-title').value = this.documentTitle;
                 document.getElementById('document-text').value = this.documentText;
 
-                // Load metadata if present
-                if (doc.metadata) {
-                    document.getElementById('writing-style').value = doc.metadata.writing_style || 'formal';
-                    document.getElementById('target-audience').value = doc.metadata.target_audience || '';
-                    document.getElementById('tone').value = doc.metadata.tone || 'neutral';
-                    document.getElementById('background-context').value = doc.metadata.background_context || '';
-                    document.getElementById('generation-directive').value = doc.metadata.generation_directive || '';
-                    document.getElementById('word-limit').value = doc.metadata.word_limit || '';
-                    document.getElementById('ai-source').value = this.normalizeAISource(doc.metadata.source);
-                    document.getElementById('ai-model').value = doc.metadata.model || '';
-                }
+                // The snapshot's settings become the document's (and fill
+                // the form), so the next save keeps them.
+                this.restoreDocumentMetadata(doc);
 
                 // Restore the current filename
                 this.currentFilename = currentFilename;
@@ -2215,16 +2222,7 @@ undo() {
                 title: this.documentTitle,
                 content: this.documentText,
                 sections: this.sections,
-                metadata: {
-                    writing_style: document.getElementById('writing-style').value,
-                    target_audience: document.getElementById('target-audience').value,
-                    tone: document.getElementById('tone').value,
-                    background_context: document.getElementById('background-context').value,
-                    generation_directive: document.getElementById('generation-directive').value,
-                    word_limit: document.getElementById('word-limit').value || null,
-                    source: document.getElementById('ai-source').value,
-                    model: document.getElementById('ai-model').value
-                },
+                metadata: this.documentMetadataForSave(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -2532,17 +2530,18 @@ undo() {
         const filename = document.getElementById('save-as-filename').value.trim();
 
         if (!filename) {
-            this.showMessage('Please enter a filename', 'error');
+            this.showMessage('Please enter a name for the document', 'error');
             return;
         }
 
-        // A template waiting on this save continues once it succeeded.
-        const pendingTemplate = this.pendingTemplate;
-        this.pendingTemplate = null;
+        // An action waiting on this save (Open, New, Import, a template)
+        // continues once it succeeded.
+        const continueWith = this.pendingAfterSave;
+        this.pendingAfterSave = null;
         this.hideSaveAsModal();
         const saved = await this.saveWithFilename(filename, true); // true for "save as"
-        if (saved && pendingTemplate) {
-            this.startDocumentFromTemplate(pendingTemplate, ` "${this.currentFilename}" was saved first.`);
+        if (saved && continueWith) {
+            continueWith();
         }
     }
 
@@ -2575,22 +2574,32 @@ undo() {
         }
     }
 
+    // What a save stores with the document: the settings last committed with
+    // Save to Document (or loaded with the document, set by a template, or
+    // saved as AI settings) — not whatever is currently typed in the Settings
+    // form, which is also where templates are authored. Suggestions do use
+    // the form as it stands, so a setting can be tried before it is kept.
+    documentMetadataForSave() {
+        const m = this.documentMetadata || {};
+        return {
+            writing_style: m.writing_style || 'formal',
+            target_audience: m.target_audience || '',
+            tone: m.tone || 'neutral',
+            background_context: m.background_context || '',
+            generation_directive: m.generation_directive || '',
+            word_limit: m.word_limit || null,
+            source: m.source || '',
+            model: m.model || ''
+        };
+    }
+
     async saveWithFilename(filename, isSaveAs = false, isAutoSave = false) {
         try {
             const documentData = {
                 title: this.documentTitle,
                 content: this.documentText,
                 sections: this.sections,
-                metadata: {
-                    writing_style: document.getElementById('writing-style').value,
-                    target_audience: document.getElementById('target-audience').value,
-                    tone: document.getElementById('tone').value,
-                    background_context: document.getElementById('background-context').value,
-                    generation_directive: document.getElementById('generation-directive').value,
-                    word_limit: document.getElementById('word-limit').value || null,
-                    source: document.getElementById('ai-source').value,
-                    model: document.getElementById('ai-model').value
-                },
+                metadata: this.documentMetadataForSave(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -2695,9 +2704,11 @@ undo() {
     setupDocumentActionListeners() {
         // Load document buttons
         document.querySelectorAll('.load-document-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const filename = e.target.dataset.filename;
-                this.loadDocumentFromServer(filename);
+                if (await this.leaveCurrentDocument(`opening "${filename}"`, () => this.loadDocumentFromServer(filename))) {
+                    this.loadDocumentFromServer(filename);
+                }
             });
         });
 
@@ -3007,16 +3018,7 @@ undo() {
                 title: this.documentTitle,
                 content: this.documentText,
                 sections: this.sections,
-                metadata: {
-                    writing_style: document.getElementById('writing-style')?.value || this.documentMetadata.writing_style,
-                    target_audience: document.getElementById('target-audience')?.value || this.documentMetadata.target_audience,
-                    tone: document.getElementById('tone')?.value || this.documentMetadata.tone,
-                    background_context: document.getElementById('background-context')?.value || this.documentMetadata.background_context,
-                    generation_directive: document.getElementById('generation-directive')?.value || this.documentMetadata.generation_directive,
-                    word_limit: document.getElementById('word-limit')?.value || this.documentMetadata.word_limit,
-                    source: document.getElementById('ai-source')?.value || this.documentMetadata.source,
-                    model: document.getElementById('ai-model')?.value || this.documentMetadata.model
-                },
+                metadata: this.documentMetadataForSave(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -3267,6 +3269,33 @@ undo() {
         }
     }
 
+    // Called before the open document is replaced (Open, New, Import, a
+    // template). A document with a library name is saved in place first,
+    // as auto-save would do; one that was never saved but has content gets
+    // the Save… / Discard / Cancel prompt. Resolves true when the caller may
+    // go ahead now. After Save…, `continueWith` runs once the Save As
+    // succeeds instead, and the caller gets false (as for Cancel).
+    async leaveCurrentDocument(what, continueWith) {
+        if (this.currentFilename) {
+            if (!await this.saveWithFilename(this.currentFilename, false, true)) {
+                return false;
+            }
+            this.showMessage(`"${this.currentFilename}" was saved first.`, 'info');
+            return true;
+        }
+        if (!this.documentText.trim() && !this.documentTitle.trim()) {
+            return true;
+        }
+        const choice = await this.askUnsavedDocument(
+            `The current document has not been saved. Save it before ${what}?`
+        );
+        if (choice === 'save') {
+            this.pendingAfterSave = continueWith;
+            this.showSaveAsModal();
+        }
+        return choice === 'discard';
+    }
+
     // Save… / Discard / Cancel for a document that was never saved.
     askUnsavedDocument(message) {
         return new Promise(resolve => {
@@ -3286,29 +3315,15 @@ undo() {
     }
 
     async newDocumentFromTemplate(template) {
-        // The document being left is saved rather than dropped: in place
-        // when it has a name, otherwise the user chooses (there is no name
-        // to save it under silently).
-        let savedNote = '';
-        if (this.currentFilename) {
-            const saved = await this.saveWithFilename(this.currentFilename, false, true);
-            if (!saved) return;
-            savedNote = ` "${this.currentFilename}" was saved first.`;
-        } else if (this.documentText.trim() || this.documentTitle.trim()) {
-            const choice = await this.askUnsavedDocument(
-                `The current document has not been saved. Save it before starting a new document from "${template.name}"?`
-            );
-            if (choice === 'cancel') return;
-            if (choice === 'save') {
-                this.pendingTemplate = template;
-                this.showSaveAsModal();
-                return; // saveDocumentAs() continues once the save succeeds
-            }
+        if (await this.leaveCurrentDocument(
+            `starting a new document from "${template.name}"`,
+            () => this.startDocumentFromTemplate(template)
+        )) {
+            this.startDocumentFromTemplate(template);
         }
-        this.startDocumentFromTemplate(template, savedNote);
     }
 
-    startDocumentFromTemplate(template, savedNote = '') {
+    startDocumentFromTemplate(template) {
         // The user's saved defaults (including AI source/model), with the
         // template's writing settings on top. A blank template field falls
         // back to the default, as a blank document field does.
@@ -3339,7 +3354,7 @@ undo() {
         this.clearUndoHistory();
         textarea.focus();
 
-        this.showMessage(`New document from template "${template.name}".${savedNote}`, 'success');
+        this.showMessage(`New document from template "${template.name}".`, 'success');
     }
 
     // Dark Mode Methods

@@ -98,7 +98,7 @@ pip install -e .
 ```bash
 git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
 cd talkpipe-writing-assistant
-pip install -e .[dev]
+pip install -e '.[dev]'
 ```
 
 ### Development environment (uv, with a reproducible lock)
@@ -163,13 +163,14 @@ The server will start on `http://localhost:8001` and display:
 🔑 Register a new account at: http://localhost:8001/register
 🔐 Login at: http://localhost:8001/login
 📚 API documentation: http://localhost:8001/docs
+💻 Terminal interface (no browser needed): run `writing-assistant-tui` in another terminal
 💾 Database: /home/user/.writing_assistant/writing_assistant.db
 ```
 
 ### 2. Create Your Account
 
 1. Open your browser and navigate to `http://localhost:8001/register`
-2. Enter your email address and password
+2. Enter your email address and a password (at least 8 characters, typed twice)
 3. Click "Create Account", then log in on the login page
 
 ### 3. Configure AI Backend
@@ -208,9 +209,10 @@ writing-assistant
 ```
 
 Alternatively, set it without restarting the server: in the web interface,
-open Settings → AI Settings → Connection and enter the address in **Server
-URL**. Values set this way are stored in your browser and applied per
-generation request (unless the server was started with
+open Settings → AI Settings → Connection, enter the address in **Server
+URL**, and press **Save AI Settings**. Values set this way are saved with
+your account on the server — so the terminal interface uses them too — and
+applied per generation request (unless the server was started with
 `--disable-custom-env-vars`).
 
 The Connection fields apply to whichever source is selected: **Server
@@ -256,15 +258,22 @@ or model a user picks in AI Settings takes precedence over the default.
    Leave a blank line between sections (paragraphs).
 2. Place your cursor in a section, then click one of the generation buttons
    below the editor — **Ideas**, **Rewrite**, **Improve**, or **Proofread** —
-   to create AI-assisted content for that section.
-3. When you like a suggestion, click **"← Use This Text"** to replace the
-   section with it.
-4. Save your work via the **File ▾** menu (**File → Save**); the File menu also
-   offers Save As, Open, snapshots, and import/export.
+   to create AI-assisted content for that section (`Ctrl+G` runs Ideas from
+   the keyboard).
+3. When you like a suggestion, click **"← Use This Text"** (or press
+   `Ctrl+U`) to replace the section with it. Both keys can be changed under
+   Settings → AI Settings → Hotkeys.
+4. Save your work via the **File ▾** menu (**File → Save**); the first save
+   asks for a name in your library on the server (shared with the terminal
+   interface — use File → Export for a file). The File menu also offers Save
+   As, Open, snapshots, and import/export. Open, New and Import save the
+   current document first when it has a name; a document that was never
+   saved gets a **Save… / Discard / Cancel** prompt instead.
 5. **Settings → Writing Settings** holds the style, audience, tone, context,
-   directive, and word limit that shape every suggestion. **Save to
-   Document** keeps them with this document; **Save as Default** makes them
-   the starting point for new ones.
+   directive, and word limit that shape every suggestion. Suggestions use
+   whatever is in the form, so you can try a setting straight away; **Save
+   to Document** is what stores it with this document, and **Save as
+   Default** makes the form the starting point for new ones.
 
 That's it! You're ready to use the AI writing assistant.
 
@@ -282,6 +291,8 @@ For writing you do again and again — emails, status updates, cover letters
    starts a new, empty document with the template's settings. The document
    you were working on is saved first when it has a name; a document that
    was never saved gets a **Save… / Discard / Cancel** prompt instead.
+   Authoring a template does not change the open document — only **Save to
+   Document** does.
 
 Templates are stored with your account, so the terminal interface sees
 the same list (`F4` there). A blank template field falls back to your
@@ -308,16 +319,19 @@ started it in. On a headless or SSH-only machine the simplest way is a tmux
 session (`tmux new -d -s writing-assistant writing-assistant`; reattach with
 `tmux attach -t writing-assistant`). To have it start at login and restart
 on failure, install it as a systemd user service — put the following in
-`~/.config/systemd/user/writing-assistant.service` (adjust the venv path and
-add any `Environment=` lines you need, e.g. `TALKPIPE_OLLAMA_SERVER_URL`),
-then `systemctl --user enable --now writing-assistant`:
+`~/.config/systemd/user/writing-assistant.service` (set `ExecStart` to the
+path `which writing-assistant` prints with the virtual environment active —
+the example assumes the venv from the install steps lives in
+`~/talkpipe-writing-assistant` — and add any `Environment=` lines you need,
+e.g. `TALKPIPE_OLLAMA_SERVER_URL`), then
+`systemctl --user enable --now writing-assistant`:
 
 ```ini
 [Unit]
 Description=TalkPipe Writing Assistant server
 
 [Service]
-ExecStart=%h/.venv/bin/writing-assistant
+ExecStart=%h/talkpipe-writing-assistant/.venv/bin/writing-assistant
 Restart=on-failure
 
 [Install]
@@ -436,6 +450,8 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
 | `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | OpenAI key, and an alternate OpenAI-compatible endpoint (users can also set both per account in AI Settings → Connection) | unset |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` | Anthropic key, and an alternate Anthropic-compatible endpoint (same per-account override) | unset |
 | `TALKPIPE_DEFAULT_MODEL_SOURCE` | Server-wide default AI source, used when a request leaves the source on "Server default" (`openai`, `anthropic`, `ollama`) | unset (users must choose one) |
 | `TALKPIPE_DEFAULT_MODEL_NAME` | Server-wide default model name, used when a request leaves Model blank | unset |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
@@ -529,15 +545,17 @@ src/writing_assistant/
 The prompt templates and the four generation modes (rewrite, improve,
 proofread, ideas) live in `src/writing_assistant/core/callbacks.py`, built on
 TalkPipe's `LLMPrompt` segment. To change how text is generated — adjust the
-prompts or swap in a different TalkPipe pipeline — edit that module and
-reinstall (`pip install -e .` from a checkout). To add a whole new mode you
-also need to add its button to the web UI: the mode buttons are defined in
-`src/writing_assistant/app/templates/index.html` (the `.mode-btn` elements)
-and sent by `src/writing_assistant/app/static/script.js` — and to the TUI,
-in `GENERATION_MODES` in `src/writing_assistant/tui/app.py`. Register the
-mode's name in `GENERATION_MODES` in `callbacks.py` and give it a branch in
-`get_system_prompt()`: the server rejects a mode it does not know with a
-400 rather than quietly answering with another mode's prompt. Any backend with
+prompts or swap in a different TalkPipe pipeline — edit that module, install
+the checkout (`pip install -e .`; after that, edits only need the server
+restarted), and start `writing-assistant` again. To add a whole new mode,
+register its name in `GENERATION_MODES` in `callbacks.py` and give it a
+branch in `get_system_prompt()` — the server rejects a mode it does not know
+with a 400 that lists the known ones rather than quietly answering with
+another mode's prompt — then add its button to the web UI: a `.mode-btn`
+element in `src/writing_assistant/app/templates/index.html` whose
+`data-mode` is the new name (`script.js` sends that attribute as the mode, so
+it needs no change), and a tuple in `GENERATION_MODES` in
+`src/writing_assistant/tui/app.py` for the TUI. Any backend with
 an OpenAI-, Anthropic-, or Ollama-compatible endpoint works; point the
 provider API key / base URL settings (or `TALKPIPE_OLLAMA_SERVER_URL` for
 Ollama) at your endpoint and select the source/model in Settings → AI
