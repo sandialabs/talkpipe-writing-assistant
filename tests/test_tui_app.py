@@ -36,6 +36,7 @@ from writing_assistant.tui.app import (
     _suggest_filename,
     main,
     parse_env_vars_text,
+    template_summary,
 )
 from writing_assistant.tui.client import ApiError, WritingAssistantClient
 from writing_assistant.tui.session import Session
@@ -1723,3 +1724,184 @@ async def test_account_dialog_cancels_with_escape(tui_app):
 def test_account_is_in_the_help_and_palette():
     assert "Account" in HELP_TEXT
     assert any(name == "account" for name, _, _ in EDITOR_COMMANDS)
+
+
+# -- quick-access templates ---------------------------------------------------
+
+EMAIL_TEMPLATE = {
+    "writing_style": "casual",
+    "target_audience": "",
+    "tone": "friendly",
+    "background_context": "Short internal emails.",
+    "generation_directive": "Three short paragraphs at most.",
+    "word_limit": 120,
+}
+
+
+async def test_f4_starts_a_new_document_from_a_template_and_saves_the_open_one(
+    tui_app,
+):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await editor.client.save_template("Email", EMAIL_TEMPLATE)
+        # Defaults differ from the template so the override is observable.
+        await editor.client.save_preferences(
+            {"target_audience": "engineers", "word_limit": 500, "model": "m"}
+        )
+        editor._apply_preferences(await editor.client.get_preferences())
+
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("essay draft")
+        editor.title_input.value = "Essay"
+        editor._save_as("essay.json", save_as=True)
+        await _settle(pilot)
+        area.load_text("essay draft with an unsaved edit")
+        await pilot.pause()
+        assert editor.dirty
+
+        await pilot.press("f4")
+        await _settle(pilot)
+        picker = app.screen
+        assert isinstance(picker, PickerScreen)
+        assert "Email" in str(
+            picker.query_one("#entries").get_option_at_index(0).prompt
+        )
+        await pilot.click("#open")
+        await _settle(pilot)
+
+        # The named document was saved, not discarded, before the switch...
+        saved = await editor.client.load_document("essay.json")
+        assert saved["content"] == "essay draft with an unsaved edit"
+        # ...and the editor now holds an empty document with the template's
+        # settings over the user's defaults (a blank template field, like a
+        # blank document field, means "use the default").
+        assert isinstance(app.screen, EditorScreen)
+        assert editor.filename is None
+        assert area.text == ""
+        assert editor.title_input.value == ""
+        assert not editor.dirty
+        assert editor.metadata["tone"] == "friendly"
+        assert editor.metadata["word_limit"] == 120
+        assert editor.metadata["target_audience"] == "engineers"
+        assert editor.metadata["model"] == "m"
+        assert Session.load().last_filename is None
+
+        area.load_text("Hi all,")
+        await pilot.pause()
+        fields = editor._generation_fields("ideas", 0)
+        assert fields["generation_directive"] == "Three short paragraphs at most."
+        assert fields["word_limit"] == 120
+
+
+async def test_f4_asks_before_dropping_a_never_saved_document(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await editor.client.save_template("Email", EMAIL_TEMPLATE)
+        area = editor.query_one("#editor", TextArea)
+        area.load_text("not saved anywhere")
+        await pilot.pause()
+
+        await pilot.press("f4")
+        await _settle(pilot)
+        await pilot.click("#open")
+        await _settle(pilot)
+        # No name to save under, so the usual Save / Discard / Cancel prompt.
+        assert isinstance(app.screen, UnsavedChangesScreen)
+        await pilot.click("#cancel")
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+        assert area.text == "not saved anywhere"
+        assert editor.dirty
+        assert editor.metadata["tone"] == "neutral"
+
+        # Discard goes ahead.
+        await pilot.press("f4")
+        await _settle(pilot)
+        await pilot.click("#open")
+        await _settle(pilot)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert area.text == ""
+        assert editor.metadata["tone"] == "friendly"
+
+
+async def test_f4_without_templates_points_at_settings(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await pilot.press("f4")
+        await _settle(pilot)
+        assert app.screen is editor  # no picker for an empty list
+
+
+async def test_settings_can_save_apply_and_delete_templates(tui_app):
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        editor = await _register_and_login(pilot, app)
+        await pilot.press("f3")
+        await _settle(pilot)
+        settings = app.screen
+        assert isinstance(settings, SettingsScreen)
+        settings.query_one("#tone").value = "friendly"
+        settings.query_one("#target_audience", Input).value = "a colleague"
+        settings.query_one("#word_limit", Input).value = "120"
+        settings.query_one("#save-template", Button).press()
+        await _settle(pilot)
+        prompt = app.screen
+        assert isinstance(prompt, PromptScreen)
+        prompt.query_one("#value", Input).value = "Email"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert app.screen is settings
+        templates = await editor.client.list_templates()
+        assert [t["name"] for t in templates] == ["Email"]
+        assert templates[0]["settings"]["tone"] == "friendly"
+        assert templates[0]["settings"]["word_limit"] == 120
+        # The editor's list is refreshed too, for F4.
+        assert [t["name"] for t in editor.templates] == ["Email"]
+
+        # Applying a template fills the form; the document is untouched
+        # until Save to Document.
+        settings.query_one("#tone").value = "neutral"
+        settings.query_one("#target_audience", Input).value = ""
+        settings.query_one("#template").value = templates[0]["id"]
+        await _settle(pilot)
+        assert settings.query_one("#tone").value == "friendly"
+        assert settings.query_one("#target_audience", Input).value == "a colleague"
+        assert editor.metadata["tone"] == "neutral"
+
+        # Saving under the same name updates rather than duplicating.
+        settings.query_one("#word_limit", Input).value = "80"
+        settings.query_one("#save-template", Button).press()
+        await _settle(pilot)
+        assert app.screen.query_one("#value", Input).value == "Email"
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        templates = await editor.client.list_templates()
+        assert len(templates) == 1
+        assert templates[0]["settings"]["word_limit"] == 80
+
+        settings.query_one("#template").value = templates[0]["id"]
+        await _settle(pilot)
+        settings.query_one("#delete-template", Button).press()
+        await _settle(pilot)
+        assert isinstance(app.screen, ConfirmScreen)
+        await pilot.click("#confirm")
+        await _settle(pilot)
+        assert await editor.client.list_templates() == []
+        assert editor.templates == []
+
+
+def test_template_summary_describes_the_settings():
+    assert template_summary(EMAIL_TEMPLATE) == "casual · friendly · ~120 words"
+    assert template_summary({"target_audience": "students"}) == (
+        "formal · neutral · for students"
+    )
+
+
+def test_templates_are_in_the_help_and_the_palette():
+    assert "F4" in HELP_TEXT
+    assert "Save as Template" in HELP_TEXT
+    assert any(name == "templates" for name, _, _ in EDITOR_COMMANDS)

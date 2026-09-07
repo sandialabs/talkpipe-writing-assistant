@@ -2,9 +2,10 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi_users import schemas
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # User schemas for FastAPI Users
@@ -129,3 +130,46 @@ class SnapshotRead(SnapshotBase):
 
     class Config:
         from_attributes = True
+
+
+# Quick-access template schemas
+class TemplateSettings(BaseModel):
+    """The writing settings a template stores.
+
+    These are the Writing Settings fields of a document's metadata. AI
+    source/model and connection settings are deliberately not part of a
+    template: they describe where to generate, not how to write. Unknown
+    keys (a client posting a whole metadata dict) are ignored.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    writing_style: str = "formal"
+    target_audience: str = ""
+    tone: str = "neutral"
+    background_context: str = ""
+    generation_directive: str = ""
+    word_limit: int | None = None
+
+    @field_validator("word_limit", mode="before")
+    @classmethod
+    def _blank_word_limit_is_none(cls, value: Any) -> Any:
+        # The web form's number field is "" when empty.
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class TemplateSave(BaseModel):
+    """Body of ``POST /templates/save``: create or replace by name."""
+
+    name: str = Field(min_length=1, max_length=100)
+    settings: TemplateSettings
+
+    @field_validator("name")
+    @classmethod
+    def _name_is_not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Template name must not be blank")
+        return stripped

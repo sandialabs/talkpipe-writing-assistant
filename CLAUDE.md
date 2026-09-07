@@ -216,6 +216,7 @@ F6/F7/Ctrl+U itself.
 - `User` model: Extends FastAPI Users base with email, hashed password, and timestamps
 - `Document` model: Stores document content (JSON) with user foreign key
 - `DocumentSnapshot` model: Version history for documents
+- `WritingTemplate` model: Per-user quick-access templates (named writing settings, JSON), unique per (user, name); served by `/templates/list`, `/templates/save`, `/templates/delete/{id}`
 
 **src/writing_assistant/app/database.py**: Database configuration:
 - Async SQLAlchemy engine and session management

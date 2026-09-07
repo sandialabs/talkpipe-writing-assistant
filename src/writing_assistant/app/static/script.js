@@ -24,6 +24,13 @@ class WritingAssistant {
         // Environment variables
         this.environmentVariables = this.loadEnvironmentVariables();
 
+        // Quick-access templates (named writing settings, stored per user on
+        // the server). pendingTemplate is the one waiting for a Save As to
+        // finish before it replaces a never-saved document.
+        this.templates = [];
+        this.pendingTemplate = null;
+        this.unsavedDocumentResolve = null;
+
         // Undo/Redo system
         this.undoStack = [];
         this.redoStack = [];
@@ -61,6 +68,9 @@ class WritingAssistant {
             console.log('WritingAssistant: Applying saved AI settings...');
             // Apply saved AI settings to the initial document
             await this.applySavedAISettings();
+
+            console.log('WritingAssistant: Loading templates...');
+            await this.loadTemplates();
 
             console.log('WritingAssistant: Loading existing document...');
             this.loadExistingDocument();
@@ -164,6 +174,19 @@ class WritingAssistant {
             this.toggleFileMenu();
         });
 
+        // Templates menu dropdown (quick-access writing settings)
+        document.getElementById('templates-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleTemplatesMenu();
+        });
+        document.getElementById('manage-templates-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            this.hideTemplatesMenu();
+            this.showSettingsModal();
+            this.switchSettingsTab('metadata');
+            document.getElementById('template-name')?.focus();
+        });
+
         // Header controls (dropdown items)
         document.getElementById('new-document-btn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -214,8 +237,11 @@ class WritingAssistant {
         }
         document.getElementById('settings-btn').addEventListener('click', () => this.showSettingsModal());
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', () => this.hideFileMenu());
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            this.hideFileMenu();
+            this.hideTemplatesMenu();
+        });
 
         // Resize handle
         this.setupResizeHandle();
@@ -254,6 +280,7 @@ class WritingAssistant {
         saveAsDefaultBtn?.addEventListener('click', () => this.saveAsDefault());
         resetMetadataBtn?.addEventListener('click', () => this.resetMetadata());
         saveGenerationSettingsBtn?.addEventListener('click', () => this.saveGenerationSettings());
+        document.getElementById('save-template-btn')?.addEventListener('click', () => this.saveTemplate());
 
         // Settings tabs
         const settingsTabBtns = document.querySelectorAll('.settings-tab-btn');
@@ -291,6 +318,12 @@ class WritingAssistant {
                     return;
                 }
                 e.preventDefault();
+                // Enter in the template-name field saves a template, not the
+                // document settings.
+                if (e.target.id === 'template-name') {
+                    this.saveTemplate();
+                    return;
+                }
                 // Save settings based on which tab is active
                 const activeTab = document.querySelector('.settings-tab-content.active');
                 if (activeTab && activeTab.id === 'metadata-settings') {
@@ -384,6 +417,23 @@ class WritingAssistant {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 this.hideSaveAsModal();
+            }
+        });
+
+        // Unsaved Document modal (Save… / Discard / Cancel before a template
+        // replaces a document that was never saved)
+        const unsavedDocumentModal = document.getElementById('unsaved-document-modal');
+        document.getElementById('close-unsaved-document-modal').addEventListener('click', () => this.resolveUnsavedDocument('cancel'));
+        document.getElementById('unsaved-document-cancel-btn').addEventListener('click', () => this.resolveUnsavedDocument('cancel'));
+        document.getElementById('unsaved-document-discard-btn').addEventListener('click', () => this.resolveUnsavedDocument('discard'));
+        document.getElementById('unsaved-document-save-btn').addEventListener('click', () => this.resolveUnsavedDocument('save'));
+        unsavedDocumentModal.addEventListener('click', (e) => {
+            if (e.target === unsavedDocumentModal) this.resolveUnsavedDocument('cancel');
+        });
+        unsavedDocumentModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.resolveUnsavedDocument('cancel');
             }
         });
 
@@ -932,6 +982,9 @@ class WritingAssistant {
         // This ensures the form displays the current state accurately
         this.loadCurrentDocumentToSettingsForm();
 
+        // Templates may have been added from the terminal interface meanwhile.
+        this.loadTemplates();
+
         // Show/hide environment variables section based on server config
         const envVarsSection = Array.from(
             document.querySelectorAll('.settings-section h4')
@@ -1184,6 +1237,9 @@ class WritingAssistant {
     hideSaveAsModal() {
         const modal = document.getElementById('save-as-modal');
         modal.classList.remove('show');
+        // Cancelling the Save As that a template was waiting on drops the
+        // template too; the document stays as it was.
+        this.pendingTemplate = null;
     }
 
     showRevertSnapshotModal() {
@@ -2480,8 +2536,14 @@ undo() {
             return;
         }
 
+        // A template waiting on this save continues once it succeeded.
+        const pendingTemplate = this.pendingTemplate;
+        this.pendingTemplate = null;
         this.hideSaveAsModal();
-        await this.saveWithFilename(filename, true); // true for "save as"
+        const saved = await this.saveWithFilename(filename, true); // true for "save as"
+        if (saved && pendingTemplate) {
+            this.startDocumentFromTemplate(pendingTemplate, ` "${this.currentFilename}" was saved first.`);
+        }
     }
 
     async createSnapshot() {
@@ -2559,13 +2621,14 @@ undo() {
                 if (!isAutoSave) {
                     this.showMessage(`Document saved as "${result.filename}"`, 'success');
                 }
-            } else {
-                this.showMessage(`Error: ${result.message}`, 'error');
+                return true;
             }
+            this.showMessage(`Error: ${result.message || result.detail || 'save failed'}`, 'error');
         } catch (error) {
             console.error('Error saving document:', error);
             this.showMessage('Error saving document', 'error');
         }
+        return false;
     }
 
     showLoadDocumentModal() {
@@ -3014,6 +3077,7 @@ undo() {
 
     // File Menu Dropdown Methods
     toggleFileMenu() {
+        this.hideTemplatesMenu();
         const dropdown = document.getElementById('file-menu-content');
         dropdown.classList.toggle('show');
     }
@@ -3021,6 +3085,261 @@ undo() {
     hideFileMenu() {
         const dropdown = document.getElementById('file-menu-content');
         dropdown.classList.remove('show');
+    }
+
+    toggleTemplatesMenu() {
+        this.hideFileMenu();
+        const dropdown = document.getElementById('templates-menu-content');
+        dropdown.classList.toggle('show');
+    }
+
+    hideTemplatesMenu() {
+        const dropdown = document.getElementById('templates-menu-content');
+        dropdown?.classList.remove('show');
+    }
+
+    // Quick-access Templates
+    //
+    // A template is a named copy of the Writing Settings fields (style,
+    // audience, tone, context, directive, word limit), stored per user on
+    // the server so the terminal interface sees the same list. The
+    // Templates ▾ menu starts a new document from one; the Writing Settings
+    // tab creates, applies (to the form) and deletes them.
+
+    static TEMPLATE_FIELDS = [
+        ['writing_style', 'writing-style'],
+        ['target_audience', 'target-audience'],
+        ['tone', 'tone'],
+        ['background_context', 'background-context'],
+        ['generation_directive', 'generation-directive'],
+        ['word_limit', 'word-limit']
+    ];
+
+    async loadTemplates() {
+        try {
+            const response = await this.authFetch('/templates/list');
+            const result = await response.json();
+            if (result.status !== 'success') {
+                throw new Error(result.message || result.detail || 'Failed to list templates');
+            }
+            this.templates = result.templates || [];
+        } catch (error) {
+            console.error('Error loading templates:', error);
+            this.templates = [];
+        }
+        this.renderTemplatesMenu();
+        this.renderTemplatesList();
+    }
+
+    templateSummary(settings) {
+        const parts = [settings.writing_style || 'formal', settings.tone || 'neutral'];
+        if (settings.target_audience) parts.push(`for ${settings.target_audience}`);
+        if (settings.word_limit) parts.push(`~${settings.word_limit} words`);
+        return parts.join(' · ');
+    }
+
+    renderTemplatesMenu() {
+        const container = document.getElementById('templates-menu-items');
+        if (!container) return;
+        if (this.templates.length === 0) {
+            container.innerHTML = '<span class="dropdown-note">No templates yet — create one under Manage templates.</span>';
+            return;
+        }
+        container.innerHTML = this.templates.map(template => `
+            <a href="#" class="dropdown-item template-menu-item" data-template-id="${template.id}" title="New document: ${this.escapeHtml(this.templateSummary(template.settings || {}))}">📄 ${this.escapeHtml(template.name)}</a>
+        `).join('');
+        container.querySelectorAll('.template-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.hideTemplatesMenu();
+                const template = this.templates.find(t => String(t.id) === item.dataset.templateId);
+                if (template) this.newDocumentFromTemplate(template);
+            });
+        });
+    }
+
+    renderTemplatesList() {
+        const container = document.getElementById('templates-list');
+        if (!container) return;
+        if (this.templates.length === 0) {
+            container.innerHTML = '<p class="no-documents">No templates saved yet. Fill in the settings above, name them, and press Save as Template.</p>';
+            return;
+        }
+        container.innerHTML = this.templates.map(template => `
+            <div class="template-item">
+                <div class="template-info">
+                    <div class="template-name">${this.escapeHtml(template.name)}</div>
+                    <div class="template-meta">${this.escapeHtml(this.templateSummary(template.settings || {}))}</div>
+                </div>
+                <div class="template-actions">
+                    <button type="button" class="btn btn-primary btn-small apply-template-btn" data-template-id="${template.id}">Apply</button>
+                    <button type="button" class="btn btn-danger btn-small delete-template-btn" data-template-id="${template.id}">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        const find = (button) => this.templates.find(t => String(t.id) === button.dataset.templateId);
+        container.querySelectorAll('.apply-template-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const template = find(button);
+                if (template) this.applyTemplateToForm(template);
+            });
+        });
+        container.querySelectorAll('.delete-template-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const template = find(button);
+                if (template) this.deleteTemplate(template);
+            });
+        });
+    }
+
+    currentWritingSettings() {
+        const settings = {};
+        WritingAssistant.TEMPLATE_FIELDS.forEach(([key, elementId]) => {
+            settings[key] = document.getElementById(elementId)?.value || '';
+        });
+        settings.word_limit = settings.word_limit ? Number(settings.word_limit) : null;
+        return settings;
+    }
+
+    applyTemplateToForm(template) {
+        const settings = template.settings || {};
+        WritingAssistant.TEMPLATE_FIELDS.forEach(([key, elementId]) => {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            let value = settings[key];
+            if (value === null || value === undefined) value = '';
+            if (key === 'writing_style' && !value) value = 'formal';
+            if (key === 'tone' && !value) value = 'neutral';
+            element.value = value;
+        });
+        document.getElementById('template-name').value = template.name;
+        this.showMessage(`Template "${template.name}" applied to the form — Save to Document keeps it.`, 'success');
+    }
+
+    async saveTemplate() {
+        const nameInput = document.getElementById('template-name');
+        const name = nameInput.value.trim();
+        if (!name) {
+            this.showMessage('Enter a name for the template first.', 'error');
+            nameInput.focus();
+            return;
+        }
+        const existing = this.templates.find(t => t.name === name);
+        if (existing && !confirm(`A template named "${name}" already exists. Replace its settings with the fields on this form?`)) {
+            return;
+        }
+        try {
+            const response = await this.authFetch('/templates/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, settings: this.currentWritingSettings() })
+            });
+            const result = await response.json();
+            if (result.status !== 'success') {
+                const detail = Array.isArray(result.detail)
+                    ? result.detail.map(d => d.msg).join('; ')
+                    : (result.detail || result.message || 'Failed to save template');
+                throw new Error(detail);
+            }
+            this.showMessage(`${result.message}: "${name}". It is in the Templates ▾ menu.`, 'success');
+            await this.loadTemplates();
+        } catch (error) {
+            console.error('Error saving template:', error);
+            this.showMessage(`Error saving template: ${error.message}`, 'error');
+        }
+    }
+
+    async deleteTemplate(template) {
+        if (!confirm(`Delete the template "${template.name}"? Documents that used it keep their settings.`)) {
+            return;
+        }
+        try {
+            const response = await this.authFetch(`/templates/delete/${template.id}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (result.status !== 'success') {
+                throw new Error(result.message || result.detail || 'Failed to delete template');
+            }
+            this.showMessage(result.message, 'success');
+            await this.loadTemplates();
+        } catch (error) {
+            console.error('Error deleting template:', error);
+            this.showMessage(`Error deleting template: ${error.message}`, 'error');
+        }
+    }
+
+    // Save… / Discard / Cancel for a document that was never saved.
+    askUnsavedDocument(message) {
+        return new Promise(resolve => {
+            this.resolveUnsavedDocument('cancel'); // settle any earlier prompt
+            this.unsavedDocumentResolve = resolve;
+            document.getElementById('unsaved-document-message').textContent = message;
+            document.getElementById('unsaved-document-modal').classList.add('show');
+            document.getElementById('unsaved-document-save-btn').focus();
+        });
+    }
+
+    resolveUnsavedDocument(choice) {
+        const resolve = this.unsavedDocumentResolve;
+        this.unsavedDocumentResolve = null;
+        document.getElementById('unsaved-document-modal')?.classList.remove('show');
+        if (resolve) resolve(choice);
+    }
+
+    async newDocumentFromTemplate(template) {
+        // The document being left is saved rather than dropped: in place
+        // when it has a name, otherwise the user chooses (there is no name
+        // to save it under silently).
+        let savedNote = '';
+        if (this.currentFilename) {
+            const saved = await this.saveWithFilename(this.currentFilename, false, true);
+            if (!saved) return;
+            savedNote = ` "${this.currentFilename}" was saved first.`;
+        } else if (this.documentText.trim() || this.documentTitle.trim()) {
+            const choice = await this.askUnsavedDocument(
+                `The current document has not been saved. Save it before starting a new document from "${template.name}"?`
+            );
+            if (choice === 'cancel') return;
+            if (choice === 'save') {
+                this.pendingTemplate = template;
+                this.showSaveAsModal();
+                return; // saveDocumentAs() continues once the save succeeds
+            }
+        }
+        this.startDocumentFromTemplate(template, savedNote);
+    }
+
+    startDocumentFromTemplate(template, savedNote = '') {
+        // The user's saved defaults (including AI source/model), with the
+        // template's writing settings on top. A blank template field falls
+        // back to the default, as a blank document field does.
+        const settings = template.settings || {};
+        this.documentMetadata = {
+            writing_style: settings.writing_style || localStorage.getItem('writingStyle') || 'formal',
+            target_audience: settings.target_audience || localStorage.getItem('targetAudience') || '',
+            tone: settings.tone || localStorage.getItem('tone') || 'neutral',
+            background_context: settings.background_context || localStorage.getItem('backgroundContext') || '',
+            generation_directive: settings.generation_directive || localStorage.getItem('generationDirective') || '',
+            word_limit: settings.word_limit || localStorage.getItem('wordLimit') || null,
+            source: localStorage.getItem('generationSource') || '',
+            model: localStorage.getItem('generationModel') || ''
+        };
+
+        this.documentTitle = '';
+        document.getElementById('document-title').value = '';
+        this.documentText = '';
+        const textarea = document.getElementById('document-text');
+        textarea.value = '';
+        this.parseSections();
+        this.handleCursorChange();
+
+        this.currentFilename = null;
+        localStorage.removeItem('lastDocumentFilename');
+        this.updateFilenameDisplay();
+        this.loadCurrentDocumentToSettingsForm();
+        this.clearUndoHistory();
+        textarea.focus();
+
+        this.showMessage(`New document from template "${template.name}".${savedNote}`, 'success');
     }
 
     // Dark Mode Methods

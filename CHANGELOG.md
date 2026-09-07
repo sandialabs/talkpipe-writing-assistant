@@ -21,6 +21,25 @@ release are grouped by kind rather than listed in the order they landed.
   authenticated endpoints, `POST /user/change-password` and
   `POST /user/change-email`, that verify the current password before
   applying the change, so a bearer token alone is not enough.
+- **Quick-access templates**: a named, reusable set of writing settings
+  (style, audience, tone, background context, generation directive, word
+  limit) for documents you write repeatedly — an "Email" template, say.
+  Templates are stored per user on the server (new `writing_templates`
+  table, created automatically on startup) behind three authenticated
+  endpoints — `GET /templates/list`, `POST /templates/save` (create, or
+  replace by name), `DELETE /templates/delete/{id}` — so the web UI and the
+  terminal interface share one list. In the web UI, **Settings → Writing
+  Settings** gained a Quick-access Templates section (name field, **Save as
+  Template**, and per-template **Apply**/**Delete**), and a **Templates ▾**
+  menu in the header starts a new document from a template. In the
+  terminal interface the same controls sit at the bottom of the Settings
+  Document tab and `F4` opens the template picker (also in the command
+  palette as "New from template"). Starting from a template saves the open
+  document first when it has a name; a never-saved document gets the
+  Save / Discard / Cancel prompt (new in the web UI for this flow) rather
+  than being dropped. Blank template fields fall back to the user's saved
+  defaults, as blank document fields do; AI source and model are not part
+  of a template.
 
 ### Removed
 

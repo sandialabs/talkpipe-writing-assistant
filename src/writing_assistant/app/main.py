@@ -32,8 +32,15 @@ from .auth import (
     get_user_manager,
 )
 from .database import create_db_and_tables, get_async_session
-from .models import Document, DocumentSnapshot, User, iso_utc, utcnow
-from .schemas import EmailChange, PasswordChange, UserCreate, UserRead, UserUpdate
+from .models import Document, DocumentSnapshot, User, WritingTemplate, iso_utc, utcnow
+from .schemas import (
+    EmailChange,
+    PasswordChange,
+    TemplateSave,
+    UserCreate,
+    UserRead,
+    UserUpdate,
+)
 
 # Lock to prevent race conditions when setting environment variables
 _env_var_lock = threading.Lock()
@@ -892,6 +899,106 @@ async def delete_document(
         await db.rollback()
         logger.exception(f"Error deleting document {filename}: {e}")
         return {"status": "error", "message": "Failed to delete document"}
+
+
+# Quick-access templates: named writing settings a user can reuse across
+# documents (an "Email" template, say). Stored per user, so the web UI and
+# the terminal interface see the same list.
+
+
+def _template_dict(template: WritingTemplate) -> dict[str, Any]:
+    return {
+        "id": template.id,
+        "name": template.name,
+        "settings": json.loads(template.settings),
+        "created": iso_utc(template.created_at),
+        "modified": iso_utc(template.updated_at),
+    }
+
+
+@app.get("/templates/list")
+async def list_templates(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """List the current user's templates, by name."""
+    try:
+        result = await db.execute(
+            select(WritingTemplate)
+            .where(WritingTemplate.user_id == user.id)
+            .order_by(WritingTemplate.name)
+        )
+        templates = [_template_dict(t) for t in result.scalars().all()]
+        return {"status": "success", "templates": templates}
+    except Exception as e:
+        logger.exception(f"Error listing templates: {e}")
+        return {"status": "error", "message": "Failed to list templates"}
+
+
+@app.post("/templates/save")
+async def save_template(
+    payload: TemplateSave,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Create a template, or replace the settings of the one with that name."""
+    try:
+        settings = json.dumps(payload.settings.model_dump())
+        result = await db.execute(
+            select(WritingTemplate).where(
+                WritingTemplate.user_id == user.id,
+                WritingTemplate.name == payload.name,
+            )
+        )
+        template = result.scalar_one_or_none()
+        if template:
+            template.settings = settings
+            template.updated_at = utcnow()
+            message = "Template updated"
+        else:
+            template = WritingTemplate(
+                user_id=user.id, name=payload.name, settings=settings
+            )
+            db.add(template)
+            message = "Template created"
+        await db.commit()
+        await db.refresh(template)
+        return {
+            "status": "success",
+            "message": message,
+            "template": _template_dict(template),
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Error saving template {payload.name!r}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save template") from e
+
+
+@app.delete("/templates/delete/{template_id}")
+async def delete_template(
+    template_id: int,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Delete one of the current user's templates."""
+    try:
+        result = await db.execute(
+            select(WritingTemplate).where(
+                WritingTemplate.user_id == user.id,
+                WritingTemplate.id == template_id,
+            )
+        )
+        template = result.scalar_one_or_none()
+        if not template:
+            return {"status": "error", "message": "Template not found"}
+        name = template.name
+        await db.delete(template)
+        await db.commit()
+        return {"status": "success", "message": f'Template "{name}" deleted'}
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Error deleting template {template_id}: {e}")
+        return {"status": "error", "message": "Failed to delete template"}
 
 
 if __name__ == "__main__":

@@ -2265,6 +2265,101 @@ body.dark-mode .dark-mode-toggle::after {
     background: var(--border-subtle);
     margin: 8px 0;
 }
+
+/* Muted text inside a dropdown (e.g. "No templates yet") */
+.dropdown-note {
+    display: block;
+    padding: 10px 16px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-style: italic;
+    max-width: 240px;
+}
+
+/* Quick-access templates (Settings → Writing Settings) */
+.templates-section {
+    margin-top: 20px;
+}
+
+.templates-section h4 {
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.template-save-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 16px 0;
+}
+
+.template-save-row input[type="text"] {
+    flex: 1;
+    width: auto;
+}
+
+.template-save-row .btn {
+    white-space: nowrap;
+}
+
+.templates-list {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.template-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    transition: background-color 0.3s;
+}
+
+.template-item:hover {
+    background: var(--surface-tertiary);
+}
+
+.template-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.template-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.template-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.template-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .template-save-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .template-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
 /* AI connection test status (Settings → AI Settings) */
 .ai-connection-status {
     margin-top: 8px;
