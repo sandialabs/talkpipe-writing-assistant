@@ -30,6 +30,16 @@
                         </div>
                         <input type="file" id="file-input" accept=".json" style="display: none;">
                     </div>
+                    <div class="file-menu-dropdown">
+                        <button id="templates-menu-btn" class="btn btn-primary btn-small" title="Start a new document from a saved set of writing settings">📝 Templates ▾</button>
+                        <div id="templates-menu-content" class="dropdown-menu">
+                            <div id="templates-menu-items">
+                                <span class="dropdown-note">Loading templates…</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" id="manage-templates-btn" class="dropdown-item">⚙️ Manage templates…</a>
+                        </div>
+                    </div>
                     <button id="copy-document-btn" class="btn btn-outline btn-small">📋 Copy</button>
                     <button id="dark-mode-toggle" class="dark-mode-toggle" title="Toggle dark mode"></button>
                     <button id="settings-btn" class="btn btn-secondary btn-small">⚙️ Settings</button>
@@ -168,7 +178,19 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                                     <input type="number" id="word-limit" name="word_limit" placeholder="e.g., 100, 500, 1000" min="10" max="10000">
                                 </div>
                             </div>
-                            
+
+                            <div class="settings-section templates-section">
+                                <h4>Quick-access Templates</h4>
+                                <small class="form-help">Save the writing settings above under a name to reuse them — an "Email" template, say. Templates appear in the <strong>Templates ▾</strong> menu in the header, where choosing one starts a new document with those settings (the open document is saved first). <strong>Apply</strong> fills in the fields above; use <strong>Save to Document</strong> to keep them.</small>
+                                <div class="template-save-row">
+                                    <input type="text" id="template-name" placeholder="Template name (e.g., Email)" maxlength="100">
+                                    <button type="button" id="save-template-btn" class="btn btn-secondary btn-small">💾 Save as Template</button>
+                                </div>
+                                <div id="templates-list" class="templates-list">
+                                    <!-- Templates are listed here -->
+                                </div>
+                            </div>
+
                             <div class="form-actions">
                                 <button type="button" id="save-to-document-btn" class="btn btn-primary">💾 Save to Document</button>
                                 <button type="button" id="save-as-default-btn" class="btn btn-success">🌐 Save as Default</button>
@@ -374,6 +396,24 @@ Separate sections with blank lines. When you place your cursor in a section, sug
             <div class="modal-footer">
                 <button id="cancel-new-document-btn" class="btn btn-secondary">Cancel</button>
                 <button id="create-new-document-btn" class="btn btn-success">Create Document</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unsaved Document Modal (before a template replaces a never-saved document) -->
+    <div id="unsaved-document-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Unsaved Document</h2>
+                <button class="modal-close" id="close-unsaved-document-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="unsaved-document-message">The current document has not been saved. Save it first?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="unsaved-document-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="unsaved-document-discard-btn" class="btn btn-danger">Discard</button>
+                <button id="unsaved-document-save-btn" class="btn btn-primary">Save…</button>
             </div>
         </div>
     </div>

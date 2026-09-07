@@ -94,6 +94,30 @@ DEFAULT_METADATA: dict[str, Any] = {
     "source": "",
     "model": "",
 }
+# The fields a quick-access template stores: the writing settings, not the
+# AI source/model (those say where to generate, not how to write).
+TEMPLATE_KEYS = (
+    "writing_style",
+    "target_audience",
+    "tone",
+    "background_context",
+    "generation_directive",
+    "word_limit",
+)
+
+
+def template_summary(settings: dict[str, Any]) -> str:
+    """A one-line description of a template's settings for lists."""
+    parts = [
+        str(settings.get("writing_style") or "formal"),
+        str(settings.get("tone") or "neutral"),
+    ]
+    if settings.get("target_audience"):
+        parts.append(f"for {settings['target_audience']}")
+    if settings.get("word_limit"):
+        parts.append(f"~{settings['word_limit']} words")
+    return " · ".join(parts)
+
 
 HELP_TEXT = """\
 [b]Writing Assistant — keyboard reference[/b]
@@ -134,6 +158,10 @@ HELP_TEXT = """\
           your library)
   F3      Settings: writing style, tone, audience, context, directive,
           word limit; AI source/model, connection, environment variables
+  F4      Templates: start a new document from a saved set of writing
+          settings (an "Email" template, say). The open document is saved
+          first when it has a name; otherwise you are asked. Create
+          templates in Settings → Document → Save as Template.
   F1      This help
   Ctrl+P  Command palette: type part of a command's name (Save As, Create
           snapshot, Export, Log out, …) and press Enter to run it
@@ -670,12 +698,23 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         *,
         allow_custom_env_vars: bool,
         editor: EditorScreen,
+        templates: list[dict[str, Any]] | None = None,
     ) -> None:
         super().__init__()
         self._metadata = dict(metadata)
         self._ai = dict(ai)
         self._allow_custom_env_vars = allow_custom_env_vars
         self._editor = editor
+        self._templates: list[dict[str, Any]] = list(templates or [])
+
+    def _template_options(self) -> list[tuple[str, int]]:
+        return [(str(t["name"]), int(t["id"])) for t in self._templates]
+
+    def _selected_template(self) -> dict[str, Any] | None:
+        value = self.query_one("#template", Select).value
+        if value is Select.BLANK:
+            return None
+        return next((t for t in self._templates if t.get("id") == value), None)
 
     def compose(self) -> ComposeResult:
         m = self._metadata
@@ -733,6 +772,21 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
                         id="word_limit",
                         type="integer",
                     )
+                    yield Label("Quick-access templates", classes="section-heading")
+                    yield Static(
+                        "Apply a template to fill in the fields above, or save "
+                        "the fields under a name to reuse them. F4 in the editor "
+                        "starts a new document from a template.",
+                        classes="muted",
+                    )
+                    with Horizontal(classes="form-row template-row"):
+                        yield Select(
+                            self._template_options(),
+                            prompt="Apply a template…",
+                            id="template",
+                        )
+                        yield Button("Save as Template", id="save-template")
+                        yield Button("Delete", id="delete-template")
                 with (
                     TabPane("AI Settings", id="tab-ai"),
                     VerticalScroll(can_focus=False),
@@ -884,15 +938,122 @@ class SettingsScreen(ModalScreen[dict[str, Any] | None]):
         values["action"] = event.button.id
         self.dismiss(values)
 
+    def _fill_writing_fields(self, settings: dict[str, Any]) -> None:
+        self.query_one("#writing_style", Select).value = (
+            settings.get("writing_style") or "formal"
+        )
+        self.query_one("#tone", Select).value = settings.get("tone") or "neutral"
+        self.query_one("#target_audience", Input).value = str(
+            settings.get("target_audience") or ""
+        )
+        self.query_one("#background_context", TextArea).text = str(
+            settings.get("background_context") or ""
+        )
+        self.query_one("#generation_directive", TextArea).text = str(
+            settings.get("generation_directive") or ""
+        )
+        self.query_one("#word_limit", Input).value = str(
+            settings.get("word_limit") or ""
+        )
+
     @on(Button.Pressed, "#reset")
     def _reset(self) -> None:
-        self.query_one("#writing_style", Select).value = "formal"
-        self.query_one("#tone", Select).value = "neutral"
-        self.query_one("#target_audience", Input).value = ""
-        self.query_one("#background_context", TextArea).text = ""
-        self.query_one("#generation_directive", TextArea).text = ""
-        self.query_one("#word_limit", Input).value = ""
+        self._fill_writing_fields(DEFAULT_METADATA)
+        self.query_one("#template", Select).clear()
         self.notify("Document settings reset to defaults (not yet saved).")
+
+    # -- quick-access templates ---------------------------------------------------
+
+    @on(Select.Changed, "#template")
+    def _template_chosen(self) -> None:
+        template = self._selected_template()
+        if template is None:
+            return
+        self._fill_writing_fields(template.get("settings") or {})
+        self.notify(
+            f'Template "{template["name"]}" applied to the form — Save to '
+            "Document keeps it."
+        )
+
+    async def _refresh_templates(self) -> bool:
+        """Reload the template list from the server into the dropdown."""
+        try:
+            self._templates = await self._editor.client.list_templates()
+        except ApiError as exc:
+            self.notify(exc.message, severity="error", timeout=10)
+            return False
+        self._editor.templates = self._templates
+        self.query_one("#template", Select).set_options(self._template_options())
+        return True
+
+    @on(Button.Pressed, "#save-template")
+    def _save_template_pressed(self) -> None:
+        self._save_template()
+
+    @on(Button.Pressed, "#delete-template")
+    def _delete_template_pressed(self) -> None:
+        self._delete_template()
+
+    @work
+    async def _save_template(self) -> None:
+        selected = self._selected_template()
+        name = await self.app.push_screen_wait(
+            PromptScreen(
+                "Save as Template",
+                "Name for these writing settings. Choosing an existing name "
+                "replaces that template.",
+                default=str(selected["name"]) if selected else "",
+                placeholder="e.g., Email",
+                confirm_label="Save",
+            )
+        )
+        if not name:
+            return
+        existing = next((t for t in self._templates if t.get("name") == name), None)
+        if existing is not None and existing is not selected:
+            confirmed = await self.app.push_screen_wait(
+                ConfirmScreen(
+                    "Replace template",
+                    f'A template named "{name}" already exists. Replace its '
+                    "settings with the fields on this form?",
+                    confirm_label="Replace",
+                )
+            )
+            if not confirmed:
+                return
+        metadata = self.collect_metadata()
+        settings = {key: metadata[key] for key in TEMPLATE_KEYS}
+        try:
+            message = await self._editor.client.save_template(name, settings)
+        except ApiError as exc:
+            self.notify(exc.message, severity="error", timeout=10)
+            return
+        if await self._refresh_templates():
+            self.notify(f"{message}: {name}. Press F4 in the editor to use it.")
+
+    @work
+    async def _delete_template(self) -> None:
+        template = self._selected_template()
+        if template is None:
+            self.notify("Choose a template to delete first.", severity="warning")
+            return
+        confirmed = await self.app.push_screen_wait(
+            ConfirmScreen(
+                "Delete template",
+                f'Delete the template "{template["name"]}"? Documents that used '
+                "it keep their settings.",
+                confirm_label="Delete",
+            )
+        )
+        if not confirmed:
+            return
+        try:
+            message = await self._editor.client.delete_template(int(template["id"]))
+        except ApiError as exc:
+            self.notify(exc.message, severity="error", timeout=10)
+            return
+        if await self._refresh_templates():
+            self.notify(message)
 
     @on(Button.Pressed, "#cancel")
     @on(Button.Pressed, "#cancel-ai")
@@ -1132,6 +1293,7 @@ class EditorScreen(Screen[None]):
         Binding("f1", "help", "Help", priority=True),
         Binding("f2", "file_menu", "File", priority=True),
         Binding("f3", "settings", "Settings", priority=True),
+        Binding("f4", "templates", "Templates", priority=True),
         Binding("ctrl+s", "save", "Save", priority=True),
         Binding("ctrl+o", "open", "Open", show=False, priority=True),
         Binding("ctrl+n", "new", "New", show=False, priority=True),
@@ -1162,6 +1324,8 @@ class EditorScreen(Screen[None]):
             "environment_variables": {},
         }
         self.defaults: dict[str, Any] = dict(DEFAULT_METADATA)
+        # The user's quick-access templates, as the server last listed them.
+        self.templates: list[dict[str, Any]] = []
         self.allow_custom_env_vars = True
         self.dirty = False
         # Title/text as of the last load or save. TextArea.Changed is
@@ -1286,6 +1450,7 @@ class EditorScreen(Screen[None]):
             )
             prefs = {}
         self._apply_preferences(prefs)
+        await self._fetch_templates(quiet=True)
         if self.session.last_filename:
             await self._open_document(self.session.last_filename, quiet=True)
         if not (self.metadata.get("source") or self.ai.get("source")) or not (
@@ -1318,6 +1483,25 @@ class EditorScreen(Screen[None]):
         cast("WritingAssistantApp", self.app).back_to_login(
             "Your session has expired. Please log in again."
         )
+
+    async def _fetch_templates(
+        self, *, quiet: bool = False
+    ) -> list[dict[str, Any]] | None:
+        """Refresh ``self.templates`` from the server; None when that failed.
+
+        ``quiet`` keeps a failure (an older server without the template
+        routes, say) off the screen and leaves the last list in place.
+        """
+        try:
+            self.templates = await self.client.list_templates()
+        except AuthError:
+            await self._session_expired()
+            return None
+        except ApiError as exc:
+            if not quiet:
+                self.notify(exc.message, severity="error", timeout=10)
+            return None
+        return self.templates
 
     # -- helpers ---------------------------------------------------------------
 
@@ -1785,6 +1969,98 @@ class EditorScreen(Screen[None]):
         self.editor.focus()
         self.notify("New document started — Ctrl+S stores it in your library.")
 
+    @work
+    async def action_templates(self) -> None:
+        """F4: start a new document from a quick-access template."""
+        while True:
+            templates = await self._fetch_templates()
+            if templates is None:
+                return
+            if not templates:
+                self.notify(
+                    "No templates yet. Press F3, fill in the writing settings, "
+                    "and press Save as Template on the Document tab.",
+                    title="Templates",
+                    timeout=10,
+                )
+                return
+            entries = [
+                (
+                    str(t["id"]),
+                    f"{t['name']}  —  {template_summary(t.get('settings') or {})}",
+                )
+                for t in templates
+            ]
+            result = await self.app.push_screen_wait(
+                PickerScreen(
+                    "New Document from Template",
+                    entries,
+                    open_label="New document",
+                    extra_buttons=[("delete", "Delete")],
+                )
+            )
+            if result is None:
+                return
+            action, template_id = result
+            template = next(
+                (t for t in templates if str(t.get("id")) == template_id), None
+            )
+            if template is None:
+                continue
+            if action == "delete":
+                await self._delete_template(template)
+                continue
+            await self._new_from_template(template)
+            return
+
+    async def _delete_template(self, template: dict[str, Any]) -> None:
+        confirmed = await self.app.push_screen_wait(
+            ConfirmScreen(
+                "Delete template",
+                f'Delete the template "{template["name"]}"? Documents that used '
+                "it keep their settings.",
+                confirm_label="Delete",
+            )
+        )
+        if not confirmed:
+            return
+        try:
+            message = await self.client.delete_template(int(template["id"]))
+        except AuthError:
+            await self._session_expired()
+            return
+        except ApiError as exc:
+            self.notify(exc.message, severity="error", timeout=10)
+            return
+        self.notify(message)
+
+    async def _new_from_template(self, template: dict[str, Any]) -> None:
+        """Replace the editor with an empty document using the template's settings.
+
+        The document being left is saved rather than discarded when it has
+        a library name; one that was never saved gets the usual Save /
+        Discard / Cancel prompt, since there is no name to save it under.
+        """
+        saved_note = ""
+        if self.dirty and self.filename:
+            if not await self._save_document(self.filename, save_as=False):
+                return
+            saved_note = f' "{self.filename}" was saved first.'
+        elif not await self._confirm_discard("Start a new document from the template"):
+            return
+        self._set_filename(None)
+        # Blank template fields fall back to the user's defaults, as blank
+        # document fields do (and as the web UI's form does).
+        self._load_document_data(
+            {"title": "", "content": "", "metadata": template.get("settings") or {}}
+        )
+        self._mark_dirty(False)
+        self.editor.focus()
+        self.notify(
+            f'New document from template "{template["name"]}".{saved_note} '
+            "Ctrl+S stores it in your library."
+        )
+
     def action_save(self) -> None:
         if self.filename:
             self._save_as(self.filename, save_as=False)
@@ -2164,12 +2440,16 @@ class EditorScreen(Screen[None]):
         # dialog's buttons.
         self.app.clear_notifications()
         metadata = dict(self.metadata)
+        # Templates may have been added from the web UI meanwhile; a failure
+        # here (an older server) just leaves the last list in place.
+        await self._fetch_templates(quiet=True)
         result = await self.app.push_screen_wait(
             SettingsScreen(
                 metadata,
                 self.ai,
                 allow_custom_env_vars=self.allow_custom_env_vars,
                 editor=self,
+                templates=self.templates,
             )
         )
         if result is None:
@@ -2307,6 +2587,7 @@ EDITOR_COMMANDS: list[tuple[str, str, str]] = [
     ("export", "Export to file", "Write the document JSON to a file"),
     ("copy", "Copy document to clipboard", "Copy the document text"),
     ("settings", "Settings", "Document and AI settings (F3)"),
+    ("templates", "New from template", "Start a document from a template (F4)"),
     ("help", "Help", "Keyboard reference (F1)"),
     ("use_suggestion", "Use suggestion", "Replace the section with it (Ctrl+U)"),
     ("account", "Account", "Change your email address or password"),

@@ -31,6 +31,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **Document Management**: Save, load, and manage multiple documents, with snapshots you can revert to
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
+- **Quick-access Templates**: Save a set of writing settings under a name (an "Email" template, say) and start a new document from it in one step — from the **Templates ▾** menu in the web UI or `F4` in the terminal interface
 - **Flexible AI Backend**: Works with LLM endpoints including OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
@@ -260,8 +261,32 @@ or model a user picks in AI Settings takes precedence over the default.
    section with it.
 4. Save your work via the **File ▾** menu (**File → Save**); the File menu also
    offers Save As, Open, snapshots, and import/export.
+5. **Settings → Writing Settings** holds the style, audience, tone, context,
+   directive, and word limit that shape every suggestion. **Save to
+   Document** keeps them with this document; **Save as Default** makes them
+   the starting point for new ones.
 
 That's it! You're ready to use the AI writing assistant.
+
+### Quick-access templates
+
+For writing you do again and again — emails, status updates, cover letters
+— save the writing settings once as a **template** and reuse them:
+
+1. Open **Settings → Writing Settings**, fill in the fields (a short
+   directive such as "Three short paragraphs; end with a clear ask" is the
+   useful part), enter a name under **Quick-access Templates**, and press
+   **Save as Template**. Saving under an existing name replaces that
+   template; **Apply** fills the form from one, and **Delete** removes it.
+2. Choose the template from the **Templates ▾** menu in the header. This
+   starts a new, empty document with the template's settings. The document
+   you were working on is saved first when it has a name; a document that
+   was never saved gets a **Save… / Discard / Cancel** prompt instead.
+
+Templates are stored with your account, so the terminal interface sees
+the same list (`F4` there). A blank template field falls back to your
+saved default, as a blank document field does; AI source and model are
+not part of a template — they come from your defaults.
 
 ## Terminal interface (TUI)
 
@@ -331,7 +356,8 @@ a server default, leave the source on "Server default" and the model blank
 | `Ctrl+S` | Save (asks for a library name the first time — the document is stored on the server, shared with the web UI, not written to a file here; use File → Export for a file) |
 | `Ctrl+N` / `Ctrl+O` | New document (a title and optional outline; `Ctrl+S` then stores it in your library) / Open a document from your library (type to filter the list by name or title; `Up`/`Down` and `Enter` pick one) |
 | `F2` | File menu: New, Save, Save As, Open, Delete, Create snapshot, Revert to snapshot, Import, Export, Copy, Account (change email or password), Log out |
-| `F3` | Settings: writing style, tone, audience, context, directive, word limit; AI source/model, Server URL, API key, environment variables, Test Connection |
+| `F3` | Settings: writing style, tone, audience, context, directive, word limit (and, below them, **Save as Template** / Apply / Delete for quick-access templates); AI source/model, Server URL, API key, environment variables, Test Connection |
+| `F4` | Templates: start a new document from a saved template (see [Quick-access templates](#quick-access-templates)). The open document is saved first when it has a library name; otherwise the Save / Discard / Cancel prompt appears |
 | `F1` | Help |
 | `Ctrl+P` | Command palette: type part of a command's name (Save As, Create snapshot, Export, Account, Log out, …) and press `Enter` |
 | `Tab` / `Shift+Tab` | Move between the title, the editor, the suggestion panel (arrow keys scroll it) and the buttons |

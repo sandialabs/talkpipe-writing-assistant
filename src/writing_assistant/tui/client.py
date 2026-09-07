@@ -314,6 +314,44 @@ class WritingAssistantClient:
         document = data.get("document") or {}
         return document if isinstance(document, dict) else {}
 
+    # -- quick-access templates -----------------------------------------------
+
+    async def list_templates(self) -> list[dict[str, Any]]:
+        """The user's writing templates, each ``{"id", "name", "settings", ...}``."""
+        try:
+            data = self._check_status(
+                await self._json("GET", "/templates/list"), "Failed to list templates"
+            )
+        except ApiError as exc:
+            if exc.status_code != 404:
+                raise
+            # Servers up to 1.0.0 have no template routes.
+            raise ApiError(
+                f"The server at {self.base_url} does not support templates "
+                "(they need a writing-assistant server newer than 1.0.0). "
+                "Upgrade the server to use them.",
+                404,
+            ) from exc
+        templates = data.get("templates") or []
+        return [t for t in templates if isinstance(t, dict)]
+
+    async def save_template(self, name: str, settings: dict[str, Any]) -> str:
+        """Create ``name`` or replace its settings; returns the server's message."""
+        data = self._check_status(
+            await self._json(
+                "POST", "/templates/save", json={"name": name, "settings": settings}
+            ),
+            "Failed to save template",
+        )
+        return str(data.get("message") or "Template saved")
+
+    async def delete_template(self, template_id: int) -> str:
+        data = self._check_status(
+            await self._json("DELETE", f"/templates/delete/{template_id}"),
+            "Failed to delete template",
+        )
+        return str(data.get("message") or "Template deleted")
+
     # -- AI -------------------------------------------------------------------
 
     async def generate_text(self, fields: dict[str, Any]) -> str:

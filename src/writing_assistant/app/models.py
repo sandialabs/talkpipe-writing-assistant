@@ -5,7 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi_users.db import SQLAlchemyBaseUserTable
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -99,6 +106,9 @@ class User(SQLAlchemyBaseUserTable[uuid.UUID], Base):
     documents: Mapped[list["Document"]] = relationship(
         "Document", back_populates="owner", cascade="all, delete-orphan"
     )
+    templates: Mapped[list["WritingTemplate"]] = relationship(
+        "WritingTemplate", back_populates="owner", cascade="all, delete-orphan"
+    )
 
 
 class Document(Base):
@@ -169,3 +179,38 @@ class DocumentSnapshot(Base):
 
     def __repr__(self) -> str:
         return f"<DocumentSnapshot(id={self.id}, name={self.snapshot_name}, document_id={self.document_id})>"
+
+
+class WritingTemplate(Base):
+    """A named, reusable set of writing settings (quick-access template).
+
+    Templates are per user and shared by every client (web UI and TUI), so
+    they live on the server rather than in a browser's local storage. The
+    settings are the document-metadata fields of the Writing Settings tab
+    (style, audience, tone, context, directive, word limit), stored as JSON.
+    """
+
+    __tablename__ = "writing_templates"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_writing_templates_user_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    settings: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    owner: Mapped[User] = relationship("User", back_populates="templates")
+
+    def __repr__(self) -> str:
+        return (
+            f"<WritingTemplate(id={self.id}, name={self.name}, user_id={self.user_id})>"
+        )

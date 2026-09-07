@@ -352,6 +352,16 @@ ModalScreen {
     margin-right: 2;
 }
 
+/* Settings → Document: the template dropdown with its two buttons beside it. */
+.template-row Select {
+    width: 1fr;
+}
+
+.template-row Button {
+    margin-left: 1;
+    min-width: 8;
+}
+
 /* The menu and picker lists: `max-height` is lowered from the screen's
    height on resize (see _fit_option_list) so the list scrolls inside the
    dialog instead of the dialog clipping it. */

@@ -129,6 +129,49 @@ async def test_preferences_round_trip(tui_client: WritingAssistantClient):
     assert await tui_client.get_preferences() == prefs
 
 
+async def test_template_round_trip(tui_client: WritingAssistantClient):
+    await tui_client.register("tui@example.com", "a-strong-password")
+    await tui_client.login("tui@example.com", "a-strong-password")
+    assert await tui_client.list_templates() == []
+
+    settings = {"writing_style": "casual", "tone": "friendly", "word_limit": 120}
+    assert await tui_client.save_template("Email", settings) == "Template created"
+    templates = await tui_client.list_templates()
+    assert [t["name"] for t in templates] == ["Email"]
+    assert templates[0]["settings"]["tone"] == "friendly"
+    assert templates[0]["settings"]["word_limit"] == 120
+    assert templates[0]["settings"]["target_audience"] == ""
+
+    message = await tui_client.save_template("Email", {**settings, "tone": "neutral"})
+    assert message == "Template updated"
+    assert (await tui_client.list_templates())[0]["settings"]["tone"] == "neutral"
+
+    with pytest.raises(ApiError, match="blank"):
+        await tui_client.save_template("   ", settings)
+
+    template_id = templates[0]["id"]
+    assert "deleted" in await tui_client.delete_template(template_id)
+    assert await tui_client.list_templates() == []
+    with pytest.raises(ApiError, match="not found"):
+        await tui_client.delete_template(template_id)
+
+
+async def test_list_templates_explains_server_without_endpoint():
+    async def old_server(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "Not Found"})
+
+    client = WritingAssistantClient(
+        "http://old-server:8001", token="t", transport=httpx.MockTransport(old_server)
+    )
+    try:
+        with pytest.raises(ApiError) as excinfo:
+            await client.list_templates()
+    finally:
+        await client.aclose()
+    assert "does not support templates" in excinfo.value.message
+    assert "1.0.0" in excinfo.value.message
+
+
 async def test_generate_text_and_test_connection(
     tui_client: WritingAssistantClient, mocker
 ):
