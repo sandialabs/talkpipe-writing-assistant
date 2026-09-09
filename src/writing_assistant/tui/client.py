@@ -126,7 +126,8 @@ class WritingAssistantClient:
             raise ApiError(
                 f"Could not connect to the writing-assistant server at "
                 f"{self.base_url}. Is it running? Start it with "
-                "`writing-assistant`, or pass --server <url>."
+                "`writing-assistant`, pass --server <url>, or run "
+                "`writing-assistant-tui --standalone` to start one here."
             ) from exc
         except httpx.TimeoutException as exc:
             raise ApiError(

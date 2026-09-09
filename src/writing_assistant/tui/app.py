@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from functools import partial
@@ -51,7 +52,7 @@ from .sections import (
     restore_saved_sections,
     section_index_at,
 )
-from .session import Session
+from .session import Session, session_path
 
 WRITING_STYLES = [
     ("Formal", "formal"),
@@ -1132,7 +1133,8 @@ LOGIN_HELP_TEXT = """\
   Server URL   The writing-assistant server to connect to. Start one with
                `writing-assistant`; the default is http://localhost:8001.
                Pass --server <url> or set WRITING_ASSISTANT_TUI_SERVER for a
-               server on another machine or port.
+               server on another machine or port. No server? Quit and run
+               `writing-assistant-tui --standalone` to start a private one.
   Email        Your account's email address.
   Password     Your password (at least 8 characters for a new account).
 
@@ -2709,7 +2711,8 @@ def main(argv: list[str] | None = None) -> None:
         description=(
             "Terminal interface for the TalkPipe Writing Assistant. Connects to "
             "a running writing-assistant server (start one with "
-            "`writing-assistant`) and offers the same features as the web UI."
+            "`writing-assistant`, or pass --standalone to start a private one "
+            "in this process) and offers the same features as the web UI."
         ),
         epilog=(
             "The login token and the last-open document are remembered in "
@@ -2718,12 +2721,34 @@ def main(argv: list[str] | None = None) -> None:
             "inside the application for the keyboard reference."
         ),
     )
-    parser.add_argument(
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument(
         "--server",
         default=None,
         help=(
             "Server URL (default: WRITING_ASSISTANT_TUI_SERVER if set, else the "
             "last one used, else http://localhost:8001)"
+        ),
+    )
+    where.add_argument(
+        "--standalone",
+        action="store_true",
+        help=(
+            "Start the writing-assistant server inside this process, on "
+            "localhost only, and connect to it; it stops when you quit. It is "
+            "the same server `writing-assistant` runs, with the same database "
+            "and settings (WRITING_ASSISTANT_DB_PATH, TALKPIPE_OLLAMA_SERVER_URL, "
+            "…), so documents are shared with one started by hand. Its log is "
+            "written next to the session file (tui_server.log)."
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help=(
+            "Port for the --standalone server (default: WRITING_ASSISTANT_PORT "
+            "if set, else 8001 — the port `writing-assistant` uses)"
         ),
     )
     parser.add_argument(
@@ -2732,9 +2757,35 @@ def main(argv: list[str] | None = None) -> None:
         help="Forget the saved session token and show the login screen",
     )
     args = parser.parse_args(argv)
+    if args.port is not None and not args.standalone:
+        parser.error("--port only applies with --standalone")
+
+    embedded = None
+    server: str | None
+    if args.standalone:
+        # Imported here, not at module level: the TUI is otherwise a pure
+        # HTTP client and must stay runnable without the server's stack.
+        from writing_assistant.app import server as server_module
+
+        host = "localhost"
+        port = args.port or int(os.getenv("WRITING_ASSISTANT_PORT", "8001"))
+        if server_module.port_in_use(host, port):
+            print(
+                f"Error: cannot start the built-in server — {host}:{port} is "
+                "already in use.\nIf that is a writing-assistant server, run "
+                "without --standalone to connect to it; otherwise pass "
+                "--port <other-port>.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        server = f"http://{host}:{port}"
+        embedded = server_module.EmbeddedServer(
+            host, port, log_path=session_path().with_name("tui_server.log")
+        )
+    else:
+        server = args.server or os.getenv("WRITING_ASSISTANT_TUI_SERVER")
 
     session = Session.load()
-    server = args.server or os.getenv("WRITING_ASSISTANT_TUI_SERVER")
     if server:
         server = server.rstrip("/")
         if server != session.server_url:
@@ -2744,7 +2795,18 @@ def main(argv: list[str] | None = None) -> None:
         session.token = None
         session.save()
 
-    WritingAssistantApp(session).run()
+    if embedded is None:
+        WritingAssistantApp(session).run()
+        return
+    try:
+        embedded.start()
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    try:
+        WritingAssistantApp(session).run()
+    finally:
+        embedded.stop()
 
 
 if __name__ == "__main__":  # pragma: no cover

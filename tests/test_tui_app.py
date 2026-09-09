@@ -8,6 +8,7 @@ call is mocked.
 import asyncio
 import time
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -440,6 +441,129 @@ def test_main_parses_server_and_logout(monkeypatch, tmp_path):
     main(["--logout"])
     assert captured["session"].token is None
     assert Session.load().token is None
+
+
+class _FakeEmbeddedServer:
+    """Stands in for writing_assistant.app.server.EmbeddedServer."""
+
+    events: ClassVar[list[str]] = []
+
+    def __init__(self, host, port, *, log_path):
+        type(self).events.append(f"init {host}:{port} {log_path}")
+
+    def start(self):
+        type(self).events.append("start")
+
+    def stop(self):
+        type(self).events.append("stop")
+
+
+@pytest.fixture
+def standalone_env(monkeypatch, tmp_path):
+    """Isolated session file, no port in use, fake server and app."""
+    monkeypatch.setenv("WRITING_ASSISTANT_TUI_HOME", str(tmp_path))
+    monkeypatch.delenv("WRITING_ASSISTANT_PORT", raising=False)
+    monkeypatch.delenv("WRITING_ASSISTANT_TUI_SERVER", raising=False)
+    _FakeEmbeddedServer.events = []
+    captured: dict = {}
+
+    class FakeApp:
+        def __init__(self, session):
+            captured["session"] = session
+
+        def run(self):
+            _FakeEmbeddedServer.events.append("run")
+            if captured.get("crash"):
+                raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "writing_assistant.app.server.EmbeddedServer", _FakeEmbeddedServer
+    )
+    monkeypatch.setattr(
+        "writing_assistant.app.server.port_in_use", lambda host, port: False
+    )
+    monkeypatch.setattr("writing_assistant.tui.app.WritingAssistantApp", FakeApp)
+    captured["events"] = _FakeEmbeddedServer.events
+    captured["tmp_path"] = tmp_path
+    return captured
+
+
+def test_main_standalone_runs_its_own_server_around_the_app(standalone_env):
+    tmp_path = standalone_env["tmp_path"]
+    Session(server_url="http://localhost:8001", token="tok").save()
+    main(["--standalone"])
+    assert standalone_env["events"] == [
+        f"init localhost:8001 {tmp_path / 'tui_server.log'}",
+        "start",
+        "run",
+        "stop",
+    ]
+    session = standalone_env["session"]
+    assert session.server_url == "http://localhost:8001"
+    # Same server as last time (a manually started one on the default port
+    # shares the database and secret), so the saved login still applies.
+    assert session.token == "tok"
+
+
+def test_main_standalone_port_flag_and_env(standalone_env, monkeypatch):
+    Session(server_url="http://localhost:8001", token="tok").save()
+    main(["--standalone", "--port", "9100"])
+    assert standalone_env["events"][0].startswith("init localhost:9100 ")
+    assert standalone_env["session"].server_url == "http://localhost:9100"
+    assert standalone_env["session"].token is None  # different server
+
+    _FakeEmbeddedServer.events.clear()
+    monkeypatch.setenv("WRITING_ASSISTANT_PORT", "9200")
+    main(["--standalone"])
+    assert standalone_env["events"][0].startswith("init localhost:9200 ")
+
+
+def test_main_standalone_stops_the_server_if_the_app_crashes(standalone_env):
+    standalone_env["crash"] = True
+    with pytest.raises(RuntimeError, match="boom"):
+        main(["--standalone"])
+    assert standalone_env["events"][-2:] == ["run", "stop"]
+
+
+def test_main_standalone_rejects_conflicting_flags(standalone_env, capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--standalone", "--server", "http://elsewhere:1"])
+    assert excinfo.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--port", "9100"])
+    assert excinfo.value.code == 2
+    assert "--standalone" in capsys.readouterr().err
+    assert standalone_env["events"] == []
+
+
+def test_main_standalone_refuses_a_port_in_use(standalone_env, monkeypatch, capsys):
+    monkeypatch.setattr(
+        "writing_assistant.app.server.port_in_use", lambda host, port: True
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--standalone"])
+    assert excinfo.value.code == 1
+    err = capsys.readouterr().err
+    assert "localhost:8001" in err
+    assert "already in use" in err
+    assert "--standalone" in err  # tells the user to drop the flag ...
+    assert "--port" in err  # ... or pick another port
+    assert standalone_env["events"] == []
+
+
+def test_main_standalone_reports_a_server_that_fails_to_start(
+    standalone_env, monkeypatch, capsys
+):
+    def failing_start(self):
+        raise RuntimeError("could not start: see the log")
+
+    monkeypatch.setattr(_FakeEmbeddedServer, "start", failing_start)
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--standalone"])
+    assert excinfo.value.code == 1
+    assert "could not start: see the log" in capsys.readouterr().err
+    assert "run" not in standalone_env["events"]
 
 
 async def test_opening_a_document_does_not_mark_it_dirty(tui_app):

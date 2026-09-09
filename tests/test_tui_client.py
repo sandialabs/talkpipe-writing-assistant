@@ -345,3 +345,40 @@ async def test_change_email_round_trip(tui_client: WritingAssistantClient):
     with pytest.raises(ApiError):
         await tui_client.login("tui@example.com", "a-strong-password")
     await tui_client.login("new@example.com", "a-strong-password")
+
+
+async def test_client_talks_to_an_embedded_server_over_loopback(tmp_path):
+    """The whole --standalone path: a real socket, a real login."""
+    import socket
+    import uuid
+
+    from writing_assistant.app.server import EmbeddedServer
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    with EmbeddedServer("127.0.0.1", port, log_path=tmp_path / "s.log") as server:
+        client = WritingAssistantClient(server.url)
+        try:
+            email = f"standalone-{uuid.uuid4().hex[:8]}@example.com"
+            await client.register(email, "a-strong-password")
+            assert await client.login(email, "a-strong-password")
+            assert (await client.check_auth())["email"] == email
+        finally:
+            await client.aclose()
+
+
+async def test_connect_error_mentions_standalone(tmp_path):
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    client = WritingAssistantClient(f"http://127.0.0.1:{port}")
+    try:
+        with pytest.raises(ApiError) as excinfo:
+            await client.check_auth()
+    finally:
+        await client.aclose()
+    assert "--standalone" in excinfo.value.message

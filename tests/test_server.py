@@ -281,3 +281,103 @@ def test_main_port_in_use_fails_before_banner(mock_uvicorn_run, capsys):
         mock_uvicorn_run.assert_not_called()
     finally:
         blocker.close()
+
+
+# --------------------------------------------------------------------------
+# EmbeddedServer: the server the TUI starts for itself (--standalone)
+# --------------------------------------------------------------------------
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_port_in_use_reports_a_listening_socket():
+    import socket
+
+    from writing_assistant.app.server import port_in_use
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen(1)
+        port = blocker.getsockname()[1]
+        assert port_in_use("127.0.0.1", port)
+    finally:
+        blocker.close()
+    assert not port_in_use("127.0.0.1", port)
+
+
+def test_embedded_server_serves_over_loopback_and_logs_to_file(tmp_path, capfd):
+    """The embedded server answers HTTP on the requested port, writes its
+    log to the given file rather than the terminal (which the TUI owns),
+    and stops when asked."""
+    import httpx
+
+    from writing_assistant.app.server import EmbeddedServer
+
+    port = _free_port()
+    log_path = tmp_path / "server.log"
+    server = EmbeddedServer("127.0.0.1", port, log_path=log_path)
+    assert server.url == f"http://127.0.0.1:{port}"
+    assert not server.is_running
+
+    server.start()
+    try:
+        assert server.is_running
+        response = httpx.get(f"{server.url}/auth/check")
+        assert response.status_code == 401  # up, and asking for a token
+    finally:
+        server.stop()
+
+    assert not server.is_running
+    text = log_path.read_text()
+    assert "Uvicorn running on" in text
+    assert "Finished server process" in text
+    out, err = capfd.readouterr()
+    assert out == ""
+    assert err == ""
+    # The file handler is detached again so later loggers don't inherit it.
+    import logging
+
+    assert not any(
+        isinstance(h, logging.FileHandler) and h.baseFilename == str(log_path)
+        for h in logging.getLogger().handlers
+    )
+
+
+def test_embedded_server_start_fails_clearly_when_port_is_taken(tmp_path):
+    import socket
+
+    from writing_assistant.app.server import EmbeddedServer
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen(1)
+        port = blocker.getsockname()[1]
+        log_path = tmp_path / "server.log"
+        server = EmbeddedServer("127.0.0.1", port, log_path=log_path)
+        with pytest.raises(RuntimeError) as excinfo:
+            server.start()
+        assert str(port) in str(excinfo.value)
+        assert str(log_path) in str(excinfo.value)
+        assert not server.is_running
+    finally:
+        blocker.close()
+
+
+def test_embedded_server_is_a_context_manager(tmp_path):
+    import httpx
+
+    from writing_assistant.app.server import EmbeddedServer
+
+    port = _free_port()
+    with EmbeddedServer("127.0.0.1", port, log_path=tmp_path / "s.log") as server:
+        assert server.is_running
+        assert httpx.get(f"{server.url}/docs").status_code == 200
+    assert not server.is_running

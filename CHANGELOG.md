@@ -6,6 +6,22 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+### Added
+
+- **`writing-assistant-tui --standalone`** starts the server inside the
+  terminal interface's own process instead of connecting to one started
+  separately, and stops it when the TUI exits. It is the same server
+  `writing-assistant` runs — same database, JWT secret and AI settings from
+  the environment — bound to localhost on port 8001 (`--port <n>` or
+  `WRITING_ASSISTANT_PORT`), so documents and the saved login are shared
+  with a server started by hand, and a browser on the same machine can use
+  it while the TUI is up. The server's log goes to `tui_server.log` next
+  to the session file, because the terminal belongs to the TUI. Starting
+  is refused with a clear message when the port is already in use (drop
+  the flag if that is a writing-assistant server, or pick another port),
+  and `--standalone` cannot be combined with `--server`. The "could not
+  connect" error and the login screen's help now mention the flag.
+
 ## 1.1.0 (2026-09-07)
 
 ### Added

@@ -314,6 +314,21 @@ writing-assistant
 writing-assistant-tui
 ```
 
+**No server? Let the TUI start one.** `writing-assistant-tui --standalone`
+runs the server inside the TUI's own process, on localhost only, and stops
+it when you quit — one command, nothing to keep running. It is the same
+server `writing-assistant` starts, with the same database, JWT secret and
+AI configuration (`WRITING_ASSISTANT_DB_PATH`, `WRITING_ASSISTANT_SECRET`,
+`TALKPIPE_OLLAMA_SERVER_URL`, … from the environment), so your documents
+and login are the same whichever way you run it, and a browser on the same
+machine can open http://localhost:8001 while the TUI is up. It listens on
+port 8001 (`--port <n>` or `WRITING_ASSISTANT_PORT` to change it) and refuses
+to start if that port is taken — if the thing on it is a writing-assistant
+server, just drop the flag. Its log goes to `tui_server.log` next to the
+session file, since the terminal belongs to the TUI. The standalone server
+only lives as long as the TUI does; for one that other machines or other
+terminals share, start it separately as follows.
+
 **Keeping the server running.** The server must outlive the terminal you
 started it in. On a headless or SSH-only machine the simplest way is a tmux
 session (`tmux new -d -s writing-assistant writing-assistant`; reattach with
@@ -455,7 +470,7 @@ Configure the application with these environment variables:
 | `TALKPIPE_DEFAULT_MODEL_SOURCE` | Server-wide default AI source, used when a request leaves the source on "Server default" (`openai`, `anthropic`, `ollama`) | unset (users must choose one) |
 | `TALKPIPE_DEFAULT_MODEL_NAME` | Server-wide default model name, used when a request leaves Model blank | unset |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
-| `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`) | last used, else `http://localhost:8001` |
+| `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`; ignored with `--standalone`, which uses `WRITING_ASSISTANT_PORT`) | last used, else `http://localhost:8001` |
 | `WRITING_ASSISTANT_TUI_HOME` | Directory for the TUI's saved session (`tui_session.json`) | `~/.writing_assistant` |
 
 

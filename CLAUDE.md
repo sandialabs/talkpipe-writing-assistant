@@ -58,8 +58,12 @@ writing-assistant --init-db
 **Terminal interface:** `writing-assistant-tui` (or `python -m
 writing_assistant.tui`) is a Textual client of the running server's REST
 API with the same features as the web UI. `--server <url>` /
-`WRITING_ASSISTANT_TUI_SERVER` pick the server; the session token lives in
-`~/.writing_assistant/tui_session.json` (`WRITING_ASSISTANT_TUI_HOME`).
+`WRITING_ASSISTANT_TUI_SERVER` pick the server; `--standalone` instead
+starts the server in-process (`EmbeddedServer` in `app/server.py`: uvicorn
+in a daemon thread, localhost only, port 8001 / `--port` /
+`WRITING_ASSISTANT_PORT`, log in `tui_server.log`) and stops it on exit.
+The session token lives in `~/.writing_assistant/tui_session.json`
+(`WRITING_ASSISTANT_TUI_HOME`).
 
 **Important:** The application now uses FastAPI Users for multi-user authentication. Users must register and login to use the application.
 

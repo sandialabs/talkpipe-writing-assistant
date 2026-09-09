@@ -1,11 +1,18 @@
 """Entry point for the writing assistant web server."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
+import contextlib
 import ipaddress
+import logging
 import os
 import socket
 import sys
+import threading
+import time
+from pathlib import Path
 
 import uvicorn
 
@@ -13,24 +20,21 @@ from .database import create_db_and_tables
 from .main import app
 
 
-def _fail_if_port_in_use(host: str, port: int) -> None:
-    """Exit with a clear error if host:port is already taken.
+def port_in_use(host: str, port: int) -> bool:
+    """True when something already listens on host:port.
 
-    Without this check the success banner (URLs, database path) prints
-    first and uvicorn's bind error only appears afterwards, which looks
-    like the server started when it did not. Only a genuine
-    "address already in use" aborts here; every other problem (bad host,
-    unresolvable name) is left for uvicorn to report. Every address the
-    host resolves to is probed, because uvicorn binds all of them — a
-    listener on 127.0.0.1 must be caught even when localhost resolves
-    to ::1 first.
+    Only a genuine "address already in use" counts; every other problem
+    (bad host, unresolvable name) is left for uvicorn to report. Every
+    address the host resolves to is probed, because uvicorn binds all of
+    them — a listener on 127.0.0.1 must be caught even when localhost
+    resolves to ::1 first.
     """
     import errno
 
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError:
-        return  # let uvicorn report resolution problems
+        return False  # let uvicorn report resolution problems
     for family, socktype, proto, _, sockaddr in infos:
         try:
             sock = socket.socket(family, socktype, proto)
@@ -41,15 +45,135 @@ def _fail_if_port_in_use(host: str, port: int) -> None:
             try:
                 sock.bind(sockaddr)
             except OSError as exc:
-                if exc.errno != errno.EADDRINUSE:
-                    continue
-                print(
-                    f"Error: cannot bind to {host}:{port} — the address is "
-                    f"already in use.\nStop the other process using the port, "
-                    f"or start with --port <other-port>.",
-                    file=sys.stderr,
+                if exc.errno == errno.EADDRINUSE:
+                    return True
+    return False
+
+
+def _fail_if_port_in_use(host: str, port: int) -> None:
+    """Exit with a clear error if host:port is already taken.
+
+    Without this check the success banner (URLs, database path) prints
+    first and uvicorn's bind error only appears afterwards, which looks
+    like the server started when it did not.
+    """
+    if port_in_use(host, port):
+        print(
+            f"Error: cannot bind to {host}:{port} — the address is "
+            f"already in use.\nStop the other process using the port, "
+            f"or start with --port <other-port>.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+
+class EmbeddedServer:
+    """The writing-assistant server running in a background thread.
+
+    Used by ``writing-assistant-tui --standalone`` so the terminal
+    interface needs no separately started ``writing-assistant``. The
+    server is the same FastAPI application, so it uses the same database
+    (``WRITING_ASSISTANT_DB_PATH``), secret and AI configuration as a
+    server started by hand — documents and logins are shared with one.
+
+    The thread owns its own event loop; the caller's (Textual's) loop is
+    untouched. Nothing is written to the terminal: uvicorn's log goes to
+    ``log_path`` while the server runs, because the TUI owns the screen.
+    """
+
+    def __init__(self, host: str, port: int, *, log_path: Path | None = None) -> None:
+        self.host = host
+        self.port = port
+        self.log_path = log_path
+        self._server = uvicorn.Server(
+            uvicorn.Config(app, host=host, port=port, log_config=None, access_log=False)
+        )
+        self._thread = threading.Thread(
+            target=self._run, name="writing-assistant-server", daemon=True
+        )
+        self._handler: logging.Handler | None = None
+        self._previous_level: int | None = None
+
+    def _run(self) -> None:
+        # uvicorn calls sys.exit when it cannot bind; it has already logged
+        # the reason, and start() reports the dead thread.
+        with contextlib.suppress(SystemExit):
+            self._server.run()
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}"
+
+    @property
+    def is_running(self) -> bool:
+        return self._thread.is_alive()
+
+    def start(self, timeout: float = 30.0) -> None:
+        """Start the server and return once it accepts connections.
+
+        Raises ``RuntimeError`` if it fails to come up (the port taken in
+        the meantime, a database problem, …); the log file has the reason.
+        """
+        self._attach_log()
+        self._thread.start()
+        deadline = time.monotonic() + timeout
+        while not self._server.started:
+            if not self._thread.is_alive():
+                self._detach_log()
+                where = f"; see {self.log_path}" if self.log_path else ""
+                raise RuntimeError(
+                    f"the writing-assistant server did not start on "
+                    f"{self.host}:{self.port}{where}"
                 )
-                raise SystemExit(1) from None
+            if time.monotonic() > deadline:
+                self.stop()
+                raise RuntimeError(
+                    f"the writing-assistant server did not start on "
+                    f"{self.host}:{self.port} within {timeout:g}s"
+                )
+            time.sleep(0.02)
+
+    def stop(self, timeout: float = 10.0) -> None:
+        """Ask the server to shut down and wait for the thread to finish."""
+        self._server.should_exit = True
+        if self._thread.is_alive():
+            self._thread.join(timeout)
+        self._detach_log()
+
+    def __enter__(self) -> EmbeddedServer:
+        self.start()
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.stop()
+
+    def _attach_log(self) -> None:
+        if self.log_path is None:
+            return
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(self.log_path)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
+        # On the root logger so that application errors (logged under
+        # ``writing_assistant``) land in the file too, and so that nothing
+        # falls through to logging's last-resort stderr handler while the
+        # TUI has the terminal.
+        logging.getLogger().addHandler(handler)
+        uvicorn_logger = logging.getLogger("uvicorn")
+        self._previous_level = uvicorn_logger.level
+        uvicorn_logger.setLevel(logging.INFO)
+        self._handler = handler
+
+    def _detach_log(self) -> None:
+        if self._handler is None:
+            return
+        logging.getLogger().removeHandler(self._handler)
+        self._handler.close()
+        self._handler = None
+        if self._previous_level is not None:
+            logging.getLogger("uvicorn").setLevel(self._previous_level)
+            self._previous_level = None
 
 
 async def init_db() -> None:
