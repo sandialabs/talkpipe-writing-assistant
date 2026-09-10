@@ -4,6 +4,17 @@ import json
 from unittest.mock import patch
 
 
+def test_health_identifies_the_app_without_auth(client):
+    """A second launch (or a desktop launcher) checks this to tell a running
+    writing assistant from anything else on the port."""
+    from writing_assistant import DIST_NAME, __version__
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"app": DIST_NAME, "version": __version__}
+
+
 def test_root_endpoint(client):
     """Test the root endpoint returns HTML."""
     response = client.get("/")

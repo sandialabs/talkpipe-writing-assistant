@@ -53,6 +53,13 @@ WRITING_ASSISTANT_RELOAD=true writing-assistant
 
 # Initialize database manually (optional, done automatically on startup)
 writing-assistant --init-db
+
+# Startup behaviour: opens the browser once the server accepts connections
+# (--no-browser to skip); if the assistant is already running on the port
+# (checked via GET /health), just opens the browser at it and exits; if
+# some other program holds 8001 and no --port/WRITING_ASSISTANT_PORT was
+# given, the next free port in 8002-8021 is used and announced.
+writing-assistant --no-browser
 ```
 
 **Terminal interface:** `writing-assistant-tui` (or `python -m
@@ -133,6 +140,7 @@ The application uses **FastAPI Users** (v13+) for complete user management:
 - `POST /auth/jwt/logout` - Logout (invalidate token)
 - `POST /auth/forgot-password` - Request password reset
 - `POST /auth/reset-password` - Reset password with token
+- `GET /health` - Unauthenticated `{"app": "talkpipe-writing-assistant", "version": …}`; how a second launch recognises a running instance
 - `GET /auth/check` - Who the token belongs to (`email`, `user_id`); both UIs use it after login
 - `POST /user/change-password` - Change the logged-in user's password (verifies the current password first; used by Settings → Account in the web UI and File → Account in the TUI)
 - `POST /user/change-email` - Change the logged-in user's email address (same rule; the token stays valid, `is_verified` resets)
@@ -184,7 +192,7 @@ src/writing_assistant/
 ├── app/                 # Web application
 │   ├── __init__.py
 │   ├── main.py          # FastAPI application and API endpoints
-│   ├── server.py        # Application entry point
+│   ├── server.py        # Application entry point (port choice, browser open)
 │   ├── models.py        # SQLAlchemy database models (User, Document, DocumentSnapshot)
 │   ├── schemas.py       # Pydantic schemas for API validation
 │   ├── database.py      # Database configuration and session management

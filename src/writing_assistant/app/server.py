@@ -5,19 +5,30 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import errno
 import ipaddress
+import json
 import logging
 import os
 import socket
 import sys
 import threading
 import time
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 import uvicorn
 
+from .. import DIST_NAME
 from .database import create_db_and_tables
 from .main import app
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_PORT = 8001
+PORT_SEARCH_RANGE = 20
+"""How many ports above the default to try when the default is taken."""
 
 
 def port_in_use(host: str, port: int) -> bool:
@@ -29,8 +40,6 @@ def port_in_use(host: str, port: int) -> bool:
     them — a listener on 127.0.0.1 must be caught even when localhost
     resolves to ::1 first.
     """
-    import errno
-
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError:
@@ -176,6 +185,100 @@ class EmbeddedServer:
             self._previous_level = None
 
 
+def _choose_port(host: str, requested: int | None) -> int:
+    """The port to bind: the requested one, or the default with fallback.
+
+    An explicit port (``--port`` or ``WRITING_ASSISTANT_PORT``) is honoured
+    or fails loudly. With no explicit port, the default is used when free;
+    when another program holds it, the next free port in a small range
+    above it is used and announced, so a launch from a desktop entry still
+    comes up instead of dying with a bind error.
+    """
+    if requested is not None:
+        _fail_if_port_in_use(host, requested)
+        return requested
+    if not port_in_use(host, DEFAULT_PORT):
+        return DEFAULT_PORT
+    for candidate in range(DEFAULT_PORT + 1, DEFAULT_PORT + 1 + PORT_SEARCH_RANGE):
+        if not port_in_use(host, candidate):
+            print(
+                f"Port {DEFAULT_PORT} is in use by another program; "
+                f"using port {candidate} instead.",
+                flush=True,
+            )
+            return candidate
+    print(
+        f"Error: ports {DEFAULT_PORT}-{DEFAULT_PORT + PORT_SEARCH_RANGE} are all "
+        f"in use on {host}. Start with --port <other-port>.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def _reachable_host(host: str) -> str:
+    """Map a bind host to an address a client can actually reach.
+
+    A wildcard bind address (0.0.0.0 / ::) isn't a routable target, so use the
+    loopback address instead; any concrete host is used as-is. The wildcard
+    literal here is only compared against, never bound to.
+    """
+    wildcard_hosts = ("", "0.0.0.0", "::")  # nosec B104 - comparison, not a bind
+    return "127.0.0.1" if host in wildcard_hosts else host
+
+
+def _browser_url(host: str, port: int) -> str:
+    """Build the URL to open in a browser for the given bind host and port."""
+    return f"http://{_reachable_host(host)}:{port}/"
+
+
+def _launch_browser_when_ready(host: str, port: int, timeout: float = 15.0) -> None:
+    """Open the app in a browser once the server accepts connections.
+
+    Waits in a background daemon thread so we never open a dead page before the
+    server is up, and so this does not block server startup. Failures (e.g. a
+    headless container with no browser) are ignored.
+    """
+    url = _browser_url(host, port)
+    connect_host = _reachable_host(host)
+
+    def _wait_and_open() -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((connect_host, port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            return  # server never came up; nothing to open
+        try:
+            webbrowser.open(url)
+        except Exception as exc:
+            logger.debug("Could not open a browser for %s: %s", url, exc)
+
+    threading.Thread(target=_wait_and_open, daemon=True).start()
+
+
+def _running_instance_url(host: str, port: int, timeout: float = 1.0) -> str | None:
+    """URL of a writing assistant already serving on host:port, else None.
+
+    Asks the unauthenticated ``/health`` route and checks the application
+    name it reports, so an unrelated program on the port is not mistaken
+    for a running instance.
+    """
+    url = _browser_url(host, port)
+    try:
+        with urllib.request.urlopen(  # nosec B310 - http URL to a local port
+            url + "health", timeout=timeout
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(payload, dict) and payload.get("app") == DIST_NAME:
+        return url
+    return None
+
+
 async def init_db() -> None:
     """Initialize the database."""
     print("Initializing database...")
@@ -203,11 +306,21 @@ def main() -> None:
         default=os.getenv("WRITING_ASSISTANT_HOST", "localhost"),
         help="Host to bind to (default: localhost, or WRITING_ASSISTANT_HOST env var)",
     )
+    env_port = os.getenv("WRITING_ASSISTANT_PORT")
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("WRITING_ASSISTANT_PORT", "8001")),
-        help="Port to bind to (default: 8001, or WRITING_ASSISTANT_PORT env var)",
+        default=int(env_port) if env_port else None,
+        help=(
+            f"Port to bind to (default: {DEFAULT_PORT}, or WRITING_ASSISTANT_PORT "
+            "env var). Without this option, the next free port above the "
+            "default is used when another program holds it."
+        ),
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the app in a web browser on startup.",
     )
     parser.add_argument(
         "--reload",
@@ -232,7 +345,6 @@ def main() -> None:
         default=os.getenv("WRITING_ASSISTANT_DB_PATH"),
         help="Path to database file (default: ~/.writing_assistant/writing_assistant.db, or WRITING_ASSISTANT_DB_PATH env var)",
     )
-
     args = parser.parse_args()
 
     # Set database path environment variable if provided via CLI
@@ -252,8 +364,21 @@ def main() -> None:
         print("Database initialization complete.")
         return
 
-    # Fail fast (before the banner) if the port is already taken
-    _fail_if_port_in_use(args.host, args.port)
+    # A second launch (a launcher clicked again, say) should not
+    # fail: if this application already serves the port, just open it.
+    running = _running_instance_url(
+        args.host, args.port if args.port is not None else DEFAULT_PORT
+    )
+    if running:
+        print(f"The Writing Assistant is already running at {running}", flush=True)
+        if not args.no_browser:
+            print("Opening it in your web browser...", flush=True)
+            webbrowser.open(running)
+        return
+
+    # Fail fast (before the banner) if an explicit port is taken; fall back
+    # to a nearby free port when the default is.
+    port = _choose_port(args.host, args.port)
 
     # Get database path for display
     from .database import get_database_url
@@ -265,7 +390,7 @@ def main() -> None:
     display_host = args.host
     if _binds_all_interfaces(args.host):
         display_host = socket.gethostname()
-    base = f"http://{display_host}:{args.port}"
+    base = f"http://{display_host}:{port}"
 
     print("\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
     print(f"📝 Access your writing assistant at: {base}/", flush=True)
@@ -284,6 +409,8 @@ def main() -> None:
         flush=True,
     )
     print(f"💾 Database: {db_path}", flush=True)
+    if not args.no_browser:
+        print("🌐 Opening in your web browser...", flush=True)
     from . import main as main_module
 
     if not main_module.ALLOW_CUSTOM_ENV_VARS:
@@ -295,7 +422,9 @@ def main() -> None:
     print("=" * 80, flush=True)
     sys.stdout.flush()
 
-    uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
+    if not args.no_browser:
+        _launch_browser_when_ready(args.host, port)
+    uvicorn.run(app, host=args.host, port=port, reload=args.reload)
 
 
 if __name__ == "__main__":

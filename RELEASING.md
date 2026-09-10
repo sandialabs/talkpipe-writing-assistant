@@ -67,7 +67,8 @@ MAJOR for changes that break any of those.
    `python -c "from importlib.metadata import version; print(version('talkpipe-writing-assistant'))"`,
    then `writing-assistant` starts and http://localhost:8001/login loads.
    Pull the published container image and check it starts the same way and
-   reports the release version.
+   reports the release version, and `curl http://localhost:8001/health`
+   reports it once started.
 
 Nothing is bumped afterwards; the next commit on `main` reports itself as
 `X.Y.(Z+1).devN` automatically.

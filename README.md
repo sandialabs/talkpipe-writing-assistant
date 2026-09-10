@@ -83,7 +83,8 @@ After installation, you can start the application immediately:
 writing-assistant
 ```
 
-Then navigate to `http://localhost:8001` in your browser. See the [Quick Start](#quick-start) section below for next steps.
+Your browser opens at `http://localhost:8001` (pass `--no-browser` to skip
+that). See the [Quick Start](#quick-start) section below for next steps.
 
 ### Install from source
 
@@ -145,7 +146,7 @@ hardening).
 
 ## Quick Start
 
-**TL;DR:** After `pip install talkpipe-writing-assistant`, just run `writing-assistant` and open `http://localhost:8001` in your browser!
+**TL;DR:** After `pip install talkpipe-writing-assistant`, just run `writing-assistant` — it opens `http://localhost:8001` in your browser!
 
 After installing with pip, follow these steps to get started:
 
@@ -155,7 +156,8 @@ After installing with pip, follow these steps to get started:
 writing-assistant
 ```
 
-The server will start on `http://localhost:8001` and display:
+The server will start on `http://localhost:8001`, open it in your browser,
+and display:
 
 ```
 🔐 Writing Assistant Server - Multi-User Edition
@@ -165,7 +167,12 @@ The server will start on `http://localhost:8001` and display:
 📚 API documentation: http://localhost:8001/docs
 💻 Terminal interface (no browser needed): run `writing-assistant-tui` in another terminal
 💾 Database: /home/user/.writing_assistant/writing_assistant.db
+🌐 Opening in your web browser...
 ```
+
+If another program already holds port 8001, the server uses the next free
+port and says so; running `writing-assistant` while it is already running
+just opens the browser at the running instance.
 
 ### 2. Create Your Account
 
@@ -417,10 +424,15 @@ to clipboard** in the File menu.
 ### Starting the Server
 
 ```bash
-# Default: http://localhost:8001
+# Default: http://localhost:8001, opened in your browser. If another program
+# holds 8001 the next free port is used; if the assistant itself is already
+# running there, the browser is opened at it and nothing else starts.
 writing-assistant
 
-# Custom port
+# Do not open a browser (containers, servers, remote sessions)
+writing-assistant --no-browser
+
+# Custom port (an explicit port is never substituted: if it is taken, this fails)
 writing-assistant --port 8080
 
 # Custom host and port (0.0.0.0 accepts connections from other machines;
@@ -460,7 +472,7 @@ Configure the application with these environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `WRITING_ASSISTANT_HOST` | Server host address | `localhost` |
-| `WRITING_ASSISTANT_PORT` | Server port number | `8001` |
+| `WRITING_ASSISTANT_PORT` | Server port number (setting it disables the free-port fallback, like `--port`) | `8001` |
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
@@ -470,7 +482,7 @@ Configure the application with these environment variables:
 | `TALKPIPE_DEFAULT_MODEL_SOURCE` | Server-wide default AI source, used when a request leaves the source on "Server default" (`openai`, `anthropic`, `ollama`) | unset (users must choose one) |
 | `TALKPIPE_DEFAULT_MODEL_NAME` | Server-wide default model name, used when a request leaves Model blank | unset |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
-| `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`; ignored with `--standalone`, which uses `WRITING_ASSISTANT_PORT`) | last used, else `http://localhost:8001` |
+| `WRITING_ASSISTANT_TUI_SERVER` | Server URL for `writing-assistant-tui` (overridden by `--server`; needed when the server fell back to another port; ignored with `--standalone`, which uses `WRITING_ASSISTANT_PORT`) | last used, else `http://localhost:8001` |
 | `WRITING_ASSISTANT_TUI_HOME` | Directory for the TUI's saved session (`tui_session.json`) | `~/.writing_assistant` |
 
 

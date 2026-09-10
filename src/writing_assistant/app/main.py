@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
 
-from .. import __version__
+from .. import DIST_NAME, __version__
 from ..core import ai_connection
 from ..core import callbacks as cb
 from ..core.definitions import Metadata
@@ -226,6 +226,18 @@ async def login_page(request: Request) -> HTMLResponse:
 async def register_page(request: Request) -> HTMLResponse:
     """Registration page."""
     return templates.TemplateResponse(request, "register.html")
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    """Identify this server, without authentication.
+
+    Answers ``{"app": "<distribution name>", "version": "<version>"}`` so a
+    second ``writing-assistant`` launch (or a desktop launcher) can tell
+    an instance of this application from anything else listening on the
+    port, and so monitoring can confirm the server is up.
+    """
+    return {"app": DIST_NAME, "version": __version__}
 
 
 @app.get("/favicon.ico")

@@ -113,4 +113,4 @@ ENV PYTHONUNBUFFERED=1 \
     WRITING_ASSISTANT_SECRET=CHANGE_THIS_IN_PRODUCTION_PLEASE
 
 # Default command to run the application
-CMD ["python3", "-m", "writing_assistant.app.server"]
+CMD ["python3", "-m", "writing_assistant.app.server", "--no-browser"]

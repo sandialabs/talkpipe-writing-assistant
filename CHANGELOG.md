@@ -21,6 +21,22 @@ release are grouped by kind rather than listed in the order they landed.
   the flag if that is a writing-assistant server, or pick another port),
   and `--standalone` cannot be combined with `--server`. The "could not
   connect" error and the login screen's help now mention the flag.
+- **The browser opens on startup** at the server's URL once it accepts
+  connections, as the vault already did; `--no-browser` turns that off
+  (the container image passes it).
+- **Second launch opens the running instance.** Starting
+  `writing-assistant` — or clicking the launcher — while it is already
+  running opens the browser at the running server instead of failing on
+  the busy port, using the new unauthenticated `GET /health` route, which
+  reports the application name and version.
+- **Free-port fallback.** When port 8001 is held by some other program and
+  no `--port` / `WRITING_ASSISTANT_PORT` was given, the server uses the
+  next free port in the 8002–8021 range and announces it. An explicit
+  port that is taken still fails with the usual error.
+
+### Changed
+
+- The container image starts the server with `--no-browser`.
 
 ## 1.1.0 (2026-09-07)
 
