@@ -54,6 +54,14 @@ MAJOR for changes that break any of those.
    git push origin vX.Y.Z
    ```
 
+   Then advance `stable`, the repository's default branch, to the release.
+   `stable` only ever points at a full release, so skip this for betas and
+   release candidates:
+
+   ```bash
+   git push origin vX.Y.Z^{commit}:stable
+   ```
+
 7. **Publish a release** for the tag on GitHub (*Releases → Draft a new
    release*). The CI workflow's
    `release: published` trigger runs `publish-package`, which builds the

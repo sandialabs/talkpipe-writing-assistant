@@ -104,6 +104,12 @@ pip install -e '.[dev]'
 
 ### Development environment (uv, with a reproducible lock)
 
+The default branch, `stable`, is release-only: it points at the latest
+release, so what you see on the repository's front page describes that
+release. Development happens on `main`, which is where merge requests go and
+where unreleased changes and their documentation accumulate — check it out
+first (`git checkout main` after cloning).
+
 The repo includes [`uv.lock`](uv.lock) so contributors share one resolved set of versions. Install [uv](https://github.com/astral-sh/uv), then:
 
 ```bash
