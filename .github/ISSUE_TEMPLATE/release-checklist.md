@@ -15,7 +15,7 @@ The application itself must be tested by hand — the suite is not enough.
 - [ ] Alembic migration committed for any model change
 - [ ] CHANGELOG: `## Unreleased` → `## X.Y.Z (YYYY-MM-DD)`, fresh empty section above; merged via MR
 - [ ] Build the wheel and install it into a **new** virtual environment
-- [ ] Manual test — web UI (`writing-assistant`, scratch database, real Ollama model)
+- [ ] Manual test — web UI (`writing-assistant`, scratch database, a real model — e.g. Ollama)
     - [ ] register, log out, log in; second account cannot see the first one's documents
     - [ ] AI Settings: Test Connection passes, wrong model reported, choice survives reload
     - [ ] Ideas / Rewrite / Improve / Proofread on a multi-section document; queued requests run in order; accept a suggestion

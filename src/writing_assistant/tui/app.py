@@ -2737,9 +2737,10 @@ def main(argv: list[str] | None = None) -> None:
             "Start the writing-assistant server inside this process, on "
             "localhost only, and connect to it; it stops when you quit. It is "
             "the same server `writing-assistant` runs, with the same database "
-            "and settings (WRITING_ASSISTANT_DB_PATH, TALKPIPE_OLLAMA_SERVER_URL, "
-            "…), so documents are shared with one started by hand. Its log is "
-            "written next to the session file (tui_server.log)."
+            "and settings (WRITING_ASSISTANT_DB_PATH, provider variables such as "
+            "OPENAI_API_KEY or TALKPIPE_OLLAMA_SERVER_URL, …), so documents are "
+            "shared with one started by hand. Its log is written next to the "
+            "session file (tui_server.log)."
         ),
     )
     parser.add_argument(

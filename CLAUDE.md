@@ -284,6 +284,13 @@ Environment variables:
 - `WRITING_ASSISTANT_RELOAD`: Enable auto-reload (default: false)
 - `WRITING_ASSISTANT_SECRET`: Secret key for JWT tokens (default: insecure value, **must set in production**)
 
+The LLM provider is not fixed: AI Settings offers `openai`, `anthropic` and
+`ollama` (plus "Server default", TalkPipe's `default_model_source`), with
+per-account API key / Server URL fields mapped onto each SDK's variables in
+`core/ai_connection.py` (`SOURCE_CONNECTION_ENV_VARS`). Do not write docs or
+UI text that assume Ollama; the user-facing reference is "LLM providers" in
+README.md.
+
 ### Dependencies
 
 The application depends on:

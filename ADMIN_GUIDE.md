@@ -204,6 +204,10 @@ environment the server starts from:
 export TALKPIPE_DEFAULT_MODEL_SOURCE=ollama          # openai | anthropic | ollama
 export TALKPIPE_DEFAULT_MODEL_NAME=llama3.1:8b
 export TALKPIPE_OLLAMA_SERVER_URL=http://ollama-host:11434   # for ollama
+# or, for a cloud API:
+#   export TALKPIPE_DEFAULT_MODEL_SOURCE=anthropic
+#   export TALKPIPE_DEFAULT_MODEL_NAME=claude-sonnet-4-5
+#   export ANTHROPIC_API_KEY=sk-ant-...                  # OPENAI_API_KEY for openai
 writing-assistant --host 0.0.0.0 --disable-custom-env-vars
 ```
 
@@ -211,7 +215,9 @@ Accounts that leave AI Source on "Server default" and Model blank then use
 that model; a source/model chosen by a user overrides it. The same keys can
 live in `~/.talkpipe.toml` (`default_model_source`, `default_model_name`)
 of the account running the server. Cloud keys (`OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`) are set the same way, server-side.
+`ANTHROPIC_API_KEY`) go in the server's environment too — not in
+`~/.talkpipe.toml`, which the provider SDKs do not read. The README's [LLM providers](README.md#llm-providers) section
+lists every source and variable.
 
 ## Common Tasks
 

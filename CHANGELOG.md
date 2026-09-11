@@ -37,6 +37,31 @@ release are grouped by kind rather than listed in the order they landed.
 ### Changed
 
 - The container image starts the server with `--no-browser`.
+- `writing-assistant-tui --standalone`'s help text names the provider
+  environment variables it inherits generally (`OPENAI_API_KEY` as well as
+  `TALKPIPE_OLLAMA_SERVER_URL`) instead of the Ollama one alone.
+
+### Documentation
+
+- **One "LLM providers" section** in the README is now the single reference
+  for model providers: the sources AI Settings offers (`openai`,
+  `anthropic`, `ollama`, plus the server default), where each takes its
+  credentials and endpoint, how a source is chosen per account, and the
+  difference between the per-account Connection fields and server-wide
+  environment variables. The Quick Start, the prerequisites, the
+  environment-variable table, the terminal-interface and systemd notes, the
+  "Customizing Generation" recipe, the admin guide, the container guide and
+  `.env.example` point at it rather than repeating (or implying that Ollama
+  is required); the server-wide default and OpenAI-compatible-server notes
+  moved there from the Quick Start, and the release procedure no longer
+  reads as though Ollama were the only option for the manual test.
+- The Quick Start's cloud options put the API key where it takes effect —
+  the Connection field in AI Settings, or the server's environment before
+  it starts — instead of exporting it in a shell after the server is
+  already running.
+- The OpenAI-compatible-server note records that the endpoint must
+  implement OpenAI's Responses API, which is what the `openai` source
+  calls.
 
 ## 1.1.0 (2026-09-07)
 

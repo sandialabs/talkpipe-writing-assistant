@@ -32,7 +32,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
 - **Customizable Metadata**: Configure writing style, tone, audience, and generation parameters
 - **Quick-access Templates**: Save a set of writing settings under a name (an "Email" template, say) and start a new document from it in one step — from the **Templates ▾** menu in the web UI or `F4` in the terminal interface
-- **Flexible AI Backend**: Works with LLM endpoints including OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.)
+- **Flexible AI Backend**: Works with LLM endpoints including OpenAI (GPT-4, GPT-4o), Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), and Ollama (llama3, mistral, etc.) — chosen per account; see [LLM providers](#llm-providers)
 - **Database Storage**: SQLite database with configurable location for easy backup and deployment
 - **Async Processing**: Efficient queuing system for AI generation requests
 
@@ -59,7 +59,9 @@ and production deployment, see the
 ### Prerequisites
 
 - Python 3.11.4 or higher
-- Access to an LLM endpoint: OpenAI, Anthropic, Ollama (local), or any compatible endpoint
+- Access to an LLM endpoint — any one of OpenAI, Anthropic, Ollama (local),
+  or a compatible endpoint; Ollama is not required (see
+  [LLM providers](#llm-providers))
 
 > **Note:** On most modern systems (Debian/Ubuntu, Fedora, macOS with Homebrew),
 > installing into the system Python is blocked or `pip` is not installed at all.
@@ -188,82 +190,51 @@ just opens the browser at the running instance.
 
 ### 3. Configure AI Backend
 
-Point the application at an LLM endpoint — OpenAI, Anthropic, and Ollama are supported out of the box:
+Pick a model provider. Any one of the three below works — Ollama is not
+required, and neither is a cloud account. Whichever you choose is set the
+same way, in **Settings → AI Settings** (in the terminal interface: `F3` →
+AI Settings). [LLM providers](#llm-providers) is the full reference,
+including OpenAI-compatible servers and server-wide defaults.
 
 **Option A: OpenAI (Cloud)**
 1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Set your API key:
-   ```bash
-   export OPENAI_API_KEY="sk-your-api-key-here"
-   ```
-3. In the web interface: Settings → AI Settings → Set Source to `openai` and Model to your model of choice (in the terminal interface: `F3` → AI Settings).
+2. In AI Settings, set Source to `openai` and Model to your model of choice
+   (e.g. `gpt-4o`), and paste the key into **Connection → API Key**.
+   Alternatively, set it server-wide: `export OPENAI_API_KEY="sk-your-api-key-here"`
+   in the shell you start `writing-assistant` from.
 
 **Option B: Anthropic (Cloud)**
 1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
-2. Set your API key:
-   ```bash
-   export ANTHROPIC_API_KEY="sk-ant-your-api-key-here"
-   ```
-3. In the web interface: Settings → AI Settings → Set Source to `anthropic` and Model to your model of choice (in the terminal interface: `F3` → AI Settings).
+2. In AI Settings, set Source to `anthropic` and Model to your model of
+   choice (e.g. `claude-sonnet-4-5`), and paste the key into **Connection →
+   API Key**. Alternatively, set it server-wide:
+   `export ANTHROPIC_API_KEY="sk-ant-your-api-key-here"` in the shell you
+   start `writing-assistant` from.
 
 **Option C: Ollama (Local, Free)**
 1. Install Ollama from [ollama.com](https://ollama.com)
 2. Pull a model: `ollama pull [model name]`
 3. Start Ollama: `ollama serve`
-4. In the web interface: Settings → AI Settings → Set Source to `ollama` and Model to [model name] (in the terminal interface: `F3` → AI Settings). The name must match one Ollama has pulled: `ollama list` shows them on the Ollama machine, or `curl http://your-ollama-host:11434/api/tags` from anywhere; Test Connection reports a name Ollama does not have.
+4. In AI Settings, set Source to `ollama` and Model to [model name]. The name must match one Ollama has pulled: `ollama list` shows them on the Ollama machine, or `curl http://your-ollama-host:11434/api/tags` from anywhere; Test Connection reports a name Ollama does not have.
 
-If Ollama runs on a different machine (or a non-default port), set
-`TALKPIPE_OLLAMA_SERVER_URL` before starting the server (if the server is
-already running, stop it and start it again with the variable set):
+If Ollama runs on a different machine (or a non-default port), enter its
+address in **Connection → Server URL**, or set `TALKPIPE_OLLAMA_SERVER_URL`
+before starting the server:
 
 ```bash
 export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"
 writing-assistant
 ```
 
-Alternatively, set it without restarting the server: in the web interface,
-open Settings → AI Settings → Connection, enter the address in **Server
-URL**, and press **Save AI Settings**. Values set this way are saved with
-your account on the server — so the terminal interface uses them too — and
-applied per generation request (unless the server was started with
-`--disable-custom-env-vars`).
+A server-wide variable (an API key or the Ollama address) is read when the
+server starts: if it is already running, stop it and start it again with
+the variable set. The Connection fields need no restart.
 
-The Connection fields apply to whichever source is selected: **Server
-URL** is an alternate API endpoint for `openai`/`anthropic` or the Ollama
-server for `ollama`, and **API Key** supplies your key for the cloud
-sources. Use the **Test Connection** button to verify the settings with a
-real round trip before generating — it reports exactly what is wrong
-(missing key, unreachable server, model not pulled) on failure.
-
-> **Note:** AI Source is a dropdown offering `openai`, `anthropic`, and
-> `ollama`, plus "Server default", which defers to the source configured on
-> the server (TalkPipe configuration).
-
-**Other OpenAI-compatible servers** (LM Studio, vLLM, llama.cpp's server,
-a corporate gateway): choose `openai` as the source, put the server's base
-URL in **Server URL** (usually ending in `/v1`, e.g.
-`http://localhost:1234/v1`), and set **API Key** to whatever it expects —
-any non-empty value if it does not check one. Nothing in the application
-is specific to Ollama beyond its address; the same document works against
-any of these once the source and model are switched in AI Settings.
-
-**Server default (administrators):** to give every account a working model
-without each user visiting AI Settings, set TalkPipe's default source and
-model in the server's environment before starting it — users who leave AI
-Source on "Server default" and Model blank then use it:
-
-```bash
-export TALKPIPE_DEFAULT_MODEL_SOURCE=ollama
-export TALKPIPE_DEFAULT_MODEL_NAME=llama3.1:8b
-export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"   # if not local
-writing-assistant --host 0.0.0.0 --disable-custom-env-vars
-```
-
-The same keys can go in `~/.talkpipe.toml` (`default_model_source = "ollama"`,
-`default_model_name = "llama3.1:8b"`) of the account running the server;
-environment variables override the file. **Test Connection** with the
-Server-default source reports which model the server resolved. Any source
-or model a user picks in AI Settings takes precedence over the default.
+Whichever option you picked, press **Test Connection** — it makes a real
+round trip and reports exactly what is wrong (missing key, unreachable
+server, model not pulled) — then **Save AI Settings**. The settings are
+saved with your account on the server, so the terminal interface uses them
+too.
 
 ### 4. Start Writing!
 
@@ -312,6 +283,88 @@ the same list (`F4` there). A blank template field falls back to your
 saved default, as a blank document field does; AI source and model are
 not part of a template — they come from your defaults.
 
+## LLM providers
+
+The writing assistant is not tied to Ollama, or to any one provider. It
+generates text through TalkPipe, and **AI Settings** (Settings → AI Settings
+in the web interface, `F3` → AI Settings in the terminal interface) offers
+these sources. Their client libraries are installed with the application, so
+nothing extra is needed on the server beyond access to the model service.
+
+| AI Source | What it talks to | Credentials | Endpoint (default → override) |
+|-----------|------------------|-------------|-------------------------------|
+| `openai` | OpenAI's API, or any OpenAI-compatible server (LM Studio, vLLM, llama.cpp's server, a corporate gateway) | **API Key** field, or `OPENAI_API_KEY` | OpenAI's API → **Server URL** field, or `OPENAI_BASE_URL` |
+| `anthropic` | Anthropic's API, or an Anthropic-compatible gateway | **API Key** field, or `ANTHROPIC_API_KEY` | Anthropic's API → **Server URL** field, or `ANTHROPIC_BASE_URL` |
+| `ollama` | An Ollama server on this machine or another — free, and can run fully offline | none | `http://localhost:11434` → **Server URL** field, or `TALKPIPE_OLLAMA_SERVER_URL` |
+| Server default | Whichever source the administrator configured — see [Server default](#server-default-administrators) | as for that source | as for that source |
+
+**Model** is the model's name on that service — e.g. `gpt-4o`,
+`claude-sonnet-4-5`, or `llama3.1:8b` (for Ollama, one already pulled
+there). There is no built-in source or model: until one is chosen, in AI
+Settings or as a server default, generation says none is configured.
+
+**Choosing a source.** Each account chooses its own source and model in AI
+Settings and keeps them with **Save AI Settings** — stored with the account
+on the server, so the web and terminal interfaces share them. Switching
+source is just a change in AI Settings; documents are not tied to a
+provider.
+
+**Supplying keys and addresses.** Either place works for every source:
+
+- **Per account** — the **Connection** fields in AI Settings. **API Key** is
+  the key for `openai` or `anthropic` (ignored for `ollama`); **Server URL**
+  is the endpoint for whichever source is selected. They are saved with
+  the account, apply only to that account's requests, and take precedence
+  over the server's environment. They are hidden when the server runs with
+  `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`).
+- **Server-wide** — the environment variables in the table, set where the
+  server starts: `export` before `writing-assistant`, `Environment=` in a
+  systemd unit, `-e` or `.env` for a container (see
+  [Connecting the Container to an LLM](CONTAINER_DEPLOYMENT.md#connecting-the-container-to-an-llm)).
+  They are read when the server starts.
+
+**OpenAI-compatible servers:** choose `openai` as the source, put the
+server's base URL in **Server URL** (usually ending in `/v1`, e.g.
+`http://localhost:1234/v1`), and set **API Key** to whatever it expects —
+any non-empty value if it does not check one. The server must implement
+OpenAI's Responses API (`/v1/responses`), which TalkPipe's `openai` source
+uses rather than Chat Completions; Test Connection shows whether it does.
+
+Press **Test Connection** after any change: it makes a real, token-capped
+request through the selected source and model and reports what is wrong —
+missing or rejected key, unreachable server, unknown model.
+
+### Server default (administrators)
+
+To give every account a working model without each user visiting AI
+Settings, set TalkPipe's default source and model — and that source's key
+or address — in the server's environment before starting it. Accounts that
+leave AI Source on "Server default" and Model blank then use it; a source
+or model a user picks in AI Settings takes precedence.
+
+```bash
+# A cloud API ...
+export TALKPIPE_DEFAULT_MODEL_SOURCE=openai        # openai | anthropic | ollama
+export TALKPIPE_DEFAULT_MODEL_NAME=gpt-4o
+export OPENAI_API_KEY="sk-your-api-key-here"
+# ... or an Ollama server:
+#   export TALKPIPE_DEFAULT_MODEL_SOURCE=ollama
+#   export TALKPIPE_DEFAULT_MODEL_NAME=llama3.1:8b
+#   export TALKPIPE_OLLAMA_SERVER_URL="http://your-ollama-host:11434"   # if not local
+writing-assistant --host 0.0.0.0 --disable-custom-env-vars
+```
+
+The same keys can go in `~/.talkpipe.toml` (`default_model_source = "ollama"`,
+`default_model_name = "llama3.1:8b"`) of the account running the server;
+environment variables override the file. API keys belong in the
+environment, not the file — the provider SDKs read only the environment.
+**Test Connection** with the Server-default source reports which model the
+server resolved.
+
+TalkPipe's
+[model and source configuration guide](https://github.com/sandialabs/talkpipe/blob/stable/docs/guides/model-and-source-configuration.md)
+covers these settings in more depth.
+
 ## Terminal interface (TUI)
 
 Everything the web interface does is also available from a terminal, for
@@ -332,6 +385,7 @@ runs the server inside the TUI's own process, on localhost only, and stops
 it when you quit — one command, nothing to keep running. It is the same
 server `writing-assistant` starts, with the same database, JWT secret and
 AI configuration (`WRITING_ASSISTANT_DB_PATH`, `WRITING_ASSISTANT_SECRET`,
+and the [provider variables](#llm-providers) such as `OPENAI_API_KEY` or
 `TALKPIPE_OLLAMA_SERVER_URL`, … from the environment), so your documents
 and login are the same whichever way you run it, and a browser on the same
 machine can open http://localhost:8001 while the TUI is up. It listens on
@@ -351,7 +405,8 @@ on failure, install it as a systemd user service — put the following in
 path `which writing-assistant` prints with the virtual environment active —
 the example assumes the venv from the install steps lives in
 `~/talkpipe-writing-assistant` — and add any `Environment=` lines you need,
-e.g. `TALKPIPE_OLLAMA_SERVER_URL`), then
+e.g. the [provider variables](#llm-providers) `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY` or `TALKPIPE_OLLAMA_SERVER_URL`), then
 `systemctl --user enable --now writing-assistant`:
 
 ```ini
@@ -382,10 +437,10 @@ straight away; press `Shift+Tab` to reach the title field above it.
 Before asking for suggestions, tell the TUI which model to use: press `F3`,
 press `F3` again to switch to the **AI Settings** tab (or `Left`/`Right`
 with the tab bar focused), choose the AI source (`Enter` opens the
-dropdown) and enter a model name (see
-[Configure AI Backend](#3-configure-ai-backend); if Ollama runs on another
-machine, put its address in **Server URL** on the same tab, or start the
-server with `TALKPIPE_OLLAMA_SERVER_URL`), press **Test Connection**, then
+dropdown) and enter a model name (see [LLM providers](#llm-providers); an
+API key for OpenAI or Anthropic, or the address of an Ollama server on
+another machine, goes in the **API key** / **Server URL** fields on the
+same tab, or in the server's environment), press **Test Connection**, then
 **Save AI Settings**. The choice is stored with your
 account, so the web interface uses it too. If the administrator configured
 a server default, leave the source on "Server default" and the model blank
@@ -473,7 +528,9 @@ When the server starts, it will display:
 
 ### Environment Variables
 
-Configure the application with these environment variables:
+Configure the application with these environment variables. Only the
+provider you actually use needs its variables set — see
+[LLM providers](#llm-providers).
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -482,9 +539,9 @@ Configure the application with these environment variables:
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
 | `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
-| `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL for local models | `http://localhost:11434` |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | OpenAI key, and an alternate OpenAI-compatible endpoint (users can also set both per account in AI Settings → Connection) | unset |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` | Anthropic key, and an alternate Anthropic-compatible endpoint (same per-account override) | unset |
+| `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL, local or remote (same per-account override, as Server URL) | `http://localhost:11434` |
 | `TALKPIPE_DEFAULT_MODEL_SOURCE` | Server-wide default AI source, used when a request leaves the source on "Server default" (`openai`, `anthropic`, `ollama`) | unset (users must choose one) |
 | `TALKPIPE_DEFAULT_MODEL_NAME` | Server-wide default model name, used when a request leaves Model blank | unset |
 | `ALLOW_CUSTOM_ENV_VARS` | Allow users to configure environment variables through the UI (`false` to disable) | `true` |
@@ -495,13 +552,14 @@ Configure the application with these environment variables:
 **Security Options:**
 - `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`): Prevents users from configuring environment variables through the browser interface
   - Use this for shared deployments or when you want centralized credential management
-  - Environment variables must be set at the server level (via shell environment) — see the server default above for choosing the model centrally as well
+  - Environment variables must be set at the server level (via shell environment) — see [Server default](#server-default-administrators) for choosing the model centrally as well
   - The Connection (Server URL, API Key) and Environment Variables fields are hidden in both the web and terminal interfaces; the startup banner notes that the switch is on
 
 
 **Configure document metadata**:
-   - AI Source: `openai`, `anthropic`, or `ollama`
-   - Model: e.g., `gpt-4`, `claude-3-5-sonnet-20241022`, or `llama3.1:8b`
+   - AI Source: `openai`, `anthropic`, or `ollama` (see
+     [LLM providers](#llm-providers))
+   - Model: e.g., `gpt-4o`, `claude-sonnet-4-5`, or `llama3.1:8b`
    - Writing style: formal, casual, technical, etc.
    - Target audience: general public, experts, students, etc.
    - Tone: neutral, persuasive, informative, etc.
@@ -588,11 +646,8 @@ another mode's prompt — then add its button to the web UI: a `.mode-btn`
 element in `src/writing_assistant/app/templates/index.html` whose
 `data-mode` is the new name (`script.js` sends that attribute as the mode, so
 it needs no change), and a tuple in `GENERATION_MODES` in
-`src/writing_assistant/tui/app.py` for the TUI. Any backend with
-an OpenAI-, Anthropic-, or Ollama-compatible endpoint works; point the
-provider API key / base URL settings (or `TALKPIPE_OLLAMA_SERVER_URL` for
-Ollama) at your endpoint and select the source/model in Settings → AI
-Settings.
+`src/writing_assistant/tui/app.py` for the TUI. Changing the model
+provider needs no code change: see [LLM providers](#llm-providers).
 
 
 ## Troubleshooting

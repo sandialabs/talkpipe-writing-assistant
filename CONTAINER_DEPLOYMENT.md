@@ -118,7 +118,11 @@ container with **Ctrl+C** in that terminal.
 ## Connecting the Container to an LLM
 
 The application generates text through TalkPipe, which works with LLM
-endpoints including **OpenAI**, **Anthropic**, and **Ollama**. Nothing in the image restricts
+endpoints including **OpenAI**, **Anthropic**, and **Ollama**. You need only
+one of them — the image does not bundle or require an Ollama server, and a
+cloud API needs nothing but outbound access and a key. The README's
+[LLM providers](README.md#llm-providers) section covers how a source is
+chosen and where keys and addresses go. Nothing in the image restricts
 outbound network access — if a connection fails, it is almost always one of
 the two issues below.
 
@@ -278,7 +282,7 @@ The compose file loads `.env` automatically if it exists (it is optional).
 - `ANTHROPIC_API_KEY`: Anthropic API key for Claude models
 - `ANTHROPIC_BASE_URL`: Alternate Anthropic-compatible endpoint (optional)
 - `TALKPIPE_OLLAMA_SERVER_URL`: Ollama server URL (default: `http://localhost:11434`)
-- `TALKPIPE_DEFAULT_MODEL_SOURCE` / `TALKPIPE_DEFAULT_MODEL_NAME`: server-wide default AI source and model, used for accounts that leave AI Source on "Server default" and Model blank (see the README's Configure AI Backend section)
+- `TALKPIPE_DEFAULT_MODEL_SOURCE` / `TALKPIPE_DEFAULT_MODEL_NAME`: server-wide default AI source and model, used for accounts that leave AI Source on "Server default" and Model blank (see the README's [Server default](README.md#server-default-administrators) section)
 - `ALLOW_CUSTOM_ENV_VARS`: Set to `false` to prevent users from configuring connection settings (Server URL, API Key, environment variables) through the UI
 
 **Reaching services on the host:** inside the container, `localhost` is the
@@ -516,8 +520,10 @@ podman system df -v
 
 Use **Settings → AI Settings → Test Connection** first — it reports the
 actual failure (missing key, unreachable server, model not pulled) instead
-of a generic error. The most common cause when running in a container is an
-Ollama URL pointing at `localhost`, which is the container itself; see
+of a generic error. The most common causes when running in a container are
+an OpenAI/Anthropic key that never reached the container (pass it with `-e`
+or `.env`, or enter it in AI Settings) and an Ollama URL pointing at
+`localhost`, which is the container itself; see
 [Connecting the Container to an LLM](#connecting-the-container-to-an-llm).
 
 ### Wrong or Missing Service Name

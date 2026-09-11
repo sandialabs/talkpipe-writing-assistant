@@ -87,16 +87,17 @@ Run this from a **wheel installed into a new virtual environment** (`python
 -m build`, then `pip install dist/*.whl` in a fresh venv), not the editable
 checkout — packaging mistakes (missing templates, static files, entry
 points, migrations) only show up that way. Use a scratch database
-(`--db-path` or `WRITING_ASSISTANT_DB_PATH`) and a working Ollama
-(`TALKPIPE_OLLAMA_SERVER_URL`) so suggestions can be judged against a real
-model. Exercise both interfaces — they share the server but have separate
-code paths.
+(`--db-path` or `WRITING_ASSISTANT_DB_PATH`) and a real model from any
+supported source so suggestions can be judged — Ollama
+(`TALKPIPE_OLLAMA_SERVER_URL`) is the keyless choice; OpenAI or Anthropic
+work as well. Exercise both interfaces — they share the server but have
+separate code paths.
 
 Web (`writing-assistant`, http://localhost:8001):
 
 - Register a new account, log out, log in again; a second account cannot
   see the first one's documents.
-- Settings → AI Settings: pick the Ollama source and a pulled model, **Test
+- Settings → AI Settings: pick that source and a model it offers, **Test
   Connection** succeeds, a wrong model name is reported; **Save** and
   confirm the choice survives a reload. Set writing style / audience
   metadata.
