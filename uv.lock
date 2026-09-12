@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11.4"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -3244,7 +3244,7 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -3329,7 +3329,7 @@ resolution-markers = [
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a7/25/c2700dfaf6442b4effaa91af24ebce5dc9d31bb4a69706313aae70d72cd0/scipy-1.18.0.tar.gz", hash = "sha256:67b2ad2ad54c72ca6d04975a9b2df8c3638c34ddd5b28738e94fc2b57929d378", size = 30774447, upload-time = "2026-06-19T15:01:43.456Z" }
 wheels = [
@@ -3498,7 +3498,7 @@ wheels = [
 
 [[package]]
 name = "talkpipe"
-version = "1.0.0b5"
+version = "1.0.2b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
@@ -3524,9 +3524,9 @@ dependencies = [
     { name = "uvicorn" },
     { name = "whoosh" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3d/ad/e8a5052468366404179bf0452dbad9dfe5cd4b695fe4504205db76096823/talkpipe-1.0.0b5.tar.gz", hash = "sha256:5a9d29f6ce771e43e6ef7d860810f02459bee6dfa612c682049294ea3195d4f1", size = 29237405, upload-time = "2026-08-21T22:00:33.573Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/48/05ee8e902b49a5d828b0d9a3a267277cbffabae14a9ba38a28de11e7305e/talkpipe-1.0.2b1.tar.gz", hash = "sha256:42238b8414a03f281215bb336f60e2bb71f82789d9302c5485e1483a579ed063", size = 29318637, upload-time = "2026-09-12T13:15:21.727Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/67/cfe33270b5c04a606f38e131c0b45baad71f93166840dd2c416fe8d1ad5f/talkpipe-1.0.0b5-py3-none-any.whl", hash = "sha256:fa43b3b9a42705a4d6263131d5935d934a4d24d417de92b808a4d936e1540bef", size = 533871, upload-time = "2026-08-21T22:00:31.015Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/43/ececc5da891dbe39a33cbb7fe87f09de66d7367d63c83cb44984629e4213/talkpipe-1.0.2b1-py3-none-any.whl", hash = "sha256:556287ef0ac8fc7f19eebae22bf980838435f9662162b3a3f61f8b8d30994856", size = 540846, upload-time = "2026-09-12T13:15:19.987Z" },
 ]
 
 [package.optional-dependencies]
