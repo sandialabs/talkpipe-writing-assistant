@@ -1,5 +1,6 @@
 """Authentication setup with FastAPI Users."""
 
+import logging
 import os
 import uuid
 from collections.abc import AsyncGenerator
@@ -21,8 +22,18 @@ from fastapi_users.authentication import (
 from .database import UserDatabase, get_user_db
 from .models import User
 
-# Secret key for JWT - should be set via environment variable in production
-SECRET = os.getenv("WRITING_ASSISTANT_SECRET", "CHANGE_THIS_IN_PRODUCTION_PLEASE")
+logger = logging.getLogger(__name__)
+
+DEFAULT_SECRET = "CHANGE_THIS_IN_PRODUCTION_PLEASE"  # nosec B105 - placeholder, not a credential
+"""Fallback JWT secret.
+
+It is a fixed placeholder, not a generated value: every install that leaves
+``WRITING_ASSISTANT_SECRET`` unset signs tokens with this same string, so
+anyone can forge one. ``server.main`` warns about it when the server is
+reachable from other machines.
+"""
+
+SECRET = os.getenv("WRITING_ASSISTANT_SECRET", DEFAULT_SECRET)
 
 
 # The type-var ignores below share one cause: mypy compares User's class-level
@@ -51,14 +62,41 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):  # type: ignor
     async def on_after_forgot_password(
         self, user: User, token: str, request: Request | None = None
     ) -> None:
-        """Called after a user requests password reset."""
-        print(f"User {user.id} has requested password reset. Token: {token}")
+        """Called after a user requests password reset.
+
+        There is no mail delivery, so the token can only go to the server's
+        log — which makes that log as good as the account's password. It is
+        logged as a warning (rather than printed) so a deployment can route or
+        silence it, and the documented way to reset a password is
+        ``writing-assistant-admin reset-password <email>``.
+        """
+        logger.warning(
+            "Password reset requested for %s (%s). No email is configured, so "
+            "the reset token is only available here — treat this log as "
+            "sensitive, or reset the password with "
+            "`writing-assistant-admin reset-password %s` instead. Token: %s",
+            user.email,
+            user.id,
+            user.email,
+            token,
+        )
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Request | None = None
     ) -> None:
-        """Called after a user requests email verification."""
-        print(f"Verification requested for user {user.id}. Token: {token}")
+        """Called after a user requests email verification.
+
+        Same caveat as password reset: with no mail delivery the token ends up
+        in the server's log.
+        """
+        logger.warning(
+            "Email verification requested for %s (%s). No email is configured, "
+            "so the token is only available here — treat this log as "
+            "sensitive. Token: %s",
+            user.email,
+            user.id,
+            token,
+        )
 
 
 async def get_user_manager(

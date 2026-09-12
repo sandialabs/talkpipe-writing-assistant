@@ -435,6 +435,11 @@ The database volume contains all user data. Ensure:
 - Proper host filesystem permissions
 - Encrypted filesystem (if required by compliance)
 
+It can also contain credentials: an API key a user types into AI Settings →
+Connection is stored unencrypted with that account, so backups of the volume
+carry it. Start the container with `ALLOW_CUSTOM_ENV_VARS=false` to keep keys
+in the server's environment only.
+
 ### 3. Use HTTPS in Production
 
 Deploy behind a reverse proxy (nginx, traefik) with SSL:

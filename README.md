@@ -27,6 +27,7 @@ Built on the [TalkPipe framework](https://github.com/sandialabs/talkpipe), this 
   - **Proofread**: Fix grammar and spelling errors only
   - **Ideas**: Get specific suggestions for enhancement
 - **Real-time Editing**: Dynamic web interface for seamless writing and editing
+- **Light and dark themes**: the round toggle in the web header switches between them
 - **Terminal Interface**: `writing-assistant-tui` offers the same features in any terminal — an SSH session, a tmux window, a machine with no browser
 - **Document Management**: Save, load, and manage multiple documents, with snapshots you can revert to
 - **User Preferences**: Per-user AI settings, writing style, and environment variables
@@ -95,6 +96,10 @@ git clone https://github.com/sandialabs/talkpipe-writing-assistant.git
 cd talkpipe-writing-assistant
 pip install -e .
 ```
+
+Install from a **clone**, not from a downloaded ZIP or tarball: the version
+comes from the repository's git metadata, so without a `.git` directory the
+install stops in `setuptools_scm` with "unable to detect version".
 
 ### Development Installation
 
@@ -179,8 +184,10 @@ and display:
 ```
 
 If another program already holds port 8001, the server uses the next free
-port and says so; running `writing-assistant` while it is already running
-just opens the browser at the running instance.
+port and says so — the terminal-interface line then carries that address
+(`writing-assistant-tui --server http://localhost:8002`), as it does for any
+`--port` or `--host` you pass. Running `writing-assistant` while it is
+already running just opens the browser at the running instance.
 
 ### 2. Create Your Account
 
@@ -213,9 +220,13 @@ including OpenAI-compatible servers and server-wide defaults.
 
 **Option C: Ollama (Local, Free)**
 1. Install Ollama from [ollama.com](https://ollama.com)
-2. Pull a model: `ollama pull [model name]`
+2. Pull a model — for example `ollama pull llama3.1:8b`
 3. Start Ollama: `ollama serve`
-4. In AI Settings, set Source to `ollama` and Model to [model name]. The name must match one Ollama has pulled: `ollama list` shows them on the Ollama machine, or `curl http://your-ollama-host:11434/api/tags` from anywhere; Test Connection reports a name Ollama does not have.
+4. In AI Settings, set Source to `ollama` and Model to the name you pulled
+   (`llama3.1:8b` here). The name must match one Ollama has pulled: `ollama
+   list` shows them on the Ollama machine, or `curl
+   http://your-ollama-host:11434/api/tags` from anywhere; Test Connection
+   reports a name Ollama does not have.
 
 If Ollama runs on a different machine (or a non-default port), enter its
 address in **Connection → Server URL**, or set `TALKPIPE_OLLAMA_SERVER_URL`
@@ -303,6 +314,12 @@ nothing extra is needed on the server beyond access to the model service.
 there). There is no built-in source or model: until one is chosen, in AI
 Settings or as a server default, generation says none is configured.
 
+TalkPipe also registers a scripted `eliza` source, which is why an error
+message about an unknown source lists four names. It talks to no model
+service and answers from a fixed script without reading the document, so it
+is only good for checking that the plumbing works; AI Settings deliberately
+does not offer it.
+
 **Choosing a source.** Each account chooses its own source and model in AI
 Settings and keeps them with **Save AI Settings** — stored with the account
 on the server, so the web and terminal interfaces share them. Switching
@@ -316,7 +333,13 @@ provider.
   is the endpoint for whichever source is selected. They are saved with
   the account, apply only to that account's requests, and take precedence
   over the server's environment. They are hidden when the server runs with
-  `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`).
+  `--disable-custom-env-vars` (or `ALLOW_CUSTOM_ENV_VARS=false`), and a
+  request that sends them anyway is ignored.
+  A key entered here is stored **unencrypted** with the account, in the
+  server's database — so whoever can read the database file (or a copy of it,
+  including a backup) can read the key. On a shared server, keep keys in the
+  server's environment instead and start it with
+  `--disable-custom-env-vars`.
 - **Server-wide** — the environment variables in the table, set where the
   server starts: `export` before `writing-assistant`, `Environment=` in a
   systemd unit, `-e` or `.env` for a container (see
@@ -391,7 +414,9 @@ and login are the same whichever way you run it, and a browser on the same
 machine can open http://localhost:8001 while the TUI is up. It listens on
 port 8001 (`--port <n>` or `WRITING_ASSISTANT_PORT` to change it) and refuses
 to start if that port is taken — if the thing on it is a writing-assistant
-server, just drop the flag. Its log goes to `tui_server.log` next to the
+server, just drop the flag. The remembered login is tied to the server's
+address, so a run on a non-default port asks for the password once (the same
+account and the same documents either way). Its log goes to `tui_server.log` next to the
 session file, since the terminal belongs to the TUI. The standalone server
 only lives as long as the TUI does; for one that other machines or other
 terminals share, start it separately as follows.
@@ -493,7 +518,9 @@ writing-assistant
 # Do not open a browser (containers, servers, remote sessions)
 writing-assistant --no-browser
 
-# Custom port (an explicit port is never substituted: if it is taken, this fails)
+# Custom port (an explicit port is never substituted: if another program holds
+# it, this fails; if the assistant itself is already there, the running
+# instance is reported instead)
 writing-assistant --port 8080
 
 # Custom host and port (0.0.0.0 accepts connections from other machines;
@@ -522,7 +549,16 @@ When the server starts, it will display:
 - The URL to access the application
 - Registration and login URLs
 - API documentation URL
+- The command that starts the terminal interface against *this* server
 - Database location
+
+**Serving other machines.** The server speaks plain HTTP: with
+`--host 0.0.0.0`, passwords, login tokens and any API key entered in AI
+Settings cross the network unencrypted. Put a TLS-terminating reverse proxy in
+front of it (see
+[Use HTTPS in Production](CONTAINER_DEPLOYMENT.md#3-use-https-in-production))
+and set `WRITING_ASSISTANT_SECRET` — the server warns you when it is
+reachable from other machines and that variable is still unset.
 
 **Authentication:** The application uses JWT-based multi-user authentication with FastAPI Users. Each user has their own account with secure password storage. New users can register through the web interface at `/register`, and existing users log in at `/login`. To change your email address or password once logged in, open **Settings → Account** in the web interface, or **File → Account** (F2) in the terminal interface; both ask for the current password first, and a changed email is what you log in with next time.
 
@@ -538,7 +574,7 @@ provider you actually use needs its variables set — see
 | `WRITING_ASSISTANT_PORT` | Server port number (setting it disables the free-port fallback, like `--port`) | `8001` |
 | `WRITING_ASSISTANT_RELOAD` | Enable auto-reload (development) | `false` |
 | `WRITING_ASSISTANT_DB_PATH` | Database file location | `~/.writing_assistant/writing_assistant.db` |
-| `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication | Auto-generated (change in production) |
+| `WRITING_ASSISTANT_SECRET` | JWT secret key for authentication. **Not generated per install** — unset, it falls back to a fixed placeholder that every install shares, so anyone can forge a login token. Set it to a random value (`python -c "import secrets; print(secrets.token_urlsafe(32))"`) before the server is reachable from another machine; changing it invalidates existing logins | a fixed placeholder (`CHANGE_THIS_IN_PRODUCTION_PLEASE`) |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | OpenAI key, and an alternate OpenAI-compatible endpoint (users can also set both per account in AI Settings → Connection) | unset |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` | Anthropic key, and an alternate Anthropic-compatible endpoint (same per-account override) | unset |
 | `TALKPIPE_OLLAMA_SERVER_URL` | Ollama server URL, local or remote (same per-account override, as Server URL) | `http://localhost:11434` |
@@ -655,6 +691,8 @@ provider needs no code change: see [LLM providers](#llm-providers).
 ### Application Issues
 
 **"Port already in use"**
+- Only an explicit `--port` (or `WRITING_ASSISTANT_PORT`) fails this way;
+  without one the server moves to the next free port and announces it
 - Change the port: `writing-assistant --port 8080`
 - Or kill the process using the port
 
@@ -668,11 +706,48 @@ provider needs no code change: see [LLM providers](#llm-providers).
 - Double-check your email and password
 - Register a new account if you haven't already
 - The database may have been reset - check the database location
+- Logins from before a change to `WRITING_ASSISTANT_SECRET` stop working; log in again
+
+**Forgotten password**
+- Whoever runs the server resets it: `writing-assistant-admin reset-password you@example.com`
+  (see the [Admin Guide](ADMIN_GUIDE.md))
+- There is no self-service reset: the application sends no email, and the
+  `/auth/forgot-password` endpoint only writes the reset token to the server's
+  own log, so that log deserves the same care as a password
 
 **"Cannot connect to database"**
 - Verify the database file exists and is not corrupted
 - Check file permissions on the database file
 - Try initializing a new database: `writing-assistant --db-path /tmp/new.db --init-db`
+
+**The terminal interface cannot reach the server**
+- The server prints the exact command to use, including the address, when it
+  is not on the default port: `writing-assistant-tui --server http://localhost:8002`
+- Or set it once: `export WRITING_ASSISTANT_TUI_SERVER=http://localhost:8002`
+- No server at all? `writing-assistant-tui --standalone` starts its own
+
+### Generation Issues
+
+**"No AI source or model is configured"**
+- Nothing is chosen yet: open **Settings → AI Settings** (`F3` in the terminal
+  interface), pick an **AI Source** and type a **Model** name, then press
+  **Test Connection** and **Save AI Settings** — see [LLM providers](#llm-providers)
+- Or have the administrator set a server-wide default, and leave AI Source on
+  "Server default" with Model blank: see [Server default](#server-default-administrators)
+
+**Generation fails, or a suggestion never arrives**
+- Press **Test Connection** in AI Settings. It makes a real request and names
+  the cause: a missing or rejected API key, an unreachable server (with the
+  address it tried), or a model the service does not have
+- Ollama on another machine, or a non-default port: put its address in
+  **Connection → Server URL**, or start the server with
+  `TALKPIPE_OLLAMA_SERVER_URL` set. A server-wide variable is read at startup,
+  so the server has to be restarted; the Connection fields take effect immediately
+- "does not have the model": pull it on the Ollama host (`ollama pull <model>`)
+  and check the spelling — the Model name must match `ollama list` exactly
+- Cloud keys: a key typed in **Connection → API Key** applies to your account
+  only; `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be exported *before* the
+  server starts, in the shell that starts it
 
 
 ## Releasing

@@ -66,7 +66,7 @@ CRITICAL: Respond ONLY with the requested output. Do not include explanations, c
     if generation_mode == "improve":
         return f"""
         {base_context}
-        Enhance the provided current while preserving its essential structure and meaning.
+        Enhance the current paragraph while preserving its essential structure and meaning.
 
         Focus on:
         - Strengthening word choices (replace weak or vague terms)

@@ -235,6 +235,10 @@ Follow the prompts to enter email and password.
 writing-assistant-admin reset-password user@example.com
 ```
 
+This is the supported way. Users have no self-service reset: the application
+sends no email, so the `/auth/forgot-password` endpoint can only write its
+reset token to the server's log (see Security Best Practices below).
+
 ### Deactivating a User (Soft Delete)
 
 ```bash
@@ -300,9 +304,22 @@ Shows:
 1. **Protect Superuser Credentials**: Superusers have full access to all data
 2. **Use Strong Passwords**: Minimum 8 characters (enforced)
 3. **Deactivate Instead of Delete**: When possible, deactivate users rather than deleting them
-4. **Regular Backups**: Copy `~/.writing_assistant/writing_assistant.db` regularly
-5. **Set JWT Secret**: In production, set `WRITING_ASSISTANT_SECRET` environment variable to a strong random value
+4. **Regular Backups**: Copy `~/.writing_assistant/writing_assistant.db` regularly —
+   and treat the copy as a secret: an API key a user typed into AI Settings →
+   Connection is stored unencrypted in that user's `preferences`, so a backup
+   carries everyone's cloud credentials. Running with
+   `--disable-custom-env-vars` keeps keys out of the database altogether
+5. **Set JWT Secret**: `WRITING_ASSISTANT_SECRET` is **not** generated per
+   install — left unset it falls back to a fixed placeholder that every install
+   shares, so anyone can forge a login token. Set it to a strong random value
+   (`python -c "import secrets; print(secrets.token_urlsafe(32))"`) before the
+   server is reachable from another machine; the server prints a warning when
+   it is and the variable is still unset. Changing it invalidates existing logins
 6. **Database Permissions**: Ensure only authorized users can access the database file
+7. **Treat the Server Log as Sensitive**: there is no mail delivery, so
+   `POST /auth/forgot-password` (and the verification route) writes its token
+   into the server's log, where it is as good as the account's password. Reset
+   passwords with `writing-assistant-admin reset-password` instead
 
 ## Troubleshooting
 

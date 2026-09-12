@@ -49,7 +49,7 @@ def test_get_system_prompt_rewrite():
 def test_get_system_prompt_improve():
     """Test get_system_prompt for improve mode."""
     prompt = get_system_prompt("improve")
-    assert "Enhance the provided" in prompt
+    assert "Enhance the current paragraph" in prompt
     assert "Strengthening word choices" in prompt
     assert "Output only the improved paragraph: a single paragraph" in prompt
     assert "no heading, title, or commentary before or after it" in prompt

@@ -36,10 +36,33 @@ release are grouped by kind rather than listed in the order they landed.
 
 ### Changed
 
+- **The startup banner's terminal-interface line carries the server's
+  address** whenever the server is not where `writing-assistant-tui` looks
+  by default — after the free-port fallback, with an explicit `--port`, or
+  with a non-loopback `--host`. It now prints, for example,
+  `writing-assistant-tui --server http://localhost:8002`. The bare command
+  it printed before sent the reader at port 8001, which after a fallback is
+  whatever program took that port.
+- **The server warns when the JWT secret is still the built-in
+  placeholder** and other machines can reach it (a wildcard or non-loopback
+  `--host`). `WRITING_ASSISTANT_SECRET` is not generated per install: unset,
+  every install signs login tokens with the same well-known string.
+- **A password-reset request is logged, not printed.** There is no mail
+  delivery, so the token can only reach the server's log;
+  `on_after_forgot_password` (and the verification equivalent) now log it as
+  a warning through the application's logger — so a deployment can route or
+  silence it — and the message says that the log is as sensitive as the
+  password and that `writing-assistant-admin reset-password` is the
+  supported way to reset one.
 - The container image starts the server with `--no-browser`.
 - `writing-assistant-tui --standalone`'s help text names the provider
   environment variables it inherits generally (`OPENAI_API_KEY` as well as
   `TALKPIPE_OLLAMA_SERVER_URL`) instead of the Ollama one alone.
+
+### Fixed
+
+- The Improve prompt read "Enhance the provided current while preserving
+  its essential structure" — it now says "the current paragraph".
 
 ### Documentation
 
@@ -62,6 +85,38 @@ release are grouped by kind rather than listed in the order they landed.
 - The OpenAI-compatible-server note records that the endpoint must
   implement OpenAI's Responses API, which is what the `openai` source
   calls.
+- **`WRITING_ASSISTANT_SECRET` is described accurately.** The
+  environment-variable table said its default was "auto-generated", which
+  reads as "safe unless you change it"; it is a fixed placeholder shared by
+  every install, and the table, the admin guide's security list and
+  `.env.example` now say so, with the command to generate a real one.
+- **Where per-account API keys are kept.** A key typed into AI Settings →
+  Connection is stored unencrypted with the account in the database, so a
+  copy of the database — a backup included — carries it. The README's
+  "Supplying keys and addresses" bullet, the admin guide's backup advice,
+  the container guide's volume section and `.env.example` say so, and point
+  at `--disable-custom-env-vars` / `ALLOW_CUSTOM_ENV_VARS=false` for
+  deployments that want keys only in the server's environment.
+- **A "Generation issues" section in the README's Troubleshooting**, which
+  previously covered only ports, the database and login: what "No AI source
+  or model is configured" means, what Test Connection reports, reaching an
+  Ollama server elsewhere, a model that is not pulled, and where a cloud key
+  has to be set. Alongside it, an entry for a forgotten password (there is
+  no self-service reset — an administrator runs
+  `writing-assistant-admin reset-password`) and one for a terminal interface
+  that cannot find the server.
+- The README notes that `--host 0.0.0.0` serves plain HTTP — passwords,
+  tokens and API keys cross the network unencrypted — and links to the
+  container guide's HTTPS section; that the `eliza` source TalkPipe
+  registers (and error messages list) answers from a script without a model
+  service and is deliberately not offered in AI Settings; that an install
+  from source needs a git clone, because the version comes from git
+  metadata; that `--standalone` on a non-default port asks for the password
+  once, since the remembered login is tied to the server's address; that an
+  explicit taken port fails only when another program holds it; and that
+  the web header's toggle switches light and dark themes. The Quick Start's
+  Ollama option uses a real model name instead of a `[model name]`
+  placeholder.
 
 ## 1.1.0 (2026-09-07)
 

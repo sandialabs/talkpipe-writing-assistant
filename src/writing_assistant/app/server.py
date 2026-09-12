@@ -21,6 +21,7 @@ from pathlib import Path
 import uvicorn
 
 from .. import DIST_NAME
+from . import auth
 from .database import create_db_and_tables
 from .main import app
 
@@ -296,6 +297,36 @@ def _binds_all_interfaces(host: str) -> bool:
         return False
 
 
+def _reachable_beyond_this_machine(host: str) -> bool:
+    """True when other machines can reach a server bound to ``host``.
+
+    Loopback (``localhost``, 127.0.0.0/8, ``::1``) is private to this machine;
+    a wildcard bind or any other address is not.
+    """
+    if _binds_all_interfaces(host):
+        return True
+    if host in ("localhost", "localhost.localdomain"):
+        return False
+    try:
+        return not ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return True  # a name we cannot classify: assume it is reachable
+
+
+def _tui_command(base_url: str, port: int, host: str) -> str:
+    """The command to start the terminal interface against this server.
+
+    ``writing-assistant-tui`` looks for a server on ``localhost:8001``, so the
+    bare command only works when that is where this server ended up. Whenever
+    the port fell back, was given explicitly, or the bind host is not loopback,
+    the banner has to name the address — otherwise the one instruction on
+    screen sends the reader at the wrong port.
+    """
+    if port == DEFAULT_PORT and not _reachable_beyond_this_machine(host):
+        return "writing-assistant-tui"
+    return f"writing-assistant-tui --server {base_url}"
+
+
 def main() -> None:
     """Main entry point for the writing assistant server."""
     parser = argparse.ArgumentParser(
@@ -404,11 +435,19 @@ def main() -> None:
     print(f"🔐 Login at: {base}/login", flush=True)
     print(f"📚 API documentation: {base}/docs", flush=True)
     print(
-        "💻 Terminal interface (no browser needed): run `writing-assistant-tui` "
-        "in another terminal",
+        "💻 Terminal interface (no browser needed): run "
+        f"`{_tui_command(base, port, args.host)}` in another terminal",
         flush=True,
     )
     print(f"💾 Database: {db_path}", flush=True)
+    if _reachable_beyond_this_machine(args.host) and auth.SECRET == auth.DEFAULT_SECRET:
+        print(
+            "⚠️  WRITING_ASSISTANT_SECRET is unset, so logins are signed with the "
+            "built-in placeholder secret that every install shares. Set it to a "
+            'random value (python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))") before letting other machines in.',
+            flush=True,
+        )
     if not args.no_browser:
         print("🌐 Opening in your web browser...", flush=True)
     from . import main as main_module

@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from writing_assistant.app import server
+from writing_assistant.app import auth, server
 
 _REAL_PORT_IN_USE = server.port_in_use
 _REAL_LAUNCH_BROWSER = server._launch_browser_when_ready
@@ -629,3 +629,108 @@ def test_main_reports_when_no_nearby_port_is_free(
     assert excinfo.value.code == 1
     assert "8001-8021 are all in use" in capsys.readouterr().err
     mock_uvicorn_run.assert_not_called()
+
+
+# --- banner: the terminal-interface line and the JWT-secret warning ------------
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py"])
+def test_banner_tui_command_is_bare_on_the_default_port(mock_uvicorn_run, capsys):
+    """`writing-assistant-tui` already looks for localhost:8001, so the plain
+    command is right there and the banner should not add noise."""
+    server.main()
+
+    line = next(
+        ln for ln in capsys.readouterr().out.splitlines() if "Terminal interface" in ln
+    )
+    assert "`writing-assistant-tui`" in line
+    assert "--server" not in line
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py"])
+def test_banner_tui_command_names_the_port_after_a_fallback(
+    mock_uvicorn_run, monkeypatch, capsys
+):
+    """A newcomer whose port fell back follows the banner; the bare command
+    would point the terminal interface at whatever holds 8001."""
+    monkeypatch.setattr(server, "port_in_use", lambda host, port: port == 8001)
+
+    server.main()
+
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if "Terminal interface" in ln)
+    assert "writing-assistant-tui --server http://localhost:8002" in line
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--port", "8080"])
+def test_banner_tui_command_names_an_explicit_port(mock_uvicorn_run, capsys):
+    server.main()
+
+    line = next(
+        ln for ln in capsys.readouterr().out.splitlines() if "Terminal interface" in ln
+    )
+    assert "writing-assistant-tui --server http://localhost:8080" in line
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--host", "0.0.0.0"])
+def test_banner_tui_command_names_the_host_for_a_wildcard_bind(
+    mock_uvicorn_run, capsys
+):
+    server.main()
+
+    line = next(
+        ln for ln in capsys.readouterr().out.splitlines() if "Terminal interface" in ln
+    )
+    assert f"--server http://{socket.gethostname()}:8001" in line
+
+
+def test_reachable_beyond_this_machine_classifies_bind_hosts():
+    assert server._reachable_beyond_this_machine("0.0.0.0")  # nosec B104
+    assert server._reachable_beyond_this_machine("")
+    assert server._reachable_beyond_this_machine("192.168.1.10")
+    assert server._reachable_beyond_this_machine("writing.example.com")
+    assert not server._reachable_beyond_this_machine("localhost")
+    assert not server._reachable_beyond_this_machine("127.0.0.1")
+    assert not server._reachable_beyond_this_machine("::1")
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py"])
+def test_no_secret_warning_on_localhost(mock_uvicorn_run, monkeypatch, capsys):
+    """The placeholder secret is harmless while only this machine can connect,
+    and a warning nobody needs is a warning nobody reads."""
+    monkeypatch.setattr(auth, "SECRET", auth.DEFAULT_SECRET)
+
+    server.main()
+
+    assert "WRITING_ASSISTANT_SECRET" not in capsys.readouterr().out
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--host", "0.0.0.0"])
+def test_default_secret_warns_when_other_machines_can_connect(
+    mock_uvicorn_run, monkeypatch, capsys
+):
+    monkeypatch.setattr(auth, "SECRET", auth.DEFAULT_SECRET)
+
+    server.main()
+
+    out = capsys.readouterr().out
+    assert "WRITING_ASSISTANT_SECRET is unset" in out
+    assert "every install shares" in out
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--host", "0.0.0.0"])
+def test_no_secret_warning_once_the_secret_is_set(
+    mock_uvicorn_run, monkeypatch, capsys
+):
+    monkeypatch.setattr(auth, "SECRET", "a-real-random-secret")
+
+    server.main()
+
+    assert "WRITING_ASSISTANT_SECRET" not in capsys.readouterr().out

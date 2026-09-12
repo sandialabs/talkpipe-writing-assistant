@@ -600,3 +600,28 @@ def test_ai_settings_say_where_the_key_is_kept(client):
     html = client.get("/").text
     assert "browser's local storage" not in html
     assert html.count("Saved with your account on the server") >= 1
+
+
+def test_forgot_password_logs_the_token_instead_of_printing_it(
+    authenticated_client, caplog
+):
+    """There is no mail delivery, so the reset token can only reach the server's
+    log. Logging it (rather than printing it) lets a deployment route or
+    silence it, and the message has to say that the log is now sensitive."""
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="writing_assistant.app.auth"):
+        response = authenticated_client.post(
+            "/auth/forgot-password",
+            json={"email": "test@example.com"},
+        )
+
+    assert response.status_code == 202
+    record = next(
+        r for r in caplog.records if "Password reset requested" in r.getMessage()
+    )
+    message = record.getMessage()
+    assert record.levelno == logging.WARNING
+    assert "test@example.com" in message
+    assert "No email is configured" in message
+    assert "writing-assistant-admin reset-password" in message
