@@ -6,6 +6,8 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+## 1.1.1 (2026-09-25)
+
 ### Added
 
 - **`writing-assistant-tui --standalone`** starts the server inside the
