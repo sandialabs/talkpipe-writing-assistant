@@ -125,7 +125,15 @@ jobs:
         # see the note on the test job's install step
         python -m venv --upgrade-deps .venv
         echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-        .venv/bin/pip install -e .[dev,security]
+        # The `test` extra, not `dev`: `dev` also installs the scanners.
+        .venv/bin/pip install -e ".[test]"
+        # The scanners get a venv of their own, outside the workspace, so the
+        # scan covers what the project installs and not the scanners' own
+        # dependencies (safety brings in nltk, which nothing here depends on).
+        python -m venv "$RUNNER_TEMP/scan-tools"
+        echo "$RUNNER_TEMP/scan-tools/bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/scan-tools/bin/python" -m pip install --upgrade pip
+        "$RUNNER_TEMP/scan-tools/bin/pip" install bandit safety
 
     - name: Run Bandit security scan
       run: |
@@ -148,10 +156,12 @@ jobs:
           # `check` is the legacy command and the only one that runs without an
           # account. It rejects .safety-policy.yml because that file is v3.0 and
           # only `scan` parses v3, so run it from a directory holding no policy
-          # file; it scans the installed environment either way.
+          # file. Left to itself it scans the venv it runs from, so hand it
+          # the project venv's packages instead.
           report="$PWD/safety-report.json"
           workdir="$(mktemp -d)"
-          (cd "$workdir" && safety check --save-json "$report")
+          .venv/bin/python -m pip freeze --exclude-editable > "$workdir/installed.txt"
+          (cd "$workdir" && safety check --stdin --save-json "$report" < installed.txt)
         fi
 
     - name: Upload security scan results
