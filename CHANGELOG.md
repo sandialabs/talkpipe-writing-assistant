@@ -8,6 +8,9 @@ release are grouped by kind rather than listed in the order they landed.
 
 ### Changed
 
+- CI: Dependabot version-update PRs target `main` instead of the default
+  branch `stable`, which only ever points at a release. Security alerts
+  still come from `stable`, so they reflect what is released.
 - CI: the security scanners run from a virtual environment of their own, and
   the dependency scan is given the packages installed in the project's
   environment (the project with its `test` extra). The scan used to cover the
