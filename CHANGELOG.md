@@ -6,6 +6,16 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+### Security
+
+- Require talkpipe 1.1.0 or later, which brings pypdf 6.19.0 or later
+  (crafted-PDF runtime and memory exhaustion advisories).
+- Add security floors for transitive dependencies: PyJWT 2.15.0 (via
+  fastapi-users; token and JWK validation advisories), urllib3 2.8.0 (via
+  requests and fastapi[standard]; proxy TLS and chunked-response
+  advisories), and, in the `dev` extra, virtualenv 21.7.13 (via pre-commit;
+  activation script and seed wheel advisories).
+
 ### Changed
 
 - CI: Dependabot version-update PRs target `main` instead of the default
