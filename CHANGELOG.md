@@ -6,6 +6,8 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+## 1.1.2 (2026-10-13)
+
 ### Security
 
 - Require talkpipe 1.1.0 or later, which brings pypdf 6.19.0 or later
