@@ -2,7 +2,7 @@
 # per clone; `pre-commit run --all-files` reproduces the gate locally.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.3  # keep in step with the ruff pin in pyproject.toml
+    rev: v0.17.0  # keep in step with the ruff pin in pyproject.toml
     hooks:
       - id: ruff-check
         args: [--fix, --show-fixes]
