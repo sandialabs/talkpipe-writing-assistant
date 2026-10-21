@@ -64,7 +64,7 @@ dev = [
     # new rules and mypy adds checks in minor releases, and CI resolves fresh,
     # so an open floor would turn a tool release into a red build. Bump the
     # pins deliberately (and the ruff-pre-commit rev with them).
-    "ruff>=0.16.3,<0.17",
+    "ruff>=0.16.3,<0.18",
     "mypy>=2.3,<3",
     "pre-commit>=4.0",
     "virtualenv>=21.7.13",  # security floor (via pre-commit)
