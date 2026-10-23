@@ -6,6 +6,18 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+### Added
+
+- `writing-assistant --no-login` starts the assistant for a single person on
+  this machine: no accounts and no login page, the browser opens straight on
+  the editor. It uses a database of its own
+  (`~/.writing_assistant/writing_assistant_no_login.db`, or `--db-path`)
+  holding one local user, and refuses to bind to any address other machines
+  could reach, such as `0.0.0.0`. The terminal interface skips its login
+  screen against such a server, and `/health` reports the mode so that a
+  second launch in the other mode starts its own server instead of opening
+  the running one.
+
 ### Build and CI
 
 - The `dev` extra moves ruff to the 0.17 series (`>=0.17.0,<0.18`), with

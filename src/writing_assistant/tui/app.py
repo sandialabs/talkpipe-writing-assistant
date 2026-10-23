@@ -2668,6 +2668,17 @@ class WritingAssistantApp(App[None]):
             self._client = client
             await self.push_screen(EditorScreen(client, self.session))
             return
+        # A server started with --no-login has no accounts: go straight in.
+        client = self.make_client(self.session.server_url)
+        try:
+            no_login = bool((await client.check_auth()).get("no_login"))
+        except ApiError:
+            no_login = False
+        if no_login:
+            self._client = client
+            await self.push_screen(EditorScreen(client, self.session))
+            return
+        await client.aclose()
         await self.push_screen(LoginScreen(self.session))
 
     def start_editor(self, client: Any, session: Session) -> None:

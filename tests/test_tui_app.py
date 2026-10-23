@@ -396,6 +396,19 @@ async def test_stale_token_returns_to_login(tui_app):
         assert "expired" in _login_message(app)
 
 
+async def test_no_login_server_opens_the_editor_directly(tui_app, monkeypatch):
+    """Against `writing-assistant --no-login` there is no account to log in
+    to, so the login screen is skipped, as in the web UI."""
+    from writing_assistant.app import main as main_module
+
+    monkeypatch.setattr(main_module, "NO_LOGIN", False)  # restored afterwards
+    main_module.enable_no_login()  # override is dropped by tui_app's teardown
+    app = tui_app
+    async with app.run_test(size=SIZE) as pilot:
+        await _settle(pilot)
+        assert isinstance(app.screen, EditorScreen)
+
+
 async def test_logout_returns_to_login_and_forgets_token(tui_app):
     app = tui_app
     async with app.run_test(size=SIZE) as pilot:

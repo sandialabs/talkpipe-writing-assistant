@@ -453,12 +453,8 @@ Separate sections with blank lines. When you place your cursor in a section, sug
         };
 
         async function checkAuth() {
-            const token = window.getAuthToken();
-            if (!token) {
-                window.location.href = '/login';
-                return null;
-            }
-
+            // Ask the server even without a token: one started with
+            // --no-login answers for its single local user.
             try {
                 const response = await fetch('/auth/check', {
                     headers: window.getAuthHeaders()
@@ -509,7 +505,13 @@ Separate sections with blank lines. When you place your cursor in a section, sug
                     // Display user email
                     const emailElement = document.getElementById('user-email');
                     if (emailElement) {
-                        emailElement.textContent = user.email;
+                        emailElement.textContent = user.no_login ? 'Local user' : user.email;
+                    }
+                    if (user.no_login) {
+                        // No account to log out of or change
+                        document.getElementById('logout-btn')?.remove();
+                        document.querySelector('.settings-tab-btn[data-settings-tab=account]')?.remove();
+                        document.getElementById('account-settings')?.remove();
                     }
                 }
             }).catch(err => {

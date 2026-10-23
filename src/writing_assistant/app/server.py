@@ -28,6 +28,8 @@ from .main import app
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8001
+NO_LOGIN_DB_NAME = "writing_assistant_no_login.db"
+"""Database file of ``--no-login`` mode, next to the multi-user one."""
 PORT_SEARCH_RANGE = 20
 """How many ports above the default to try when the default is taken."""
 
@@ -260,12 +262,15 @@ def _launch_browser_when_ready(host: str, port: int, timeout: float = 15.0) -> N
     threading.Thread(target=_wait_and_open, daemon=True).start()
 
 
-def _running_instance_url(host: str, port: int, timeout: float = 1.0) -> str | None:
+def _running_instance_url(
+    host: str, port: int, timeout: float = 1.0, *, no_login: bool = False
+) -> str | None:
     """URL of a writing assistant already serving on host:port, else None.
 
     Asks the unauthenticated ``/health`` route and checks the application
     name it reports, so an unrelated program on the port is not mistaken
-    for a running instance.
+    for a running instance — and its login mode, so a ``--no-login`` launch
+    does not open a multi-user instance's login page (or the reverse).
     """
     url = _browser_url(host, port)
     try:
@@ -275,7 +280,11 @@ def _running_instance_url(host: str, port: int, timeout: float = 1.0) -> str | N
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
         return None
-    if isinstance(payload, dict) and payload.get("app") == DIST_NAME:
+    if (
+        isinstance(payload, dict)
+        and payload.get("app") == DIST_NAME
+        and bool(payload.get("no_login")) == no_login
+    ):
         return url
     return None
 
@@ -373,13 +382,42 @@ def main() -> None:
     )
     parser.add_argument(
         "--db-path",
-        default=os.getenv("WRITING_ASSISTANT_DB_PATH"),
         help="Path to database file (default: ~/.writing_assistant/writing_assistant.db, or WRITING_ASSISTANT_DB_PATH env var)",
+    )
+    parser.add_argument(
+        "--no-login",
+        action="store_true",
+        help=(
+            "Single-user mode: no accounts, no login page; the browser opens "
+            "straight on the editor. Uses its own database (default: "
+            f"~/.writing_assistant/{NO_LOGIN_DB_NAME}, or --db-path; "
+            "WRITING_ASSISTANT_DB_PATH is ignored) and only binds to this "
+            "machine (localhost, 127.0.0.1, ::1)."
+        ),
     )
     args = parser.parse_args()
 
-    # Set database path environment variable if provided via CLI
-    if args.db_path:
+    if args.no_login:
+        # No password stands between the network and the documents, so
+        # nothing but this machine may connect.
+        if _reachable_beyond_this_machine(args.host):
+            print(
+                f"Error: --no-login only binds to this machine (localhost, "
+                f"127.0.0.1 or ::1); refusing --host {args.host!r}, which "
+                f"other machines could reach without a password.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        # A database of its own: WRITING_ASSISTANT_DB_PATH names the
+        # multi-user one, which must not gain a passwordless user.
+        os.environ["WRITING_ASSISTANT_DB_PATH"] = args.db_path or str(
+            Path.home() / ".writing_assistant" / NO_LOGIN_DB_NAME
+        )
+        from . import main as main_module
+
+        main_module.enable_no_login()
+    elif args.db_path:
+        # Set database path environment variable if provided via CLI
         os.environ["WRITING_ASSISTANT_DB_PATH"] = args.db_path
 
     # Set custom environment variables flag (the CLI flag forces it off;
@@ -398,7 +436,9 @@ def main() -> None:
     # A second launch (a launcher clicked again, say) should not
     # fail: if this application already serves the port, just open it.
     running = _running_instance_url(
-        args.host, args.port if args.port is not None else DEFAULT_PORT
+        args.host,
+        args.port if args.port is not None else DEFAULT_PORT,
+        no_login=args.no_login,
     )
     if running:
         print(f"The Writing Assistant is already running at {running}", flush=True)
@@ -423,7 +463,10 @@ def main() -> None:
         display_host = socket.gethostname()
     base = f"http://{display_host}:{port}"
 
-    print("\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
+    if args.no_login:
+        print("\n🔓 Writing Assistant Server - No-Login Mode", flush=True)
+    else:
+        print("\n🔐 Writing Assistant Server - Multi-User Edition", flush=True)
     print(f"📝 Access your writing assistant at: {base}/", flush=True)
     if display_host != args.host:
         print(
@@ -431,8 +474,15 @@ def main() -> None:
             f"use this machine's name or IP address in place of {display_host}",
             flush=True,
         )
-    print(f"🔑 Register a new account at: {base}/register", flush=True)
-    print(f"🔐 Login at: {base}/login", flush=True)
+    if args.no_login:
+        print(
+            "👤 No login: everything runs as one local user, reachable only "
+            "from this machine",
+            flush=True,
+        )
+    else:
+        print(f"🔑 Register a new account at: {base}/register", flush=True)
+        print(f"🔐 Login at: {base}/login", flush=True)
     print(f"📚 API documentation: {base}/docs", flush=True)
     print(
         "💻 Terminal interface (no browser needed): run "

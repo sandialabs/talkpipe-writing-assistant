@@ -536,6 +536,9 @@ writing-assistant --db-path /path/to/database.db
 # Disable custom environment variables from UI (security)
 writing-assistant --disable-custom-env-vars
 
+# Single user on this machine, no login (see "No-login mode" below)
+writing-assistant --no-login
+
 # Initialize database without starting server
 writing-assistant --init-db
 
@@ -559,6 +562,18 @@ front of it (see
 [Use HTTPS in Production](CONTAINER_DEPLOYMENT.md#3-use-https-in-production))
 and set `WRITING_ASSISTANT_SECRET` — the server warns you when it is
 reachable from other machines and that variable is still unset.
+
+**No-login mode.** `writing-assistant --no-login` is for one person on their
+own computer: there are no accounts and no login page, and the browser opens
+straight on the editor as a single local user. It keeps its documents in a
+database of its own, `~/.writing_assistant/writing_assistant_no_login.db`
+(`--db-path` chooses another; `WRITING_ASSISTANT_DB_PATH` is ignored, so it
+never adds a passwordless user to your multi-user database). Because nothing
+asks for a password, it refuses to start on any address other machines could
+reach: `localhost`, `127.0.0.1` and `::1` are accepted, `0.0.0.0` or a
+network address is an error. `writing-assistant-tui` pointed at such a server
+also skips its login screen. Logout and the Account settings do not apply
+and are hidden in the web interface.
 
 **Authentication:** The application uses JWT-based multi-user authentication with FastAPI Users. Each user has their own account with secure password storage. New users can register through the web interface at `/register`, and existing users log in at `/login`. To change your email address or password once logged in, open **Settings → Account** in the web interface, or **File → Account** (F2) in the terminal interface; both ask for the current password first, and a changed email is what you log in with next time.
 

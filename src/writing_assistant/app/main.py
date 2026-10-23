@@ -3,7 +3,9 @@
 import json
 import logging
 import os
+import secrets
 import threading
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC
@@ -11,12 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_users import InvalidPasswordException
 from fastapi_users.exceptions import UserAlreadyExists
+from fastapi_users.password import PasswordHelper
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from talkpipe.util.config import reset_config as reset_talkpipe_config
@@ -32,7 +35,7 @@ from .auth import (
     fastapi_users,
     get_user_manager,
 )
-from .database import create_db_and_tables, get_async_session
+from .database import create_db_and_tables, get_async_session, get_session_maker
 from .models import Document, DocumentSnapshot, User, WritingTemplate, iso_utc, utcnow
 from .schemas import (
     EmailChange,
@@ -54,6 +57,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize the database on application startup."""
     await create_db_and_tables()
+    if NO_LOGIN:
+        async with get_session_maker()() as session:
+            await ensure_no_login_user(session)
     yield
 
 
@@ -95,6 +101,52 @@ def _allow_custom_env_vars_default() -> bool:
 # Configurable via the ALLOW_CUSTOM_ENV_VARS environment variable or the
 # --disable-custom-env-vars CLI flag (the flag wins when passed).
 ALLOW_CUSTOM_ENV_VARS = _allow_custom_env_vars_default()
+
+# No-login mode (``writing-assistant --no-login``): every request acts as one
+# local user, so nobody registers or logs in. Only for a server that other
+# machines cannot reach — server.main refuses any non-loopback host — and
+# with a database of its own, so the passwordless user never lands in a
+# multi-user database. Switched on with enable_no_login().
+NO_LOGIN = False
+
+# example.com is reserved (RFC 2606) and, unlike "localhost", passes the
+# EmailStr validation of the UserRead schema.
+NO_LOGIN_EMAIL = "local-user@example.com"
+
+
+async def ensure_no_login_user(session: AsyncSession) -> User:
+    """The no-login user, created on first use.
+
+    Its password is random and never shown: the account is reached only
+    through no-login mode, so opening the same database without
+    ``--no-login`` does not give anyone a way in.
+    """
+    result = await session.execute(select(User).where(User.email == NO_LOGIN_EMAIL))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            id=uuid.uuid4(),
+            email=NO_LOGIN_EMAIL,
+            hashed_password=PasswordHelper().hash(secrets.token_urlsafe(32)),
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+        )
+        session.add(user)
+        await session.commit()
+    return user
+
+
+async def _no_login_user(db: AsyncSession = Depends(get_async_session)) -> User:
+    """Stands in for ``current_active_user`` in no-login mode."""
+    return await ensure_no_login_user(db)
+
+
+def enable_no_login() -> None:
+    """Serve every request as the single local user, without a token."""
+    global NO_LOGIN
+    NO_LOGIN = True
+    app.dependency_overrides[current_active_user] = _no_login_user
 
 
 def _request_env_vars(
@@ -217,27 +269,33 @@ async def read_root(request: Request) -> HTMLResponse:
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request) -> HTMLResponse:
-    """Login page."""
+async def login_page(request: Request) -> Response:
+    """Login page (straight to the editor in no-login mode)."""
+    if NO_LOGIN:
+        return RedirectResponse("/")
     return templates.TemplateResponse(request, "login.html")
 
 
 @app.get("/register", response_class=HTMLResponse)
-async def register_page(request: Request) -> HTMLResponse:
-    """Registration page."""
+async def register_page(request: Request) -> Response:
+    """Registration page (straight to the editor in no-login mode)."""
+    if NO_LOGIN:
+        return RedirectResponse("/")
     return templates.TemplateResponse(request, "register.html")
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health() -> dict[str, Any]:
     """Identify this server, without authentication.
 
-    Answers ``{"app": "<distribution name>", "version": "<version>"}`` so a
-    second ``writing-assistant`` launch (or a desktop launcher) can tell
-    an instance of this application from anything else listening on the
-    port, and so monitoring can confirm the server is up.
+    Answers ``{"app": "<distribution name>", "version": "<version>",
+    "no_login": <bool>}`` so a second ``writing-assistant`` launch (or a
+    desktop launcher) can tell an instance of this application from
+    anything else listening on the port, and one started with or without
+    ``--no-login`` from the other, and so monitoring can confirm the server
+    is up.
     """
-    return {"app": DIST_NAME, "version": __version__}
+    return {"app": DIST_NAME, "version": __version__, "no_login": NO_LOGIN}
 
 
 @app.get("/favicon.ico")
@@ -253,6 +311,7 @@ async def get_config() -> dict[str, Any]:
     return {
         "allow_custom_env_vars": ALLOW_CUSTOM_ENV_VARS,
         "multi_user_enabled": True,
+        "no_login": NO_LOGIN,
     }
 
 
@@ -263,6 +322,7 @@ async def check_auth(user: User = Depends(current_active_user)) -> dict[str, Any
         "authenticated": True,
         "email": user.email,
         "user_id": str(user.id),
+        "no_login": NO_LOGIN,
     }
 
 

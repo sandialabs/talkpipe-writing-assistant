@@ -28,7 +28,9 @@ def browser_launches(monkeypatch):
     it with ``_REAL_PORT_IN_USE``.
     """
     launches: list[tuple[str, int]] = []
-    monkeypatch.setattr(server, "_running_instance_url", lambda host, port: None)
+    monkeypatch.setattr(
+        server, "_running_instance_url", lambda host, port, **kwargs: None
+    )
     monkeypatch.setattr(server, "port_in_use", lambda host, port: False)
     monkeypatch.setattr(
         server,
@@ -541,7 +543,9 @@ def test_main_already_running_opens_browser_and_exits(
     """A second launch must not fail on the busy port: open the running one."""
     opened = []
     monkeypatch.setattr(
-        server, "_running_instance_url", lambda host, port: "http://localhost:8001/"
+        server,
+        "_running_instance_url",
+        lambda host, port, **kwargs: "http://localhost:8001/",
     )
     monkeypatch.setattr(server.webbrowser, "open", lambda url: opened.append(url))
 
@@ -561,7 +565,9 @@ def test_main_already_running_respects_no_browser(
 ):
     opened = []
     monkeypatch.setattr(
-        server, "_running_instance_url", lambda host, port: "http://localhost:8001/"
+        server,
+        "_running_instance_url",
+        lambda host, port, **kwargs: "http://localhost:8001/",
     )
     monkeypatch.setattr(server.webbrowser, "open", lambda url: opened.append(url))
 
@@ -734,3 +740,104 @@ def test_no_secret_warning_once_the_secret_is_set(
     server.main()
 
     assert "WRITING_ASSISTANT_SECRET" not in capsys.readouterr().out
+
+
+# --- --no-login ---------------------------------------------------------------
+
+
+@pytest.fixture
+def no_login_cleanup(monkeypatch, tmp_path):
+    """Undo what ``main(--no-login)`` switches on, and keep it out of ~."""
+    from writing_assistant.app import main as main_module
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("WRITING_ASSISTANT_DB_PATH", str(tmp_path / "multi.db"))
+    yield tmp_path
+    main_module.NO_LOGIN = False
+    main_module.app.dependency_overrides.pop(main_module.current_active_user, None)
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.10", "example.com"])
+@patch("writing_assistant.app.server.uvicorn.run")
+def test_no_login_refuses_hosts_other_machines_can_reach(
+    mock_uvicorn_run, host, no_login_cleanup, capsys
+):
+    from writing_assistant.app import main as main_module
+
+    with (
+        patch("sys.argv", ["server.py", "--no-login", "--host", host]),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        server.main()
+
+    assert excinfo.value.code != 0
+    err = capsys.readouterr().err
+    assert "--no-login only binds to this machine" in err
+    assert host in err
+    mock_uvicorn_run.assert_not_called()
+    assert main_module.NO_LOGIN is False
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1"])
+@patch("writing_assistant.app.server.uvicorn.run")
+def test_no_login_binds_to_loopback(mock_uvicorn_run, host, no_login_cleanup):
+    from writing_assistant.app import main as main_module
+
+    with patch("sys.argv", ["server.py", "--no-login", "--host", host]):
+        server.main()
+
+    assert mock_uvicorn_run.call_args.kwargs["host"] == host
+    assert main_module.NO_LOGIN is True
+    assert (
+        main_module.app.dependency_overrides[main_module.current_active_user]
+        is main_module._no_login_user
+    )
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+@patch("sys.argv", ["server.py", "--no-login"])
+def test_no_login_uses_its_own_database(mock_uvicorn_run, no_login_cleanup, capsys):
+    """WRITING_ASSISTANT_DB_PATH names the multi-user database; a no-login
+    launch must not open it (and add a passwordless user to it)."""
+    home = no_login_cleanup
+
+    server.main()
+
+    expected = home / ".writing_assistant" / "writing_assistant_no_login.db"
+    assert os.environ["WRITING_ASSISTANT_DB_PATH"] == str(expected)
+    out = capsys.readouterr().out
+    assert str(expected) in out
+    assert "/register" not in out
+    assert "/login" not in out
+
+
+@patch("writing_assistant.app.server.uvicorn.run")
+def test_no_login_honours_an_explicit_db_path(
+    mock_uvicorn_run, no_login_cleanup, tmp_path
+):
+    chosen = tmp_path / "mine.db"
+    with patch("sys.argv", ["server.py", "--no-login", "--db-path", str(chosen)]):
+        server.main()
+
+    assert os.environ["WRITING_ASSISTANT_DB_PATH"] == str(chosen)
+
+
+def test_running_instance_url_requires_the_same_login_mode(health_server, monkeypatch):
+    """A no-login launch must not hand the browser to a running multi-user
+    instance (or the reverse); it starts its own on the next free port."""
+    port = health_server.server_address[1]
+    monkeypatch.setattr(
+        _HealthHandler,
+        "payload",
+        {"app": server.DIST_NAME, "version": "1.2.3", "no_login": False},
+    )
+    assert _REAL_RUNNING_INSTANCE_URL("127.0.0.1", port, no_login=True) is None
+    assert _REAL_RUNNING_INSTANCE_URL("127.0.0.1", port) is not None
+
+    monkeypatch.setattr(
+        _HealthHandler,
+        "payload",
+        {"app": server.DIST_NAME, "version": "1.2.3", "no_login": True},
+    )
+    assert _REAL_RUNNING_INSTANCE_URL("127.0.0.1", port, no_login=True) is not None
+    assert _REAL_RUNNING_INSTANCE_URL("127.0.0.1", port) is None

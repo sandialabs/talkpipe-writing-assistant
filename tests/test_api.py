@@ -12,7 +12,11 @@ def test_health_identifies_the_app_without_auth(client):
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"app": DIST_NAME, "version": __version__}
+    assert response.json() == {
+        "app": DIST_NAME,
+        "version": __version__,
+        "no_login": False,
+    }
 
 
 def test_root_endpoint(client):

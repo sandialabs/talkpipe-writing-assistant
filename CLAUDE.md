@@ -60,6 +60,11 @@ writing-assistant --init-db
 # some other program holds 8001 and no --port/WRITING_ASSISTANT_PORT was
 # given, the next free port in 8002-8021 is used and announced.
 writing-assistant --no-browser
+
+# Single local user, no login page: own database (writing_assistant_no_login.db,
+# or --db-path; WRITING_ASSISTANT_DB_PATH ignored), loopback hosts only.
+# main.enable_no_login() overrides current_active_user for every route.
+writing-assistant --no-login
 ```
 
 **Terminal interface:** `writing-assistant-tui` (or `python -m
