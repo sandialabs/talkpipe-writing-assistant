@@ -104,6 +104,11 @@ where = ["src"]
 
 [tool.uv]
 # Commit uv.lock for reproducible dev/CI installs; use `uv lock` / `uv lock --upgrade`.
+# Lock-only: safety and virtualenv still cap filelock below 4.0, but every 3.x release
+# carries advisories fixed only in 4.2.1. This lifts the cap for the locked
+# dev/CI environment; pip installs still follow the cap. Drop it once they
+# allow filelock 4 (talkpipe-agents carries the same override).
+override-dependencies = ["filelock>=4.2.1"]
 
 [tool.setuptools_scm]
 # Use defaults
