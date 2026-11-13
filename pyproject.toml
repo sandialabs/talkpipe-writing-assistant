@@ -45,6 +45,11 @@ dependencies = [
     "fastapi-users[sqlalchemy]>=15.0.2",  # security floor
     "pyjwt>=2.15.0",  # security floor (via fastapi-users)
     "urllib3>=2.8.0",  # security floor (via requests, fastapi[standard])
+    "certifi>=2026.10.18",  # security floor (via httpx, requests)
+    "dnspython>=2.9.0",  # security floor (via email-validator, from fastapi-users)
+    "mako>=1.4.2",  # security floor (via alembic)
+    "pillow>=13.0.0",  # security floor (via talkpipe[all])
+    "pypdf>=6.21.4",  # security floor (via talkpipe[all])
     "sqlalchemy[asyncio]>=2.0.0",
     "aiosqlite>=0.19.0",
     "alembic>=1.12.0",
@@ -67,9 +72,12 @@ dev = [
     "ruff>=0.16.3,<0.17",
     "mypy>=2.3,<3",
     "pre-commit>=4.0",
-    "virtualenv>=21.7.13",  # security floor (via pre-commit)
+    "virtualenv>=21.14.9",  # security floor (via pre-commit)
     "bandit>=1.7.7",
     "safety>=2.3.0",
+    "authlib>=1.9.1",  # security floor (via safety)
+    "joserfc>=1.7.6",  # security floor (via authlib, from safety)
+    "nltk>=3.10.4",  # security floor (via safety)
 ]
 test = [
     "pytest>=9.0.3",
@@ -81,6 +89,9 @@ test = [
 security = [
     "bandit>=1.7.7",
     "safety>=2.3.0",
+    "authlib>=1.9.1",  # security floor (via safety)
+    "joserfc>=1.7.6",  # security floor (via authlib, from safety)
+    "nltk>=3.10.4",  # security floor (via safety)
 ]
 
 [project.scripts]
@@ -104,6 +115,11 @@ where = ["src"]
 
 [tool.uv]
 # Commit uv.lock for reproducible dev/CI installs; use `uv lock` / `uv lock --upgrade`.
+# Lock-only: safety still caps filelock below 4.0, but every 3.x release
+# carries advisories fixed only in 4.2.1. This lifts the cap for the locked
+# dev/CI environment; pip installs still follow the cap. Drop it once safety
+# allows filelock 4 (talkpipe-agents carries the same override).
+override-dependencies = ["filelock>=4.2.1"]
 
 [tool.setuptools_scm]
 # Use defaults
