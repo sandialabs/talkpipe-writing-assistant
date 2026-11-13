@@ -6,6 +6,8 @@ release are grouped by kind rather than listed in the order they landed.
 
 ## Unreleased
 
+## 1.1.3 (2026-11-13)
+
 ### Security
 
 - Add security floors for transitive dependencies of the installed
