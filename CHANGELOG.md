@@ -24,6 +24,34 @@ release are grouped by kind rather than listed in the order they landed.
   the ruff-pre-commit hook on v0.17.0 to match. The code needed no changes
   for the new release's rules or formatting.
 
+## 1.1.3 (2026-11-13)
+
+### Security
+
+- Add security floors for transitive dependencies of the installed
+  application: Pillow 13.0.0 and pypdf 6.21.4 (both via talkpipe[all];
+  crafted-image heap overflow, memory disclosure and decompression-bomb bypass
+  advisories, and crafted-PDF infinite loop, runtime and memory exhaustion
+  advisories), certifi 2026.10.18 (via httpx and requests; root certificates
+  with compromised intermediate keys removed from the bundle), dnspython 2.9.0
+  (via email-validator, from fastapi-users; excessive CPU use parsing names
+  from the wire) and Mako 1.4.2 (via alembic; template lookup path traversal
+  on Windows). `uv.lock` moves pypdf to 7.0.1 and Pillow to 13.0.0; the
+  assistant imports neither, and reads PDFs only through TalkPipe's
+  `PdfReader`, `pages` and `extract_text()` calls, which pypdf 7 keeps.
+- In the `dev` and `security` extras, raise or add floors for the scanner and
+  tooling stack: virtualenv 21.14.9 (via pre-commit; activation script, seed
+  wheel verification and symlink-following advisories), and Authlib 1.9.1,
+  joserfc 1.7.6 and nltk 3.10.4 (all via safety; JWT/JWS signature and token
+  validation advisories, JWS/JWE resource exhaustion, and a model path that
+  escaped nltk's path containment).
+- filelock 4.2.1 (via huggingface-hub, from talkpipe[all], and via the dev
+  tools; symlink, stale-lock and lock-database advisories) is taken in
+  `uv.lock` through a `[tool.uv]` override, because safety still requires
+  `filelock<4.0`. The override governs the locked dev/CI environment only; a
+  pip install resolves filelock on its own and gets a fixed release unless the
+  `security` or `dev` extra is installed alongside.
+
 ## 1.1.2 (2026-10-13)
 
 ### Security

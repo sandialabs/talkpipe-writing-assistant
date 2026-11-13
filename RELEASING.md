@@ -140,6 +140,56 @@ Upgrade check:
   and snapshot are intact, and generation still works. Anything that cannot
   be migrated must be called out in the changelog.
 
+## Security hotfix releases
+
+Everything above describes a **regular release**: it is cut from `main`
+and **a person reviews it**. An agent may prepare one (the changelog, the
+merge request, the test runs), but a person reads the result and decides to
+tag and publish it. That holds for every release except the one kind
+described here.
+
+A **security hotfix** may be carried out by an agent from start to finish,
+without review, and only when all of this is true:
+
+- its purpose is to clear the security advisories GitHub reports against
+  `stable` (Dependabot alerts);
+- every one of them is cleared by raising a dependency's lower bound in
+  `pyproject.toml` and re-locking `uv.lock`, with no change under `src/`;
+- beyond the floors it contains at most corrections to documentation and
+  to code snippets, examples or tutorials that the upgrade made inaccurate.
+
+Anything else is not a hotfix: a change to the source, a new feature, an
+advisory with no patched version, a code-scanning or container-scan finding,
+a floor that another dependency's cap forbids. That work goes through
+`main` as a regular release, with human review. This autonomous procedure
+never applies to a regular release.
+
+A hotfix differs from the steps above in these points and no others:
+
+1. **Branch.** It branches off `stable`, not `main`, as
+   `chore/security-floors-YYYYMMDD`: the last release plus the floors, and
+   nothing from development.
+2. **Version.** The next PATCH after the release `stable` points at.
+3. **Checks.** Every step above that comes before tagging still applies, on
+   that branch: the changelog, the tests, and the manual application test,
+   which the agent carries out itself against the wheel under test. Two
+   more: every version the lock moves to must have been on PyPI for at
+   least three days, and the package must still install together with the
+   released TalkPipe it depends on (nothing in the suite depends on the
+   assistant).
+4. **CI.** The branch's final commit must pass on Gitea **and** on GitHub
+   before `stable` moves. A merge request into `stable` starts no run; the
+   evidence is the push run of the `chore/**` branch.
+5. **Merge, tag, publish.** Only then is `stable` advanced, to the same
+   commit on both hosts. The tag goes on that commit on `stable` rather than
+   on `main`, and the GitHub release is published as in step 7.
+6. **Afterwards** `stable` is merged back into `main` through a merge
+   request, so `main` carries the tag and the floors.
+
+The agent stops and hands the release to a person as soon as one of the
+conditions fails, CI fails for a reason that is not an infrastructure fault,
+or the testing turns up anything beyond the corrections named above.
+
 ## Downstream
 
 Nothing in the suite pins the writing assistant. When a release changes the
